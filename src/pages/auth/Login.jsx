@@ -1,10 +1,10 @@
 import { useState } from "react";
 import {
+  ArrowRight,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
-  ArrowRight,
 } from "lucide-react";
 
 import {
@@ -39,10 +39,7 @@ function Login() {
   // ---------------------------------------------------------
 
   const handleChange = (event) => {
-    const {
-      name,
-      value,
-    } = event.target;
+    const { name, value } = event.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -87,9 +84,7 @@ function Login() {
 
     setErrors(newErrors);
 
-    return (
-      Object.keys(newErrors).length === 0
-    );
+    return Object.keys(newErrors).length === 0;
   };
 
   // ---------------------------------------------------------
@@ -108,34 +103,33 @@ function Login() {
     setIsSubmitting(true);
 
     try {
-      const email =
-        formData.email.trim();
+      const email = formData.email
+        .trim()
+        .toLowerCase();
 
-      /*
-       * Frontend-only authentication for now.
-       *
-       * The actual password is not being verified
-       * against a backend yet.
-       */
-      login({
-        name:
-          email
-            .split("@")[0]
-            .replace(/[._-]/g, " "),
+      const result = login({
         email,
+        password: formData.password,
       });
 
-      /*
-       * IMPORTANT:
-       *
-       * If the user came from a protected page,
-       * return them there.
-       *
-       * Example:
-       * /events/1/book
-       *
-       * Otherwise go to home.
-       */
+      // -----------------------------------------------------
+      // LOGIN FAILED
+      // -----------------------------------------------------
+
+      if (!result.success) {
+        setErrors({
+          form: result.error,
+        });
+
+        setIsSubmitting(false);
+
+        return;
+      }
+
+      // -----------------------------------------------------
+      // LOGIN SUCCESSFUL
+      // -----------------------------------------------------
+
       const destination =
         location.state?.from || "/";
 
@@ -190,6 +184,7 @@ function Login() {
           </Link>
 
           <div className="mt-14">
+
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-400">
               Welcome back
             </p>
@@ -205,8 +200,8 @@ function Login() {
               discover upcoming events and keep
               everything in one place.
             </p>
-          </div>
 
+          </div>
         </div>
       </section>
 
@@ -218,9 +213,12 @@ function Login() {
 
         <div className="w-full max-w-md">
 
-          {/* Mobile Logo */}
+          {/* =================================================
+              MOBILE LOGO
+          ================================================= */}
 
           <div className="mb-8 lg:hidden">
+
             <Link
               to="/"
               className="inline-flex items-center gap-3"
@@ -238,11 +236,15 @@ function Login() {
                 </span>
               </div>
             </Link>
+
           </div>
 
-          {/* Heading */}
+          {/* =================================================
+              HEADING
+          ================================================= */}
 
           <div>
+
             <p className="text-sm font-semibold text-orange-500">
               Welcome back
             </p>
@@ -254,9 +256,12 @@ function Login() {
             <p className="mt-2 text-sm leading-6 text-slate-500">
               Enter your details to continue.
             </p>
+
           </div>
 
-          {/* Form */}
+          {/* =================================================
+              FORM
+          ================================================= */}
 
           <form
             onSubmit={handleSubmit}
@@ -271,9 +276,12 @@ function Login() {
               </div>
             )}
 
-            {/* Email */}
+            {/* =================================================
+                EMAIL
+            ================================================= */}
 
             <div>
+
               <label
                 htmlFor="email"
                 className="mb-2 block text-sm font-semibold text-slate-700"
@@ -282,6 +290,7 @@ function Login() {
               </label>
 
               <div className="relative">
+
                 <Mail
                   size={18}
                   className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -301,6 +310,7 @@ function Login() {
                       : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
                   }`}
                 />
+
               </div>
 
               {errors.email && (
@@ -308,12 +318,17 @@ function Login() {
                   {errors.email}
                 </p>
               )}
+
             </div>
 
-            {/* Password */}
+            {/* =================================================
+                PASSWORD
+            ================================================= */}
 
             <div>
+
               <div className="mb-2 flex items-center justify-between">
+
                 <label
                   htmlFor="password"
                   className="block text-sm font-semibold text-slate-700"
@@ -327,9 +342,11 @@ function Login() {
                 >
                   Forgot password?
                 </button>
+
               </div>
 
               <div className="relative">
+
                 <LockKeyhole
                   size={18}
                   className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -375,6 +392,7 @@ function Login() {
                     <Eye size={18} />
                   )}
                 </button>
+
               </div>
 
               {errors.password && (
@@ -382,9 +400,12 @@ function Login() {
                   {errors.password}
                 </p>
               )}
+
             </div>
 
-            {/* Submit */}
+            {/* =================================================
+                SUBMIT
+            ================================================= */}
 
             <button
               type="submit"
@@ -402,10 +423,13 @@ function Login() {
 
           </form>
 
-          {/* Register */}
+          {/* =================================================
+              REGISTER
+          ================================================= */}
 
           <p className="mt-7 text-center text-sm text-slate-500">
             Don't have an account?{" "}
+
             <Link
               to="/register"
               state={location.state}
@@ -413,17 +437,22 @@ function Login() {
             >
               Create account
             </Link>
+
           </p>
 
-          {/* Back Home */}
+          {/* =================================================
+              BACK HOME
+          ================================================= */}
 
           <div className="mt-6 text-center">
+
             <Link
               to="/"
               className="text-xs font-medium text-slate-400 transition hover:text-slate-600"
             >
               ← Back to home
             </Link>
+
           </div>
 
         </div>

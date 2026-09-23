@@ -32,6 +32,9 @@ function Register() {
 
   const [errors, setErrors] = useState({});
 
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
   // ---------------------------------------------------------
   // INPUT CHANGE
   // ---------------------------------------------------------
@@ -47,6 +50,7 @@ function Register() {
     setErrors((previous) => ({
       ...previous,
       [name]: "",
+      form: "",
     }));
   };
 
@@ -58,7 +62,8 @@ function Register() {
     const newErrors = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = "Please enter your full name.";
+      newErrors.name =
+        "Please enter your full name.";
     } else if (formData.name.trim().length < 2) {
       newErrors.name =
         "Name must contain at least 2 characters.";
@@ -88,7 +93,8 @@ function Register() {
       newErrors.confirmPassword =
         "Please confirm your password.";
     } else if (
-      formData.password !== formData.confirmPassword
+      formData.password !==
+      formData.confirmPassword
     ) {
       newErrors.confirmPassword =
         "Passwords do not match.";
@@ -110,30 +116,69 @@ function Register() {
       return;
     }
 
-    register({
-      name: formData.name.trim(),
-      email: formData.email.trim(),
-    });
+    setIsSubmitting(true);
 
-    navigate("/login", {
-      replace: true,
-    });
+    try {
+      const result = register({
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+      });
+
+      // -----------------------------------------------------
+      // REGISTRATION FAILED
+      // -----------------------------------------------------
+
+      if (!result.success) {
+        setErrors({
+          form: result.error,
+        });
+
+        setIsSubmitting(false);
+
+        return;
+      }
+
+      // -----------------------------------------------------
+      // REGISTRATION SUCCESSFUL
+      // -----------------------------------------------------
+
+      navigate("/", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        "Registration failed:",
+        error
+      );
+
+      setErrors({
+        form:
+          "Unable to create your account right now. Please try again.",
+      });
+
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <main className="h-full overflow-hidden bg-slate-50">
       <div className="grid h-full lg:grid-cols-2">
+
         {/* =================================================
             LEFT PANEL
         ================================================== */}
 
         <section className="relative hidden h-full overflow-hidden bg-[#070b14] lg:flex">
+
           <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
 
           <div className="absolute -bottom-32 right-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
 
           <div className="relative z-10 flex w-full items-center px-12 xl:px-16">
+
             <div className="max-w-lg">
+
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-lg font-bold text-white shadow-lg shadow-orange-500/20">
                 E
               </div>
@@ -155,6 +200,7 @@ function Register() {
               </p>
 
               <div className="mt-7 space-y-3">
+
                 {[
                   "Discover events that match your interests",
                   "Book tickets in just a few steps",
@@ -176,6 +222,7 @@ function Register() {
                     </span>
                   </div>
                 ))}
+
               </div>
             </div>
           </div>
@@ -186,10 +233,13 @@ function Register() {
         ================================================== */}
 
         <section className="flex h-full items-center justify-center overflow-hidden px-5 py-4 sm:px-8 lg:px-12">
+
           <div className="w-full max-w-md">
+
             {/* Header */}
 
             <div className="mb-4">
+
               <p className="text-xs font-semibold text-orange-500">
                 Create your account
               </p>
@@ -202,6 +252,7 @@ function Register() {
                 Create an account to book and manage your
                 event experiences.
               </p>
+
             </div>
 
             {/* Form */}
@@ -211,9 +262,19 @@ function Register() {
               noValidate
               className="space-y-3"
             >
+
+              {/* General Error */}
+
+              {errors.form && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                  {errors.form}
+                </div>
+              )}
+
               {/* NAME */}
 
               <div>
+
                 <label
                   htmlFor="register-name"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -222,6 +283,7 @@ function Register() {
                 </label>
 
                 <div className="relative">
+
                   <User
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -241,6 +303,7 @@ function Register() {
                         : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     }`}
                   />
+
                 </div>
 
                 {errors.name && (
@@ -248,11 +311,13 @@ function Register() {
                     {errors.name}
                   </p>
                 )}
+
               </div>
 
               {/* EMAIL */}
 
               <div>
+
                 <label
                   htmlFor="register-email"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -261,6 +326,7 @@ function Register() {
                 </label>
 
                 <div className="relative">
+
                   <Mail
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -280,6 +346,7 @@ function Register() {
                         : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     }`}
                   />
+
                 </div>
 
                 {errors.email && (
@@ -287,11 +354,13 @@ function Register() {
                     {errors.email}
                   </p>
                 )}
+
               </div>
 
               {/* PASSWORD */}
 
               <div>
+
                 <label
                   htmlFor="register-password"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -300,6 +369,7 @@ function Register() {
                 </label>
 
                 <div className="relative">
+
                   <LockKeyhole
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -344,6 +414,7 @@ function Register() {
                       <Eye size={17} />
                     )}
                   </button>
+
                 </div>
 
                 {errors.password && (
@@ -351,11 +422,13 @@ function Register() {
                     {errors.password}
                   </p>
                 )}
+
               </div>
 
               {/* CONFIRM PASSWORD */}
 
               <div>
+
                 <label
                   htmlFor="register-confirm-password"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -364,6 +437,7 @@ function Register() {
                 </label>
 
                 <div className="relative">
+
                   <LockKeyhole
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -408,6 +482,7 @@ function Register() {
                       <Eye size={17} />
                     )}
                   </button>
+
                 </div>
 
                 {errors.confirmPassword && (
@@ -415,27 +490,35 @@ function Register() {
                     {errors.confirmPassword}
                   </p>
                 )}
+
               </div>
 
               {/* SUBMIT */}
 
               <button
                 type="submit"
-                className="group mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                disabled={isSubmitting}
+                className="group mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Create account
+                {isSubmitting
+                  ? "Creating account..."
+                  : "Create account"}
 
-                <ArrowRight
-                  size={17}
-                  className="transition-transform group-hover:translate-x-0.5"
-                />
+                {!isSubmitting && (
+                  <ArrowRight
+                    size={17}
+                    className="transition-transform group-hover:translate-x-0.5"
+                  />
+                )}
               </button>
+
             </form>
 
             {/* LOGIN LINK */}
 
             <p className="mt-4 text-center text-sm text-slate-500">
               Already have an account?{" "}
+
               <Link
                 to="/login"
                 className="font-semibold text-orange-600 hover:text-orange-700"
@@ -450,6 +533,7 @@ function Register() {
               By creating an account, you agree to EventON's
               terms and privacy policy.
             </p>
+
           </div>
         </section>
       </div>

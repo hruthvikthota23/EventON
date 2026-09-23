@@ -8,21 +8,20 @@ import {
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY = "eventon_user";
+const USER_STORAGE_KEY = "eventon_user";
+const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-
   const [isLoading, setIsLoading] = useState(true);
 
   // ---------------------------------------------------------
-  // RESTORE USER
+  // RESTORE LOGGED-IN USER
   // ---------------------------------------------------------
 
   useEffect(() => {
     try {
-      const storedUser =
-        localStorage.getItem(STORAGE_KEY);
+      const storedUser = localStorage.getItem(USER_STORAGE_KEY);
 
       if (storedUser) {
         setUser(JSON.parse(storedUser));
@@ -33,37 +32,50 @@ export function AuthProvider({ children }) {
         error
       );
 
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   // ---------------------------------------------------------
-  // LOGIN
+  // GET REGISTERED ACCOUNTS
   // ---------------------------------------------------------
 
-  const login = (userData) => {
-    const normalizedUser = {
-      id:
-        userData.id ||
-        `user-${Date.now()}`,
+  const getAccounts = () => {
+    try {
+      const storedAccounts = localStorage.getItem(
+        ACCOUNTS_STORAGE_KEY
+      );
 
-      name:
-        userData.name ||
-        "EventON User",
+      if (!storedAccounts) {
+        return [];
+      }
 
-      email: userData.email,
-    };
+      const parsedAccounts = JSON.parse(storedAccounts);
 
+      return Array.isArray(parsedAccounts)
+        ? parsedAccounts
+        : [];
+    } catch (error) {
+      console.error(
+        "Unable to read EventON accounts:",
+        error
+      );
+
+      return [];
+    }
+  };
+
+  // ---------------------------------------------------------
+  // SAVE REGISTERED ACCOUNTS
+  // ---------------------------------------------------------
+
+  const saveAccounts = (accounts) => {
     localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(normalizedUser)
+      ACCOUNTS_STORAGE_KEY,
+      JSON.stringify(accounts)
     );
-
-    setUser(normalizedUser);
-
-    return normalizedUser;
   };
 
   // ---------------------------------------------------------
@@ -71,22 +83,134 @@ export function AuthProvider({ children }) {
   // ---------------------------------------------------------
 
   const register = (userData) => {
-    return login({
-      name: userData.name,
-      email: userData.email,
-    });
+    const accounts = getAccounts();
+
+    const normalizedEmail = userData.email
+      .trim()
+      .toLowerCase();
+
+    const existingAccount = accounts.find(
+      (account) =>
+        account.email.toLowerCase() === normalizedEmail
+    );
+
+    if (existingAccount) {
+      return {
+        success: false,
+        error: "An account with this email already exists.",
+      };
+    }
+
+    const newAccount = {
+      id: `user-${Date.now()}`,
+      name: userData.name.trim(),
+      email: normalizedEmail,
+      password: userData.password,
+    };
+
+    saveAccounts([...accounts, newAccount]);
+
+    const loggedInUser = {
+      id: newAccount.id,
+      name: newAccount.name,
+      email: newAccount.email,
+    };
+
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(loggedInUser)
+    );
+
+    setUser(loggedInUser);
+
+    return {
+      success: true,
+      user: loggedInUser,
+    };
   };
+
+  // ---------------------------------------------------------
+  // LOGIN
+  // ---------------------------------------------------------
+
+  const login = (userData) => {
+    const accounts = getAccounts();
+
+    const normalizedEmail = userData.email
+      .trim()
+      .toLowerCase();
+
+    const account = accounts.find(
+      (item) =>
+        item.email.toLowerCase() === normalizedEmail
+    );
+
+    if (!account) {
+      return {
+        success: false,
+        error: "No account found with this email.",
+      };
+    }
+
+    if (account.password !== userData.password) {
+      return {
+        success: false,
+        error: "Incorrect password.",
+      };
+    }
+
+    const loggedInUser = {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+    };
+
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(loggedInUser)
+    );
+
+    setUser(loggedInUser);
+
+    return {
+      success: true,
+      user: loggedInUser,
+    };
+  };
+
+  // ---------------------------------------------------------
+  // UPDATE USER
+  // ---------------------------------------------------------
 
   const updateUser = (updates) => {
     setUser((currentUser) => {
-      if (!currentUser) return currentUser;
+      if (!currentUser) {
+        return currentUser;
+      }
 
       const updatedUser = {
         ...currentUser,
         ...updates,
       };
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+      localStorage.setItem(
+        USER_STORAGE_KEY,
+        JSON.stringify(updatedUser)
+      );
+
+      // Keep registered account information in sync
+      const accounts = getAccounts();
+
+      const updatedAccounts = accounts.map((account) =>
+        account.id === currentUser.id
+          ? {
+              ...account,
+              ...updates,
+            }
+          : account
+      );
+
+      saveAccounts(updatedAccounts);
 
       return updatedUser;
     });
@@ -97,8 +221,7 @@ export function AuthProvider({ children }) {
   // ---------------------------------------------------------
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY);
-
+    localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
   };
 
@@ -111,6 +234,7 @@ export function AuthProvider({ children }) {
       user,
       isAuthenticated: Boolean(user),
       isLoading,
+
       login,
       register,
       updateUser,

@@ -24,7 +24,8 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
+  overflow-anchor: none;
 }
 
 body {
@@ -32,6 +33,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: #ffffff;
+  overflow-anchor: none;
 }
 
 #root {

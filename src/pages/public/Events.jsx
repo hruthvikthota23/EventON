@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   CalendarDays,
+  ChevronDown,
   MapPin,
   Search,
   SlidersHorizontal,
@@ -21,12 +22,11 @@ function Events() {
   const [selectedDate, setSelectedDate] = useState("all");
   const [sortBy, setSortBy] = useState("date-asc");
 
-  // Mobile filter bottom sheet
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] =
     useState(false);
 
   // =========================================================
-  // DYNAMIC LOCATIONS
+  // LOCATIONS
   // =========================================================
 
   const locations = useMemo(() => {
@@ -40,7 +40,7 @@ function Events() {
   }, []);
 
   // =========================================================
-  // SELECTED CATEGORY NAME
+  // SELECTED CATEGORY
   // =========================================================
 
   const selectedCategoryName = eventCategories.find(
@@ -48,7 +48,7 @@ function Events() {
   )?.name;
 
   // =========================================================
-  // FILTER + SORT EVENTS
+  // FILTER + SORT
   // =========================================================
 
   const filteredEvents = useMemo(() => {
@@ -59,7 +59,9 @@ function Events() {
       // SEARCH
       // -------------------------------------------------------
       .filter((event) => {
-        if (!query) return true;
+        if (!query) {
+          return true;
+        }
 
         const searchableText = [
           event.title,
@@ -80,7 +82,9 @@ function Events() {
       // CATEGORY
       // -------------------------------------------------------
       .filter((event) => {
-        if (!selectedCategory) return true;
+        if (!selectedCategory) {
+          return true;
+        }
 
         return event.categorySlug === selectedCategory;
       })
@@ -89,7 +93,9 @@ function Events() {
       // LOCATION
       // -------------------------------------------------------
       .filter((event) => {
-        if (!selectedLocation) return true;
+        if (!selectedLocation) {
+          return true;
+        }
 
         return event.city === selectedLocation;
       })
@@ -108,17 +114,14 @@ function Events() {
         eventDate.setHours(0, 0, 0, 0);
         today.setHours(0, 0, 0, 0);
 
-        // TODAY
         if (selectedDate === "today") {
           return eventDate.getTime() === today.getTime();
         }
 
-        // THIS WEEK
         if (selectedDate === "week") {
           const day = today.getDay();
-
-          // Monday = first day of week
-          const daysFromMonday = day === 0 ? 6 : day - 1;
+          const daysFromMonday =
+            day === 0 ? 6 : day - 1;
 
           const monday = new Date(today);
 
@@ -131,7 +134,6 @@ function Events() {
           const sunday = new Date(monday);
 
           sunday.setDate(monday.getDate() + 6);
-
           sunday.setHours(23, 59, 59, 999);
 
           return (
@@ -140,7 +142,6 @@ function Events() {
           );
         }
 
-        // THIS MONTH
         if (selectedDate === "month") {
           return (
             eventDate.getMonth() === today.getMonth() &&
@@ -156,7 +157,6 @@ function Events() {
       // SORT
       // -------------------------------------------------------
       .sort((a, b) => {
-        // Soonest
         if (sortBy === "date-asc") {
           return (
             new Date(a.date).getTime() -
@@ -164,7 +164,6 @@ function Events() {
           );
         }
 
-        // Latest
         if (sortBy === "date-desc") {
           return (
             new Date(b.date).getTime() -
@@ -172,12 +171,10 @@ function Events() {
           );
         }
 
-        // Price: Low to High
         if (sortBy === "price-asc") {
           return Number(a.price) - Number(b.price);
         }
 
-        // Price: High to Low
         if (sortBy === "price-desc") {
           return Number(b.price) - Number(a.price);
         }
@@ -226,48 +223,67 @@ function Events() {
           ? "This month"
           : "";
 
+  const hasActiveFilters =
+    searchQuery ||
+    selectedCategory ||
+    selectedLocation ||
+    selectedDate !== "all";
+
+  // =========================================================
+  // SHARED SELECT CLASS
+  // =========================================================
+
+  const selectClass =
+    "h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-11 pr-10 text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-orange-400 focus:ring-4 focus:ring-orange-100";
+
   return (
     <main className="min-h-screen bg-slate-50">
       {/* =====================================================
-          PAGE HEADER
+          HERO
       ====================================================== */}
 
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto w-full max-w-7xl px-5 py-14 sm:px-8 lg:px-10">
-          <div className="max-w-3xl">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-orange-500">
-              Explore EventON
-            </p>
+      <section className="relative overflow-hidden border-b border-slate-200 bg-white">
+        {/* Decorative background */}
+        <div className="pointer-events-none absolute -right-32 -top-40 h-96 w-96 rounded-full bg-orange-100/60 blur-3xl" />
 
-            <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+        <div className="pointer-events-none absolute -left-40 bottom-[-180px] h-96 w-96 rounded-full bg-slate-100 blur-3xl" />
+
+        <div className="relative mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 sm:py-14 lg:px-10 lg:py-16">
+          <div className="max-w-4xl">
+            <div className="inline-flex items-center rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5">
+              <span className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
+                Explore EventON
+              </span>
+            </div>
+
+            <h1 className="mt-5 max-w-4xl text-4xl font-bold leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-5xl lg:text-[52px]">
               Discover events worth attending.
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              Find conferences, workshops, concerts, sports,
-              meetups and more happening around you.
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-500 sm:text-lg">
+              Find conferences, workshops, concerts,
+              sports, meetups and more happening around
+              you.
             </p>
           </div>
         </div>
       </section>
 
       {/* =====================================================
-          SEARCH & FILTERS
+          SEARCH + FILTER BAR
       ====================================================== */}
 
       <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
-          {/* =================================================
-              DESKTOP FILTERS
-          ================================================== */}
-
-          <div className="hidden gap-3 lg:grid lg:grid-cols-[1fr_220px_180px_220px]">
+        <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
+          {/* Desktop */}
+          <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm lg:grid lg:grid-cols-[minmax(280px,1fr)_210px_180px_210px] lg:gap-2">
             {/* Search */}
 
             <div className="relative">
               <Search
-                size={19}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+                strokeWidth={2}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
               <input
@@ -278,7 +294,7 @@ function Events() {
                 }
                 placeholder="Search events..."
                 aria-label="Search events"
-                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                className="h-12 w-full rounded-xl border border-transparent bg-white pl-11 pr-10 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
               />
 
               {searchQuery && (
@@ -286,9 +302,9 @@ function Events() {
                   type="button"
                   onClick={() => setSearchQuery("")}
                   aria-label="Clear search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-sm text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                  className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                 >
-                  ×
+                  <X size={15} />
                 </button>
               )}
             </div>
@@ -297,7 +313,7 @@ function Events() {
 
             <div className="relative">
               <MapPin
-                size={18}
+                size={17}
                 className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -307,7 +323,7 @@ function Events() {
                   setSelectedLocation(event.target.value)
                 }
                 aria-label="Filter by location"
-                className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                className={selectClass}
               >
                 <option value="">All locations</option>
 
@@ -320,13 +336,18 @@ function Events() {
                   </option>
                 ))}
               </select>
+
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
             </div>
 
             {/* Date */}
 
             <div className="relative">
               <CalendarDays
-                size={18}
+                size={17}
                 className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -336,20 +357,25 @@ function Events() {
                   setSelectedDate(event.target.value)
                 }
                 aria-label="Filter by date"
-                className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                className={selectClass}
               >
                 <option value="all">Any date</option>
                 <option value="today">Today</option>
                 <option value="week">This week</option>
                 <option value="month">This month</option>
               </select>
+
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
             </div>
 
             {/* Category */}
 
             <div className="relative">
               <SlidersHorizontal
-                size={18}
+                size={17}
                 className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -359,7 +385,7 @@ function Events() {
                   setSelectedCategory(event.target.value)
                 }
                 aria-label="Filter by category"
-                className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                className={selectClass}
               >
                 <option value="">All categories</option>
 
@@ -372,20 +398,23 @@ function Events() {
                   </option>
                 ))}
               </select>
+
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
             </div>
           </div>
 
           {/* =================================================
-              MOBILE CONTROLS
+              MOBILE
           ================================================== */}
 
           <div className="lg:hidden">
-            {/* Mobile Search */}
-
             <div className="relative">
               <Search
-                size={19}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
               <input
@@ -404,14 +433,12 @@ function Events() {
                   type="button"
                   onClick={() => setSearchQuery("")}
                   aria-label="Clear search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-sm text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                  className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200"
                 >
-                  ×
+                  <X size={15} />
                 </button>
               )}
             </div>
-
-            {/* Mobile Filter + Sort */}
 
             <div className="mt-3 grid grid-cols-2 gap-3">
               <button
@@ -419,7 +446,7 @@ function Events() {
                 onClick={() =>
                   setIsMobileFiltersOpen(true)
                 }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
               >
                 <SlidersHorizontal size={17} />
 
@@ -432,35 +459,39 @@ function Events() {
                 )}
               </button>
 
-              <select
-                value={sortBy}
-                onChange={(event) =>
-                  setSortBy(event.target.value)
-                }
-                aria-label="Sort events"
-                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-              >
-                <option value="date-asc">
-                  Soonest
-                </option>
+              <div className="relative">
+                <select
+                  value={sortBy}
+                  onChange={(event) =>
+                    setSortBy(event.target.value)
+                  }
+                  aria-label="Sort events"
+                  className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-9 text-sm font-semibold text-slate-700 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                >
+                  <option value="date-asc">
+                    Soonest
+                  </option>
+                  <option value="date-desc">
+                    Latest
+                  </option>
+                  <option value="price-asc">
+                    Price: Low
+                  </option>
+                  <option value="price-desc">
+                    Price: High
+                  </option>
+                </select>
 
-                <option value="date-desc">
-                  Latest
-                </option>
-
-                <option value="price-asc">
-                  Price: Low
-                </option>
-
-                <option value="price-desc">
-                  Price: High
-                </option>
-              </select>
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
             </div>
           </div>
 
           {/* =================================================
-              MOBILE FILTER BOTTOM SHEET
+              MOBILE FILTER SHEET
           ================================================== */}
 
           {isMobileFiltersOpen && (
@@ -476,14 +507,12 @@ function Events() {
                 className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
               />
 
-              {/* Bottom Sheet */}
+              {/* Sheet */}
 
-              <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white shadow-2xl">
-                {/* Header */}
-
+              <div className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-3xl bg-white shadow-2xl">
                 <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900">
+                    <h2 className="text-lg font-bold tracking-tight text-slate-900">
                       Filters
                     </h2>
 
@@ -503,8 +532,6 @@ function Events() {
                     <X size={18} />
                   </button>
                 </div>
-
-                {/* Filter Fields */}
 
                 <div className="space-y-6 px-5 py-6">
                   {/* Category */}
@@ -527,16 +554,14 @@ function Events() {
                         All categories
                       </option>
 
-                      {eventCategories.map(
-                        (category) => (
-                          <option
-                            key={category.slug}
-                            value={category.slug}
-                          >
-                            {category.name}
-                          </option>
-                        )
-                      )}
+                      {eventCategories.map((category) => (
+                        <option
+                          key={category.slug}
+                          value={category.slug}
+                        >
+                          {category.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -606,8 +631,6 @@ function Events() {
                   </div>
                 </div>
 
-                {/* Bottom Actions */}
-
                 <div className="sticky bottom-0 border-t border-slate-200 bg-white p-5">
                   <div className="grid grid-cols-2 gap-3">
                     <button
@@ -642,10 +665,10 @@ function Events() {
           RESULTS
       ====================================================== */}
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-10">
-        {/* Results Header */}
+      <section className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
+        {/* Results heading */}
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500">
               {searchQuery
@@ -663,28 +686,30 @@ function Events() {
                           : "Explore our collection"}
             </p>
 
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+            <h2 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
               All events
             </h2>
           </div>
 
-          <p className="text-sm text-slate-500">
-            {filteredEvents.length}{" "}
+          <div className="rounded-full bg-white px-3.5 py-2 text-sm font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
+            <span className="font-bold text-slate-900">
+              {filteredEvents.length}
+            </span>{" "}
             {filteredEvents.length === 1
               ? "event"
               : "events"}{" "}
             available
-          </p>
+          </div>
         </div>
 
         {/* =================================================
-            DESKTOP SORT
+            DESKTOP SORT BAR
         ================================================== */}
 
-        <div className="mt-8 hidden border-t border-slate-200 pt-6 sm:flex sm:items-center sm:justify-between">
+        <div className="mt-7 flex flex-col gap-4 border-y border-slate-200 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">
             Showing{" "}
-            <span className="font-semibold text-slate-900">
+            <span className="font-bold text-slate-900">
               {filteredEvents.length}
             </span>{" "}
             {filteredEvents.length === 1
@@ -692,88 +717,82 @@ function Events() {
               : "events"}
           </p>
 
-          <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-3 sm:flex">
             <label
               htmlFor="desktop-sort-events"
-              className="whitespace-nowrap text-sm font-medium text-slate-600"
+              className="text-sm font-medium text-slate-500"
             >
               Sort by
             </label>
 
-            <select
-              id="desktop-sort-events"
-              value={sortBy}
-              onChange={(event) =>
-                setSortBy(event.target.value)
-              }
-              className="h-10 min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-            >
-              <option value="date-asc">
-                Date: Soonest
-              </option>
+            <div className="relative">
+              <select
+                id="desktop-sort-events"
+                value={sortBy}
+                onChange={(event) =>
+                  setSortBy(event.target.value)
+                }
+                className="h-10 min-w-[190px] appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-9 text-sm font-semibold text-slate-700 outline-none transition hover:border-slate-300 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+              >
+                <option value="date-asc">
+                  Date: Soonest
+                </option>
 
-              <option value="date-desc">
-                Date: Latest
-              </option>
+                <option value="date-desc">
+                  Date: Latest
+                </option>
 
-              <option value="price-asc">
-                Price: Low to High
-              </option>
+                <option value="price-asc">
+                  Price: Low to High
+                </option>
 
-              <option value="price-desc">
-                Price: High to Low
-              </option>
-            </select>
+                <option value="price-desc">
+                  Price: High to Low
+                </option>
+              </select>
+
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+            </div>
           </div>
         </div>
 
         {/* =================================================
-            ACTIVE FILTER CHIPS
+            ACTIVE FILTERS
         ================================================== */}
 
-        {(searchQuery ||
-          selectedCategory ||
-          selectedLocation ||
-          selectedDate !== "all") && (
+        {hasActiveFilters && (
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            {/* Search */}
-
             {searchQuery && (
-              <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white">
+              <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
                 Search: {searchQuery}
               </span>
             )}
 
-            {/* Category */}
-
             {selectedCategory && (
-              <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1.5 text-xs font-medium text-orange-700">
+              <span className="inline-flex items-center rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 ring-1 ring-inset ring-orange-100">
                 Category: {selectedCategoryName}
               </span>
             )}
 
-            {/* Location */}
-
             {selectedLocation && (
-              <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">
+              <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-100">
                 Location: {selectedLocation}
               </span>
             )}
 
-            {/* Date */}
-
             {selectedDate !== "all" && (
-              <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1.5 text-xs font-medium text-green-700">
+              <span className="inline-flex items-center rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-100">
                 Date: {dateLabel}
               </span>
             )}
 
-            {/* Clear */}
-
             <button
               type="button"
               onClick={clearFilters}
-              className="text-xs font-semibold text-slate-500 transition hover:text-slate-900"
+              className="ml-1 text-xs font-bold text-slate-500 transition hover:text-orange-600"
             >
               Clear all
             </button>
@@ -785,7 +804,7 @@ function Events() {
         ================================================== */}
 
         {filteredEvents.length > 0 ? (
-          <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-7 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredEvents.map((event) => (
               <EventCard
                 key={event.id}
@@ -798,15 +817,15 @@ function Events() {
              EMPTY STATE
           ================================================== */
 
-          <div className="mt-8 rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+          <div className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
               <Search
-                size={24}
+                size={25}
                 className="text-slate-400"
               />
             </div>
 
-            <h3 className="mt-5 text-lg font-semibold text-slate-900">
+            <h3 className="mt-5 text-xl font-bold tracking-tight text-slate-900">
               No events found
             </h3>
 
@@ -819,7 +838,7 @@ function Events() {
             <button
               type="button"
               onClick={clearFilters}
-              className="mt-6 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-200"
             >
               Clear filters
             </button>
