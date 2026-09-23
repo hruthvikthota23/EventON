@@ -1,29 +1,65 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Navbar from "./components/layout/Navbar";
-import Footer from "./components/layout/Footer";
-import Home from "./pages/public/Home";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-function Events() {
-  return (
-    <main className="min-h-[70vh] p-10">
-      <h1 className="text-3xl font-bold text-gray-900">
-        Events
-      </h1>
-    </main>
-  );
-}
+import MainLayout from "./layouts/MainLayout";
+import AuthLayout from "./layouts/AuthLayout";
+
+import Home from "./pages/public/Home";
+import Events from "./pages/public/Events";
+import EventDetails from "./pages/public/EventDetails";
+import Booking from "./pages/public/Booking";
+import BookingConfirmation from "./pages/public/BookingConfirmation";
+
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
 
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
-
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/events" element={<Events />} />
-      </Routes>
+        {/* ================================================
+            PUBLIC WEBSITE
+        ================================================= */}
 
-      <Footer />
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Home />} />
+
+          <Route
+            path="/events"
+            element={<Events />}
+          />
+
+          <Route
+            path="/events/:id"
+            element={<EventDetails />}
+          />
+
+          <Route
+            path="/events/:id/book"
+            element={<Booking />}
+          />
+
+          <Route
+            path="/booking-confirmation"
+            element={<BookingConfirmation />}
+          />
+        </Route>
+
+        {/* ================================================
+            AUTHENTICATION
+        ================================================= */}
+
+        <Route element={<AuthLayout />}>
+          <Route
+            path="/login"
+            element={<Login />}
+          />
+
+          <Route
+            path="/register"
+            element={<Register />}
+          />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }

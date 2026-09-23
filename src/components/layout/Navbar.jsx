@@ -1,5 +1,6 @@
-import { CalendarDays, Menu, Search, User, X } from "lucide-react";
+import { CalendarDays, ChevronDown, LogOut, Menu, Search, User, X } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { Link, NavLink } from "react-router-dom";
 
 const navLinks = [
@@ -15,6 +16,12 @@ const navLinks = [
 
 function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const {
+    user,
+    isAuthenticated,
+    logout,
+  } = useAuth();
 
   const closeMenu = () => {
     setIsMenuOpen(false);
