@@ -8,6 +8,10 @@ import Events from "./pages/public/Events";
 import EventDetails from "./pages/public/EventDetails";
 import Booking from "./pages/public/Booking";
 import BookingConfirmation from "./pages/public/BookingConfirmation";
+import MyBookings from "./pages/attendee/MyBookings";
+import BookingDetails from "./pages/attendee/BookingDetails";
+import Profile from "./pages/attendee/Profile";
+import EditProfile from "./pages/attendee/EditProfile";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -22,27 +26,16 @@ function App() {
 
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
-
-          <Route
-            path="/events"
-            element={<Events />}
-          />
-
-          <Route
-            path="/events/:id"
-            element={<EventDetails />}
-          />
-
-          <Route
-            path="/events/:id/book"
-            element={<Booking />}
-          />
-
-          <Route
-            path="/booking-confirmation"
-            element={<BookingConfirmation />}
-          />
+          <Route path="/events" element={<Events />} />
+          <Route path="/events/:id" element={<EventDetails />} />
+          <Route path="/events/:id/book" element={<Booking />} />
+          <Route path="/booking-confirmation" element={<BookingConfirmation />} />
+          <Route path="/bookings" element={<MyBookings />} />
+          <Route path="/bookings/:bookingId" element={<BookingDetails />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/edit" element={<EditProfile />} />
         </Route>
+
 
         {/* ================================================
             AUTHENTICATION

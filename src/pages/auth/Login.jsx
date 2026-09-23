@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
-  ArrowRight,
-  Check,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
+  ArrowRight,
 } from "lucide-react";
+
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
 
@@ -17,37 +21,28 @@ function Login() {
 
   const { login } = useAuth();
 
-  const [showPassword, setShowPassword] = useState(false);
-
   const [formData, setFormData] = useState({
-    email: location.state?.registeredEmail || "",
+    email: "",
     password: "",
   });
 
   const [errors, setErrors] = useState({});
 
-  const registeredMessage = location.state?.message;
+  const [showPassword, setShowPassword] =
+    useState(false);
 
-  // ---------------------------------------------------------
-  // CLEAR ROUTER STATE
-  // ---------------------------------------------------------
-
-  useEffect(() => {
-    if (location.state) {
-      window.history.replaceState(
-        {},
-        document.title,
-        window.location.pathname
-      );
-    }
-  }, [location.state]);
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
 
   // ---------------------------------------------------------
   // INPUT CHANGE
   // ---------------------------------------------------------
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
+    const {
+      name,
+      value,
+    } = event.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -57,6 +52,7 @@ function Login() {
     setErrors((previous) => ({
       ...previous,
       [name]: "",
+      form: "",
     }));
   };
 
@@ -68,292 +64,371 @@ function Login() {
     const newErrors = {};
 
     if (!formData.email.trim()) {
-      newErrors.email = "Please enter your email address.";
+      newErrors.email =
+        "Please enter your email.";
     } else if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
         formData.email.trim()
       )
     ) {
-      newErrors.email = "Please enter a valid email address.";
+      newErrors.email =
+        "Please enter a valid email address.";
     }
 
     if (!formData.password) {
-      newErrors.password = "Please enter your password.";
+      newErrors.password =
+        "Please enter your password.";
+    } else if (
+      formData.password.length < 6
+    ) {
+      newErrors.password =
+        "Password must be at least 6 characters.";
     }
 
     setErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    return (
+      Object.keys(newErrors).length === 0
+    );
   };
 
   // ---------------------------------------------------------
-  // SUBMIT
+  // LOGIN
   // ---------------------------------------------------------
 
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!validateForm()) {
+    const isValid = validateForm();
+
+    if (!isValid) {
       return;
     }
 
-    const email = formData.email.trim();
+    setIsSubmitting(true);
 
-    const name =
-      email
-        .split("@")[0]
-        .replace(/[._-]+/g, " ")
-        .replace(/\b\w/g, (letter) => letter.toUpperCase()) ||
-      "EventON User";
+    try {
+      const email =
+        formData.email.trim();
 
-    login({
-      name,
-      email,
-    });
+      /*
+       * Frontend-only authentication for now.
+       *
+       * The actual password is not being verified
+       * against a backend yet.
+       */
+      login({
+        name:
+          email
+            .split("@")[0]
+            .replace(/[._-]/g, " "),
+        email,
+      });
 
-    navigate("/", {
-      replace: true,
-    });
+      /*
+       * IMPORTANT:
+       *
+       * If the user came from a protected page,
+       * return them there.
+       *
+       * Example:
+       * /events/1/book
+       *
+       * Otherwise go to home.
+       */
+      const destination =
+        location.state?.from || "/";
+
+      navigate(destination, {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        "Login failed:",
+        error
+      );
+
+      setErrors({
+        form:
+          "Unable to login right now. Please try again.",
+      });
+
+      setIsSubmitting(false);
+    }
   };
 
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
+
   return (
-    <main className="h-full overflow-hidden bg-slate-50">
-      <div className="grid h-full lg:grid-cols-2">
-        {/* =================================================
-            LEFT PANEL
-        ================================================== */}
+    <div className="flex h-full min-h-0 overflow-hidden bg-slate-50">
 
-        <section className="relative hidden h-full overflow-hidden bg-[#070b14] lg:flex">
-          <div className="absolute -right-32 top-10 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
+      {/* =====================================================
+          LEFT SIDE
+      ====================================================== */}
 
-          <div className="absolute -bottom-32 left-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+      <section className="hidden flex-1 items-center justify-center bg-slate-900 px-10 lg:flex">
+        <div className="max-w-md">
 
-          <div className="relative z-10 flex w-full items-center px-12 xl:px-16">
-            <div className="max-w-lg">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-lg font-bold text-white shadow-lg shadow-orange-500/20">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-3"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white shadow-lg">
+              <span className="text-lg font-bold">
                 E
-              </div>
-
-              <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">
-                Welcome back
-              </p>
-
-              <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-white xl:text-5xl">
-                Pick up where
-                <br />
-                you left off.
-              </h1>
-
-              <p className="mt-5 max-w-md text-sm leading-6 text-slate-400">
-                Sign in to manage your bookings, discover
-                upcoming events, and keep everything in one
-                place.
-              </p>
-
-              <div className="mt-7 space-y-3">
-                {[
-                  "Manage your upcoming bookings",
-                  "Discover new experiences",
-                  "Keep your event plans organized",
-                ].map((item) => (
-                  <div
-                    key={item}
-                    className="flex items-center gap-3"
-                  >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-orange-400">
-                      <Check
-                        size={12}
-                        strokeWidth={3}
-                      />
-                    </span>
-
-                    <span className="text-sm text-slate-300">
-                      {item}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              </span>
             </div>
+
+            <div className="text-2xl font-bold tracking-tight text-white">
+              Event
+              <span className="text-orange-500">
+                ON
+              </span>
+            </div>
+          </Link>
+
+          <div className="mt-14">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-400">
+              Welcome back
+            </p>
+
+            <h1 className="mt-4 text-4xl font-bold leading-tight text-white">
+              Discover events.
+              <br />
+              Create memories.
+            </h1>
+
+            <p className="mt-5 text-base leading-7 text-slate-400">
+              Sign in to manage your bookings,
+              discover upcoming events and keep
+              everything in one place.
+            </p>
           </div>
-        </section>
 
-        {/* =================================================
-            RIGHT PANEL
-        ================================================== */}
+        </div>
+      </section>
 
-        <section className="flex h-full items-center justify-center overflow-hidden px-5 py-6 sm:px-8 lg:px-12">
-          <div className="w-full max-w-md">
-            {/* Header */}
+      {/* =====================================================
+          RIGHT SIDE
+      ====================================================== */}
 
-            <div className="mb-6">
-              <p className="text-xs font-semibold text-orange-500">
-                Welcome back
-              </p>
+      <section className="flex min-w-0 flex-1 items-center justify-center overflow-y-auto px-5 py-8 sm:px-8 lg:max-w-xl">
 
-              <h2 className="mt-1.5 text-3xl font-bold tracking-tight text-slate-900">
-                Sign in to EventON
-              </h2>
+        <div className="w-full max-w-md">
 
-              <p className="mt-2 text-sm text-slate-500">
-                Enter your account details to continue.
-              </p>
-            </div>
+          {/* Mobile Logo */}
 
-            {/* Success message */}
+          <div className="mb-8 lg:hidden">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-3"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-white">
+                <span className="font-bold">
+                  E
+                </span>
+              </div>
 
-            {registeredMessage && (
-              <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5">
-                <p className="text-xs font-medium text-green-700">
-                  {registeredMessage}
-                </p>
+              <div className="text-xl font-bold tracking-tight text-slate-900">
+                Event
+                <span className="text-orange-500">
+                  ON
+                </span>
+              </div>
+            </Link>
+          </div>
+
+          {/* Heading */}
+
+          <div>
+            <p className="text-sm font-semibold text-orange-500">
+              Welcome back
+            </p>
+
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+              Sign in to EventON
+            </h1>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Enter your details to continue.
+            </p>
+          </div>
+
+          {/* Form */}
+
+          <form
+            onSubmit={handleSubmit}
+            className="mt-8 space-y-5"
+          >
+
+            {/* General Error */}
+
+            {errors.form && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                {errors.form}
               </div>
             )}
 
-            <form
-              onSubmit={handleSubmit}
-              noValidate
-              className="space-y-4"
-            >
-              {/* Email */}
+            {/* Email */}
 
-              <div>
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                Email address
+              </label>
+
+              <div className="relative">
+                <Mail
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  className={`h-12 w-full rounded-xl border bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                    errors.email
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
+                      : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
+                  }`}
+                />
+              </div>
+
+              {errors.email && (
+                <p className="mt-1.5 text-xs font-medium text-red-500">
+                  {errors.email}
+                </p>
+              )}
+            </div>
+
+            {/* Password */}
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
                 <label
-                  htmlFor="login-email"
-                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  htmlFor="password"
+                  className="block text-sm font-semibold text-slate-700"
                 >
-                  Email address
+                  Password
                 </label>
 
-                <div className="relative">
-                  <Mail
-                    size={17}
-                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <input
-                    id="login-email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    className={`h-11 w-full rounded-xl border bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${
-                      errors.email
-                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                        : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    }`}
-                  />
-                </div>
-
-                {errors.email && (
-                  <p className="mt-1 text-xs text-red-500">
-                    {errors.email}
-                  </p>
-                )}
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-orange-500 transition hover:text-orange-600"
+                >
+                  Forgot password?
+                </button>
               </div>
 
-              {/* Password */}
-
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label
-                    htmlFor="login-password"
-                    className="text-sm font-semibold text-slate-700"
-                  >
-                    Password
-                  </label>
-
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-orange-600 hover:text-orange-700"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <LockKeyhole
-                    size={17}
-                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <input
-                    id="login-password"
-                    name="password"
-                    type={
-                      showPassword
-                        ? "text"
-                        : "password"
-                    }
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Enter your password"
-                    autoComplete="current-password"
-                    className={`h-11 w-full rounded-xl border bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${
-                      errors.password
-                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                        : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    }`}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowPassword(
-                        (previous) => !previous
-                      )
-                    }
-                    aria-label={
-                      showPassword
-                        ? "Hide password"
-                        : "Show password"
-                    }
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    {showPassword ? (
-                      <EyeOff size={17} />
-                    ) : (
-                      <Eye size={17} />
-                    )}
-                  </button>
-                </div>
-
-                {errors.password && (
-                  <p className="mt-1 text-xs text-red-500">
-                    {errors.password}
-                  </p>
-                )}
-              </div>
-
-              {/* Submit */}
-
-              <button
-                type="submit"
-                className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
-              >
-                Sign in
-
-                <ArrowRight
-                  size={17}
-                  className="transition-transform group-hover:translate-x-0.5"
+              <div className="relative">
+                <LockKeyhole
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                 />
-              </button>
-            </form>
 
-            <p className="mt-5 text-center text-sm text-slate-500">
-              Don't have an account?{" "}
-              <Link
-                to="/register"
-                className="font-semibold text-orange-600 hover:text-orange-700"
-              >
-                Create account
-              </Link>
-            </p>
+                <input
+                  id="password"
+                  name="password"
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
+                  autoComplete="current-password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  className={`h-12 w-full rounded-xl border bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                    errors.password
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
+                      : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
+                  }`}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPassword(
+                      (previous) =>
+                        !previous
+                    )
+                  }
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                </button>
+              </div>
+
+              {errors.password && (
+                <p className="mt-1.5 text-xs font-medium text-red-500">
+                  {errors.password}
+                </p>
+              )}
+            </div>
+
+            {/* Submit */}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting
+                ? "Signing in..."
+                : "Sign in"}
+
+              {!isSubmitting && (
+                <ArrowRight size={17} />
+              )}
+            </button>
+
+          </form>
+
+          {/* Register */}
+
+          <p className="mt-7 text-center text-sm text-slate-500">
+            Don't have an account?{" "}
+            <Link
+              to="/register"
+              state={location.state}
+              className="font-semibold text-orange-500 transition hover:text-orange-600"
+            >
+              Create account
+            </Link>
+          </p>
+
+          {/* Back Home */}
+
+          <div className="mt-6 text-center">
+            <Link
+              to="/"
+              className="text-xs font-medium text-slate-400 transition hover:text-slate-600"
+            >
+              ← Back to home
+            </Link>
           </div>
-        </section>
-      </div>
-    </main>
+
+        </div>
+      </section>
+    </div>
   );
 }
 

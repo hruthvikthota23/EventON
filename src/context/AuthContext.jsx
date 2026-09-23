@@ -77,6 +77,21 @@ export function AuthProvider({ children }) {
     });
   };
 
+  const updateUser = (updates) => {
+    setUser((currentUser) => {
+      if (!currentUser) return currentUser;
+
+      const updatedUser = {
+        ...currentUser,
+        ...updates,
+      };
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+
+      return updatedUser;
+    });
+  };
+
   // ---------------------------------------------------------
   // LOGOUT
   // ---------------------------------------------------------
@@ -98,6 +113,7 @@ export function AuthProvider({ children }) {
       isLoading,
       login,
       register,
+      updateUser,
       logout,
     }),
     [user, isLoading]

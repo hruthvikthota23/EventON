@@ -1,9 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+
 import {
   Link,
   useNavigate,
   useParams,
-} from "react-router-dom";import {
+} from "react-router-dom";
+
+import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
@@ -21,9 +25,17 @@ import {
   isEventSoldOut,
 } from "../../data/events";
 
+import { saveBooking } from "../../utils/bookingStorage";
+
 function Booking() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+  } = useAuth();
 
   const event = getEventById(id);
 
@@ -36,6 +48,46 @@ function Booking() {
   });
 
   const [errors, setErrors] = useState({});
+
+  // ---------------------------------------------------------
+  // AUTHENTICATION CHECK
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      navigate("/login", {
+        replace: true,
+        state: {
+          from: `/events/${id}/book`,
+        },
+      });
+    }
+  }, [
+    id,
+    isAuthenticated,
+    isLoading,
+    navigate,
+  ]);
+
+  // ---------------------------------------------------------
+  // PREFILL USER DETAILS
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setFormData((previous) => ({
+      ...previous,
+      name: previous.name || user.name || "",
+      email: previous.email || user.email || "",
+    }));
+  }, [user]);
 
   // ---------------------------------------------------------
   // EVENT NOT FOUND
@@ -64,7 +116,7 @@ function Booking() {
 
             <Link
               to="/events"
-              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
             >
               <ArrowLeft size={17} />
               Back to events
@@ -75,12 +127,13 @@ function Booking() {
     );
   }
 
-  const availableSeats = getAvailableSeats(event);
-  const soldOut = isEventSoldOut(event);
+  // ---------------------------------------------------------
+  // PRICE & AVAILABILITY
+  // ---------------------------------------------------------
 
-  // ---------------------------------------------------------
-  // PRICE CALCULATION
-  // ---------------------------------------------------------
+  const availableSeats = getAvailableSeats(event);
+
+  const soldOut = isEventSoldOut(event);
 
   const totalPrice = useMemo(() => {
     return Number(event.price) * ticketCount;
@@ -103,8 +156,11 @@ function Booking() {
   // INPUT HANDLER
   // ---------------------------------------------------------
 
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
+  const handleInputChange = (inputEvent) => {
+    const {
+      name,
+      value,
+    } = inputEvent.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -123,13 +179,27 @@ function Booking() {
 
   const increaseTickets = () => {
     if (ticketCount < availableSeats) {
-      setTicketCount((count) => count + 1);
+      setTicketCount(
+        (count) => count + 1
+      );
+
+      setErrors((previous) => ({
+        ...previous,
+        tickets: "",
+      }));
     }
   };
 
   const decreaseTickets = () => {
     if (ticketCount > 1) {
-      setTicketCount((count) => count - 1);
+      setTicketCount(
+        (count) => count - 1
+      );
+
+      setErrors((previous) => ({
+        ...previous,
+        tickets: "",
+      }));
     }
   };
 
@@ -141,14 +211,16 @@ function Booking() {
     const newErrors = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = "Please enter your name.";
+      newErrors.name =
+        "Please enter your name.";
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = "Please enter your email.";
+      newErrors.email =
+        "Please enter your email.";
     } else if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        formData.email
+        formData.email.trim()
       )
     ) {
       newErrors.email =
@@ -159,70 +231,121 @@ function Booking() {
       newErrors.phone =
         "Please enter your phone number.";
     } else if (
-      !/^[6-9]\d{9}$/.test(formData.phone)
+      !/^[6-9]\d{9}$/.test(
+        formData.phone.trim()
+      )
     ) {
       newErrors.phone =
         "Please enter a valid 10-digit phone number.";
     }
 
+    if (
+      ticketCount < 1 ||
+      ticketCount > availableSeats
+    ) {
+      newErrors.tickets =
+        `Only ${availableSeats} seats are available.`;
+    }
+
     setErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    return (
+      Object.keys(newErrors).length === 0
+    );
   };
 
   // ---------------------------------------------------------
-  // SUBMIT
+  // SUBMIT BOOKING
   // ---------------------------------------------------------
 
-const handleSubmit = (submitEvent) => {
-  submitEvent.preventDefault();
+  const handleSubmit = (submitEvent) => {
+    submitEvent.preventDefault();
 
-  if (soldOut) {
-    return;
-  }
+    // Extra authentication protection
+    if (
+      !isAuthenticated ||
+      !user
+    ) {
+      navigate("/login", {
+        replace: true,
+        state: {
+          from: `/events/${id}/book`,
+        },
+      });
 
-  if (ticketCount > availableSeats) {
-    setErrors({
-      tickets: `Only ${availableSeats} seats are available.`,
-    });
+      return;
+    }
 
-    return;
-  }
+    if (soldOut) {
+      return;
+    }
 
-  const isValid = validateForm();
+    if (
+      ticketCount > availableSeats
+    ) {
+      setErrors({
+        tickets: `Only ${availableSeats} seats are available.`,
+      });
 
-  if (!isValid) {
-    return;
-  }
+      return;
+    }
 
-  const bookingId = `EVT-${Date.now()
-    .toString()
-    .slice(-8)}`;
+    const isValid = validateForm();
 
-  const booking = {
-    bookingId,
+    if (!isValid) {
+      return;
+    }
 
-    event,
+    const bookingId = `EVT-${Date.now()
+      .toString()
+      .slice(-8)}`;
 
-    attendee: {
-      name: formData.name.trim(),
-      email: formData.email.trim(),
-      phone: formData.phone.trim(),
-    },
+    const booking = {
+      bookingId,
 
-    ticketCount,
+      event,
 
-    totalPrice,
+      attendee: {
+        name: formData.name.trim(),
+        email: user.email,
+        phone: formData.phone.trim(),
+      },
 
-    createdAt: new Date().toISOString(),
+      ticketCount,
+
+      totalPrice,
+
+      status: "confirmed",
+
+      createdAt:
+        new Date().toISOString(),
+    };
+
+    const savedBooking =
+      saveBooking(booking);
+
+    if (!savedBooking) {
+      setErrors({
+        form:
+          "Unable to save your booking. Please try again.",
+      });
+
+      return;
+    }
+
+    navigate(
+      "/booking-confirmation",
+      {
+        state: {
+          booking: savedBooking,
+        },
+      }
+    );
   };
 
-  navigate("/booking-confirmation", {
-    state: {
-      booking,
-    },
-  });
-};
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -248,15 +371,18 @@ const handleSubmit = (submitEvent) => {
 
       <section className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14 lg:px-10">
         <div className="grid gap-8 lg:grid-cols-[1fr_380px] lg:items-start">
+
           {/* =================================================
               LEFT SIDE
           ================================================== */}
 
           <div className="space-y-6">
+
             {/* Event Summary */}
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
               <div className="flex flex-col gap-5 sm:flex-row">
+
                 <img
                   src={event.image}
                   alt={event.title}
@@ -273,6 +399,7 @@ const handleSubmit = (submitEvent) => {
                   </h1>
 
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
+
                     <span className="inline-flex items-center gap-1.5">
                       <CalendarDays size={14} />
                       {formattedDate}
@@ -287,8 +414,10 @@ const handleSubmit = (submitEvent) => {
                       <MapPin size={14} />
                       {event.city}
                     </span>
+
                   </div>
                 </div>
+
               </div>
             </div>
 
@@ -314,7 +443,14 @@ const handleSubmit = (submitEvent) => {
                 </p>
               </div>
 
+              {errors.form && (
+                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                  {errors.form}
+                </div>
+              )}
+
               <div className="mt-7 space-y-5">
+
                 {/* Name */}
 
                 <div>
@@ -416,6 +552,7 @@ const handleSubmit = (submitEvent) => {
                     </p>
                   )}
                 </div>
+
               </div>
             </form>
           </div>
@@ -426,6 +563,7 @@ const handleSubmit = (submitEvent) => {
 
           <aside className="lg:sticky lg:top-24">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -447,6 +585,7 @@ const handleSubmit = (submitEvent) => {
 
               <div className="mt-7">
                 <div className="flex items-center justify-between">
+
                   <div>
                     <p className="text-sm font-semibold text-slate-900">
                       Tickets
@@ -458,6 +597,7 @@ const handleSubmit = (submitEvent) => {
                   </div>
 
                   <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50">
+
                     <button
                       type="button"
                       onClick={decreaseTickets}
@@ -483,6 +623,7 @@ const handleSubmit = (submitEvent) => {
                     >
                       <Plus size={16} />
                     </button>
+
                   </div>
                 </div>
 
@@ -505,6 +646,7 @@ const handleSubmit = (submitEvent) => {
               {/* Price */}
 
               <div className="space-y-3">
+
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-500">
                     Ticket price
@@ -527,6 +669,7 @@ const handleSubmit = (submitEvent) => {
 
                 <div className="border-t border-slate-100 pt-3">
                   <div className="flex items-center justify-between">
+
                     <span className="text-base font-semibold text-slate-900">
                       Total
                     </span>
@@ -534,13 +677,21 @@ const handleSubmit = (submitEvent) => {
                     <span className="text-2xl font-bold text-slate-900">
                       ₹{totalPrice}
                     </span>
+
                   </div>
                 </div>
+
               </div>
 
               {/* Availability */}
 
-              <div className="mt-6 flex items-start gap-3 rounded-xl bg-green-50 p-3.5">
+              <div
+                className={`mt-6 flex items-start gap-3 rounded-xl p-3.5 ${
+                  soldOut
+                    ? "bg-red-50"
+                    : "bg-green-50"
+                }`}
+              >
                 <CheckCircle2
                   size={18}
                   className={
@@ -571,7 +722,7 @@ const handleSubmit = (submitEvent) => {
               <button
                 type="submit"
                 form="booking-form"
-                disabled={soldOut}
+                disabled={soldOut || isLoading}
                 className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-orange-500 text-sm font-bold text-white transition hover:bg-orange-600 focus:outline-none focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
               >
                 {soldOut
@@ -583,8 +734,10 @@ const handleSubmit = (submitEvent) => {
                 Your booking information is securely
                 processed.
               </p>
+
             </div>
           </aside>
+
         </div>
       </section>
     </main>
