@@ -37,6 +37,17 @@ export const eventCategories = [
   },
 ];
 
+/*
+ * System-owned events
+ *
+ * These are the original EventON demo events.
+ * They are not owned by a real registered user.
+ *
+ * Organizer-created events will use the logged-in
+ * organizer's user ID as organizerId.
+ */
+export const SYSTEM_ORGANIZER_ID = "system-organizer";
+
 export const events = [
   {
     id: 1,
@@ -52,6 +63,7 @@ export const events = [
     location: "HICC, Hyderabad",
     city: "Hyderabad",
     organizer: "EventON Tech",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 999,
     capacity: 500,
     bookedSeats: 342,
@@ -75,6 +87,7 @@ export const events = [
     location: "T-Hub, Hyderabad",
     city: "Hyderabad",
     organizer: "AI Community Hyderabad",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 799,
     capacity: 300,
     bookedSeats: 187,
@@ -98,6 +111,7 @@ export const events = [
     location: "Novotel HICC, Hyderabad",
     city: "Hyderabad",
     organizer: "Startup Hyderabad",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 499,
     capacity: 250,
     bookedSeats: 121,
@@ -121,6 +135,7 @@ export const events = [
     location: "Gachibowli Stadium, Hyderabad",
     city: "Hyderabad",
     organizer: "Hyderabad Live",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 1299,
     capacity: 2000,
     bookedSeats: 1450,
@@ -144,6 +159,7 @@ export const events = [
     location: "JNTUH Campus, Hyderabad",
     city: "Hyderabad",
     organizer: "Career Launch",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 299,
     capacity: 400,
     bookedSeats: 275,
@@ -167,6 +183,7 @@ export const events = [
     location: "Necklace Road, Hyderabad",
     city: "Hyderabad",
     organizer: "Hyderabad Runners",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 599,
     capacity: 1500,
     bookedSeats: 920,
@@ -190,6 +207,7 @@ export const events = [
     location: "State Art Gallery, Hyderabad",
     city: "Hyderabad",
     organizer: "Hyderabad Arts Collective",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 199,
     capacity: 300,
     bookedSeats: 98,
@@ -213,6 +231,7 @@ export const events = [
     location: "Microsoft Reactor, Hyderabad",
     city: "Hyderabad",
     organizer: "Hyderabad Developers",
+    organizerId: SYSTEM_ORGANIZER_ID,
     price: 0,
     capacity: 150,
     bookedSeats: 103,
@@ -223,22 +242,68 @@ export const events = [
   },
 ];
 
+/**
+ * Get a single event by ID.
+ */
 export const getEventById = (id) => {
-  return events.find((event) => event.id === Number(id));
+  return events.find(
+    (event) => event.id === Number(id)
+  );
 };
 
+/**
+ * Get all featured events.
+ */
 export const getFeaturedEvents = () => {
-  return events.filter((event) => event.featured);
+  return events.filter(
+    (event) => event.featured
+  );
 };
 
-export const getEventsByCategory = (categorySlug) => {
-  return events.filter((event) => event.categorySlug === categorySlug);
+/**
+ * Get events belonging to a category.
+ */
+export const getEventsByCategory = (
+  categorySlug
+) => {
+  return events.filter(
+    (event) =>
+      event.categorySlug === categorySlug
+  );
 };
 
+/**
+ * Get available seats.
+ */
 export const getAvailableSeats = (event) => {
-  return Math.max(event.capacity - event.bookedSeats, 0);
+  if (!event) {
+    return 0;
+  }
+
+  return Math.max(
+    Number(event.capacity || 0) -
+      Number(event.bookedSeats || 0),
+    0
+  );
 };
 
+/**
+ * Check whether an event is sold out.
+ */
 export const isEventSoldOut = (event) => {
   return getAvailableSeats(event) === 0;
+};
+
+/**
+ * Get events created by a specific organizer.
+ *
+ * This will be used by the Organizer Dashboard.
+ */
+export const getEventsByOrganizer = (
+  organizerId
+) => {
+  return events.filter(
+    (event) =>
+      event.organizerId === organizerId
+  );
 };

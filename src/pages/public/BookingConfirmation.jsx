@@ -35,7 +35,7 @@ function BookingConfirmation() {
 
             <Link
               to="/events"
-              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-800"
             >
               <ArrowLeft size={17} />
               Browse events

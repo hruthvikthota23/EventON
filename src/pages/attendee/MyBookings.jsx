@@ -16,12 +16,16 @@ import { useAuth } from "../../context/AuthContext";
 import BookingCard from "../../components/bookings/BookingCard";
 import BookingEmptyState from "../../components/bookings/BookingEmptyState";
 
-import { bookings as mockBookings } from "../../data/bookings";
-
 import {
   getStoredBookings,
   updateStoredBooking,
 } from "../../utils/bookingStorage";
+
+import {
+  getStoredEventById,
+  updateStoredEvent,
+  EVENTS_UPDATED_EVENT,
+} from "../../utils/eventStorage";
 
 const tabs = [
   {
@@ -42,42 +46,15 @@ const tabs = [
   },
 ];
 
-// ---------------------------------------------------------
-// INITIAL BOOKINGS
-// ---------------------------------------------------------
-
-function getInitialBookings() {
-  const storedBookings = getStoredBookings();
-
-  const storedBookingIds = new Set(
-    storedBookings.map(
-      (booking) => booking.bookingId
-    )
-  );
-
-  const fallbackBookings =
-    mockBookings.filter(
-      (booking) =>
-        !storedBookingIds.has(
-          booking.bookingId
-        )
-    );
-
-  return [
-    ...storedBookings,
-    ...fallbackBookings,
-  ];
-}
-
-// ---------------------------------------------------------
-// COMPONENT
-// ---------------------------------------------------------
-
 function MyBookings() {
   const {
     user,
     isAuthenticated,
   } = useAuth();
+
+  // =========================================================
+  // STATE
+  // =========================================================
 
   const [bookingList, setBookingList] =
     useState([]);
@@ -85,71 +62,134 @@ function MyBookings() {
   const [activeTab, setActiveTab] =
     useState("all");
 
-  // -------------------------------------------------------
+  // =========================================================
   // LOAD USER BOOKINGS
-  // -------------------------------------------------------
+  // =========================================================
 
   useEffect(() => {
-    if (
-      !isAuthenticated ||
-      !user?.email
-    ) {
-      setBookingList([]);
-      return;
-    }
+    const loadBookings = () => {
+      if (
+        !isAuthenticated ||
+        !user?.email
+      ) {
+        setBookingList([]);
+        return;
+      }
 
-    const allBookings =
-      getInitialBookings();
+      const allBookings =
+        getStoredBookings();
 
-    const userBookings =
-      allBookings.filter(
-        (booking) =>
-          booking.attendee?.email?.toLowerCase() ===
-          user.email.toLowerCase()
+      const userEmail =
+        user.email.trim().toLowerCase();
+
+      const userBookings =
+        allBookings.filter(
+          (booking) =>
+            booking.attendee?.email
+              ?.trim()
+              .toLowerCase() ===
+            userEmail
+        );
+
+      setBookingList(userBookings);
+    };
+
+    loadBookings();
+
+    // Refresh when EventON updates
+    // booking/event data.
+    window.addEventListener(
+      "eventon:bookings-updated",
+      loadBookings
+    );
+
+    window.addEventListener(
+      EVENTS_UPDATED_EVENT,
+      loadBookings
+    );
+
+    // Refresh when localStorage
+    // changes in another browser tab.
+    window.addEventListener(
+      "storage",
+      loadBookings
+    );
+
+    return () => {
+      window.removeEventListener(
+        "eventon:bookings-updated",
+        loadBookings
       );
 
-    setBookingList(userBookings);
+      window.removeEventListener(
+        EVENTS_UPDATED_EVENT,
+        loadBookings
+      );
+
+      window.removeEventListener(
+        "storage",
+        loadBookings
+      );
+    };
   }, [
     isAuthenticated,
     user?.email,
   ]);
 
-  // -------------------------------------------------------
+  // =========================================================
   // BOOKING COUNTS
-  // -------------------------------------------------------
+  // =========================================================
 
   const counts = useMemo(() => {
-    const today = new Date();
+    const now = new Date();
 
     const upcoming =
       bookingList.filter(
         (booking) => {
+          if (
+            booking.status !==
+            "confirmed"
+          ) {
+            return false;
+          }
+
+          if (
+            !booking.event?.date
+          ) {
+            return false;
+          }
+
           const eventDate =
             new Date(
               booking.event.date
             );
 
-          return (
-            eventDate >= today &&
-            booking.status ===
-              "confirmed"
-          );
+          return eventDate >= now;
         }
       ).length;
 
     const completed =
       bookingList.filter(
         (booking) => {
+          if (
+            booking.status !==
+            "confirmed"
+          ) {
+            return false;
+          }
+
+          if (
+            !booking.event?.date
+          ) {
+            return false;
+          }
+
           const eventDate =
             new Date(
               booking.event.date
             );
 
-          return (
-            eventDate < today &&
-            booking.status ===
-              "confirmed"
-          );
+          return eventDate < now;
         }
       ).length;
 
@@ -168,13 +208,13 @@ function MyBookings() {
     };
   }, [bookingList]);
 
-  // -------------------------------------------------------
+  // =========================================================
   // FILTER BOOKINGS
-  // -------------------------------------------------------
+  // =========================================================
 
   const filteredBookings =
     useMemo(() => {
-      const today = new Date();
+      const now = new Date();
 
       if (
         activeTab ===
@@ -193,16 +233,25 @@ function MyBookings() {
       ) {
         return bookingList.filter(
           (booking) => {
+            if (
+              booking.status !==
+              "confirmed"
+            ) {
+              return false;
+            }
+
+            if (
+              !booking.event?.date
+            ) {
+              return false;
+            }
+
             const eventDate =
               new Date(
                 booking.event.date
               );
 
-            return (
-              eventDate < today &&
-              booking.status ===
-                "confirmed"
-            );
+            return eventDate < now;
           }
         );
       }
@@ -213,16 +262,25 @@ function MyBookings() {
       ) {
         return bookingList.filter(
           (booking) => {
+            if (
+              booking.status !==
+              "confirmed"
+            ) {
+              return false;
+            }
+
+            if (
+              !booking.event?.date
+            ) {
+              return false;
+            }
+
             const eventDate =
               new Date(
                 booking.event.date
               );
 
-            return (
-              eventDate >= today &&
-              booking.status ===
-                "confirmed"
-            );
+            return eventDate >= now;
           }
         );
       }
@@ -233,13 +291,20 @@ function MyBookings() {
       bookingList,
     ]);
 
-  // -------------------------------------------------------
+  // =========================================================
   // CANCEL BOOKING
-  // -------------------------------------------------------
+  // =========================================================
 
   const handleCancelBooking = (
     booking
   ) => {
+    if (
+      booking.status !==
+      "confirmed"
+    ) {
+      return;
+    }
+
     const shouldCancel =
       window.confirm(
         `Are you sure you want to cancel booking ${booking.bookingId}?`
@@ -249,52 +314,168 @@ function MyBookings() {
       return;
     }
 
-    const updatedBookings =
-      updateStoredBooking(
-        booking.bookingId,
-        {
-          status: "cancelled",
-        }
+    // =======================================================
+    // GET LATEST BOOKING DATA
+    // =======================================================
+
+    const storedBookings =
+      getStoredBookings();
+
+    const currentBooking =
+      storedBookings.find(
+        (item) =>
+          item.bookingId ===
+          booking.bookingId
       );
 
-    setBookingList(
-      (previousBookings) =>
-        previousBookings.map(
+    if (!currentBooking) {
+      setBookingList(
+        storedBookings.filter(
           (item) =>
-            item.bookingId ===
-            booking.bookingId
-              ? {
-                  ...item,
-                  status:
-                    "cancelled",
-                }
-              : item
+            item.attendee?.email
+              ?.trim()
+              .toLowerCase() ===
+            user?.email
+              ?.trim()
+              .toLowerCase()
         )
-    );
+      );
+
+      return;
+    }
+
+    // Prevent cancelling twice
+    if (
+      currentBooking.status !==
+      "confirmed"
+    ) {
+      return;
+    }
+
+    // =======================================================
+    // UPDATE BOOKING
+    // =======================================================
+
+    const updatedBookings =
+      updateStoredBooking(
+        currentBooking.bookingId,
+        {
+          status: "cancelled",
+          cancelledAt:
+            new Date().toISOString(),
+        }
+      );
 
     if (!updatedBookings) {
       console.warn(
         "Booking status could not be persisted."
       );
+
+      return;
     }
+
+    // =======================================================
+    // RESTORE EVENT SEATS
+    // =======================================================
+
+    const eventId =
+      currentBooking.eventId ||
+      currentBooking.event?.id;
+
+    if (eventId) {
+      const currentEvent =
+        getStoredEventById(
+          eventId
+        );
+
+      if (currentEvent) {
+        const currentBookedSeats =
+          Number(
+            currentEvent.bookedSeats
+          ) || 0;
+
+        const cancelledTickets =
+          Number(
+            currentBooking.ticketCount
+          ) || 0;
+
+        const restoredBookedSeats =
+          Math.max(
+            currentBookedSeats -
+              cancelledTickets,
+            0
+          );
+
+        updateStoredEvent(
+          eventId,
+          {
+            bookedSeats:
+              restoredBookedSeats,
+
+            status:
+              currentEvent.status ===
+                "sold-out" ||
+              currentEvent.status ===
+                "published"
+                ? "published"
+                : currentEvent.status,
+          }
+        );
+      }
+    }
+
+    // =======================================================
+    // REFRESH USER BOOKINGS
+    // =======================================================
+
+    const refreshedBookings =
+      getStoredBookings();
+
+    const refreshedUserBookings =
+      refreshedBookings.filter(
+        (item) =>
+          item.attendee?.email
+            ?.trim()
+            .toLowerCase() ===
+          user?.email
+            ?.trim()
+            .toLowerCase()
+      );
+
+    setBookingList(
+      refreshedUserBookings
+    );
+
+    // =======================================================
+    // NOTIFY OTHER COMPONENTS
+    // =======================================================
+
+    window.dispatchEvent(
+      new Event(
+        "eventon:bookings-updated"
+      )
+    );
   };
 
-  // -------------------------------------------------------
+  // =========================================================
   // UI
-  // -------------------------------------------------------
+  // =========================================================
 
   return (
     <main className="min-h-screen bg-slate-50">
 
-      {/* =================================================
+      {/* =====================================================
           HEADER
-      ================================================== */}
+      ====================================================== */}
 
       <section className="border-b border-slate-200 bg-white">
+
         <div className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 lg:px-10">
+
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 
             <div>
+
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-orange-500">
                 Your activity
               </p>
@@ -309,23 +490,26 @@ function MyBookings() {
                 completed bookings, and
                 cancelled reservations.
               </p>
+
             </div>
 
             <Link
               to="/events"
-              className="inline-flex w-fit items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
+              className="inline-flex w-fit items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold !text-white transition hover:bg-orange-600"
             >
               <CalendarDays size={17} />
               Browse Events
             </Link>
 
           </div>
+
         </div>
+
       </section>
 
-      {/* =================================================
+      {/* =====================================================
           SUMMARY
-      ================================================== */}
+      ====================================================== */}
 
       <section className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
 
@@ -334,6 +518,7 @@ function MyBookings() {
           {/* All */}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
             <div className="flex items-center justify-between">
 
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
@@ -353,11 +538,13 @@ function MyBookings() {
             <p className="mt-1 text-sm text-slate-500">
               All bookings
             </p>
+
           </div>
 
           {/* Upcoming */}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
             <div className="flex items-center justify-between">
 
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600">
@@ -377,11 +564,13 @@ function MyBookings() {
             <p className="mt-1 text-sm text-slate-500">
               Upcoming
             </p>
+
           </div>
 
           {/* Completed */}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
             <div className="flex items-center justify-between">
 
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -401,11 +590,13 @@ function MyBookings() {
             <p className="mt-1 text-sm text-slate-500">
               Completed
             </p>
+
           </div>
 
           {/* Cancelled */}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
             <div className="flex items-center justify-between">
 
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-500">
@@ -425,6 +616,7 @@ function MyBookings() {
             <p className="mt-1 text-sm text-slate-500">
               Cancelled
             </p>
+
           </div>
 
         </div>
@@ -434,6 +626,7 @@ function MyBookings() {
         ================================================== */}
 
         <div className="mt-8 overflow-x-auto">
+
           <div className="flex min-w-max gap-2 rounded-2xl border border-slate-200 bg-white p-2">
 
             {tabs.map((tab) => {
@@ -456,6 +649,7 @@ function MyBookings() {
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
+
                   {tab.label}
 
                   <span
@@ -467,11 +661,13 @@ function MyBookings() {
                   >
                     {counts[tab.id]}
                   </span>
+
                 </button>
               );
             })}
 
           </div>
+
         </div>
 
         {/* =================================================
@@ -481,6 +677,7 @@ function MyBookings() {
         <div className="mt-8 flex items-center justify-between gap-4">
 
           <div>
+
             <h2 className="text-lg font-bold text-slate-900">
               {
                 tabs.find(
@@ -499,11 +696,16 @@ function MyBookings() {
                 : "bookings"}{" "}
               found
             </p>
+
           </div>
 
           <div className="hidden items-center gap-2 text-sm text-slate-400 sm:flex">
+
             <Clock3 size={16} />
-            Updated from your latest bookings
+
+            Updated from your latest
+            bookings
+
           </div>
 
         </div>
@@ -514,7 +716,9 @@ function MyBookings() {
 
         {filteredBookings.length ===
         0 ? (
+
           <div className="mt-5">
+
             <BookingEmptyState
               title={
                 activeTab ===
@@ -529,12 +733,17 @@ function MyBookings() {
                   : `You don't have any ${activeTab} bookings at the moment.`
               }
               showBrowseButton={
-                activeTab === "all"
+                activeTab ===
+                "all"
               }
             />
+
           </div>
+
         ) : (
+
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
+
             {filteredBookings.map(
               (booking) => (
                 <BookingCard
@@ -548,10 +757,13 @@ function MyBookings() {
                 />
               )
             )}
+
           </div>
+
         )}
 
       </section>
+
     </main>
   );
 }
