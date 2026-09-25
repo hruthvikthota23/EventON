@@ -24,6 +24,7 @@ function Login() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    role: "attendee",
   });
 
   const [errors, setErrors] = useState({});
@@ -64,12 +65,12 @@ function Login() {
       newErrors.email =
         "Please enter your email.";
     } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
         formData.email.trim()
       )
     ) {
       newErrors.email =
-        "Please enter a valid email address.";
+        "Please enter a valid Gmail address ending with @gmail.com.";
     }
 
     if (!formData.password) {
@@ -110,6 +111,7 @@ function Login() {
       const result = login({
         email,
         password: formData.password,
+        role: formData.role,
       });
 
       // -----------------------------------------------------
@@ -130,8 +132,47 @@ function Login() {
       // LOGIN SUCCESSFUL
       // -----------------------------------------------------
 
-      const destination =
-        location.state?.from || "/";
+      // -----------------------------------------------------
+      // ROLE-BASED REDIRECT
+      // -----------------------------------------------------
+      //
+      // Never send an attendee back to an organizer route.
+      // This can happen when an organizer logs out while
+      // /organizer is the current URL and the next login is
+      // performed by an attendee.
+      //
+      // Organizers always enter the organizer dashboard.
+      // Attendees can return to a safe public destination.
+      // -----------------------------------------------------
+
+      const loggedInRole =
+        String(result.user?.role || "attendee")
+          .trim()
+          .toLowerCase();
+
+      const requestedDestination =
+        location.state?.from;
+
+      const isOrganizerDestination =
+        typeof requestedDestination === "string" &&
+        (
+          requestedDestination === "/organizer" ||
+          requestedDestination.startsWith(
+            "/organizer/"
+          )
+        );
+
+      let destination = "/";
+
+      if (loggedInRole === "organizer") {
+        destination = "/organizer";
+      } else if (
+        requestedDestination &&
+        !isOrganizerDestination &&
+        typeof requestedDestination === "string"
+      ) {
+        destination = requestedDestination;
+      }
 
       navigate(destination, {
         replace: true,
@@ -275,6 +316,90 @@ function Login() {
                 {errors.form}
               </div>
             )}
+
+            {/* =================================================
+                ACCOUNT TYPE
+            ================================================= */}
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Login as
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((previous) => ({
+                      ...previous,
+                      role: "attendee",
+                    }))
+                  }
+                  className={`rounded-xl border px-4 py-3 text-left transition ${
+                    formData.role === "attendee"
+                      ? "border-orange-500 bg-orange-50 ring-2 ring-orange-100"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm ${
+                        formData.role === "attendee"
+                          ? "bg-orange-500 text-white"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      👤
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        Attendee
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Book events
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((previous) => ({
+                      ...previous,
+                      role: "organizer",
+                    }))
+                  }
+                  className={`rounded-xl border px-4 py-3 text-left transition ${
+                    formData.role === "organizer"
+                      ? "border-orange-500 bg-orange-50 ring-2 ring-orange-100"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm ${
+                        formData.role === "organizer"
+                          ? "bg-orange-500 text-white"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      🏢
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        Organizer
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Manage events
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
 
             {/* =================================================
                 EMAIL

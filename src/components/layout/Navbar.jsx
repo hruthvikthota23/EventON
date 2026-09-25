@@ -1,53 +1,44 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
-  CalendarDays,
   ChevronDown,
+  LayoutDashboard,
   LogOut,
   Menu,
   Search,
   User,
   X,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
 
 function Navbar() {
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useAuth();
 
-  const profileRef = useRef(null);
+  const {
+    user,
+    isAuthenticated,
+    logout,
+  } = useAuth();
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] =
+    useState(false);
 
-  // ---------------------------------------------------------
-  // CLOSE DROPDOWN WHEN CLICKING OUTSIDE
-  // ---------------------------------------------------------
+  const [isProfileOpen, setIsProfileOpen] =
+    useState(false);
 
-  useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target)
-      ) {
-        setIsProfileOpen(false);
-      }
-    };
+  const isOrganizer =
+    user?.role === "organizer";
 
-    document.addEventListener("mousedown", handleOutsideClick);
+  const isAdmin =
+    user?.role === "admin";
 
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-    };
-  }, []);
-
-  // ---------------------------------------------------------
+  // =========================================================
   // LOGOUT
-  // ---------------------------------------------------------
+  // =========================================================
 
   const handleLogout = () => {
     logout();
@@ -58,62 +49,78 @@ function Navbar() {
     navigate("/login");
   };
 
-  // ---------------------------------------------------------
+  // =========================================================
   // CLOSE MOBILE MENU
-  // ---------------------------------------------------------
+  // =========================================================
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
-  };
-
-  // ---------------------------------------------------------
-  // CLOSE PROFILE MENU
-  // ---------------------------------------------------------
-
-  const closeProfileMenu = () => {
     setIsProfileOpen(false);
   };
 
-  // ---------------------------------------------------------
-  // USER INITIALS
-  // ---------------------------------------------------------
+  // =========================================================
+  // PROFILE CLICK
+  // =========================================================
+
+  const handleProfileClick = () => {
+    setIsProfileOpen(
+      (previous) => !previous
+    );
+  };
+
+  // =========================================================
+  // PROFILE HOVER
+  // =========================================================
+
+  const handleProfileMouseEnter = () => {
+    setIsProfileOpen(true);
+  };
+
+  const handleProfileMouseLeave = () => {
+    setIsProfileOpen(false);
+  };
+
+  // =========================================================
+  // INITIALS
+  // =========================================================
 
   const getInitials = (name = "") => {
-    const trimmedName = name.trim();
+    const words = name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
 
-    if (!trimmedName) {
+    if (!words.length) {
       return "U";
     }
 
-    const words = trimmedName.split(/\s+/);
-
     if (words.length === 1) {
-      return words[0].slice(0, 2).toUpperCase();
+      return words[0]
+        .slice(0, 2)
+        .toUpperCase();
     }
 
-    return `${words[0][0]}${
-      words[words.length - 1][0]
-    }`.toUpperCase();
+    return `${words[0][0]}${words[
+      words.length - 1
+    ][0]}`.toUpperCase();
   };
-
-  // ---------------------------------------------------------
-  // NAVBAR
-  // ---------------------------------------------------------
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+
+      {/* =====================================================
+          NAVBAR CONTAINER
+      ===================================================== */}
+
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 
-        {/* ================================================= */}
-        {/* LOGO */}
-        {/* ================================================= */}
+        {/* ===================================================
+            LOGO
+        =================================================== */}
 
         <Link
           to="/"
-          onClick={() => {
-            closeMobileMenu();
-            closeProfileMenu();
-          }}
+          onClick={closeMobileMenu}
           className="flex items-center gap-2.5"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-sm font-bold text-white shadow-sm">
@@ -121,15 +128,19 @@ function Navbar() {
           </span>
 
           <span className="text-xl font-bold tracking-tight text-slate-900">
-            Event<span className="text-orange-500">ON</span>
+            Event
+            <span className="text-orange-500">
+              ON
+            </span>
           </span>
         </Link>
 
-        {/* ================================================= */}
-        {/* DESKTOP NAVIGATION */}
-        {/* ================================================= */}
+        {/* ===================================================
+            DESKTOP NAVIGATION
+        =================================================== */}
 
         <nav className="hidden items-center gap-7 md:flex">
+
           <Link
             to="/"
             className="text-sm font-medium text-slate-600 transition hover:text-orange-500"
@@ -143,15 +154,17 @@ function Navbar() {
           >
             Events
           </Link>
+
         </nav>
 
-        {/* ================================================= */}
-        {/* DESKTOP ACTIONS */}
-        {/* ================================================= */}
+        {/* ===================================================
+            DESKTOP ACTIONS
+        =================================================== */}
 
         <div className="hidden items-center gap-3 md:flex">
 
           {/* Search */}
+
           <Link
             to="/events"
             className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
@@ -160,9 +173,9 @@ function Navbar() {
             <Search size={19} />
           </Link>
 
-          {/* ================================================= */}
-          {/* LOGGED OUT */}
-          {/* ================================================= */}
+          {/* =================================================
+              LOGGED OUT
+          ================================================= */}
 
           {!isAuthenticated ? (
             <>
@@ -181,163 +194,231 @@ function Navbar() {
               </Link>
             </>
           ) : (
-
-            /* ================================================= */
-            /* LOGGED IN PROFILE */
-            /* ================================================= */
+            /* =================================================
+               LOGGED IN PROFILE
+            ================================================= */
 
             <div
-              ref={profileRef}
               className="relative"
-              onMouseLeave={() => setIsProfileOpen(false)}
+              onMouseEnter={
+                handleProfileMouseEnter
+              }
+              onMouseLeave={
+                handleProfileMouseLeave
+              }
             >
 
               {/* Profile Button */}
 
               <button
                 type="button"
-                onClick={() =>
-                  setIsProfileOpen(
-                    (previous) => !previous
-                  )
-                }
-                className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition ${
+                onClick={handleProfileClick}
+                className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-slate-100"
+                aria-expanded={
                   isProfileOpen
-                    ? "bg-slate-100"
-                    : "hover:bg-slate-100"
-                }`}
-                aria-expanded={isProfileOpen}
-                aria-haspopup="true"
+                }
+                aria-label="Open account menu"
               >
+
                 {/* Avatar */}
 
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600">
-                  {getInitials(user?.name)}
+                  {getInitials(
+                    user?.name
+                  )}
                 </span>
 
                 {/* Name */}
 
                 <span className="max-w-28 truncate text-sm font-semibold text-slate-700">
-                  {user?.name || "Account"}
+                  {user?.name ||
+                    "Account"}
                 </span>
 
                 {/* Arrow */}
 
                 <ChevronDown
                   size={16}
-                  className={`text-slate-400 transition-transform duration-200 ${
+                  className={`text-slate-400 transition ${
                     isProfileOpen
                       ? "rotate-180"
                       : ""
                   }`}
                 />
+
               </button>
 
-              {/* ================================================= */}
-              {/* PROFILE DROPDOWN */}
-              {/* ================================================= */}
+              {/* =================================================
+                  DROPDOWN
+              ================================================= */}
 
-              <div
-                className={`absolute right-0 top-full w-64 pt-2 transition-all duration-200 ${
-                  isProfileOpen
-                    ? "visible translate-y-0 opacity-100"
-                    : "invisible translate-y-1 opacity-0"
-                }`}
-              >
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+              {isProfileOpen && (
+                <div className="absolute right-0 top-full pt-2">
 
-                  {/* User Information */}
+                  <div className="w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
 
-                  <div className="border-b border-slate-100 px-4 py-4">
-                    <div className="flex items-center gap-3">
+                    {/* USER HEADER */}
 
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
-                        {getInitials(user?.name)}
-                      </span>
+                    <div className="border-b border-slate-100 px-4 py-4">
 
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">
-                          {user?.name ||
-                            "EventON User"}
-                        </p>
+                      <div className="flex items-center gap-3">
 
-                        <p className="truncate text-xs text-slate-500">
-                          {user?.email}
-                        </p>
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
+                          {getInitials(
+                            user?.name
+                          )}
+                        </span>
+
+                        <div className="min-w-0">
+
+                          <p className="truncate text-sm font-bold text-slate-900">
+                            {user?.name ||
+                              "EventON User"}
+                          </p>
+
+                          <p className="truncate text-xs text-slate-500">
+                            {user?.email}
+                          </p>
+
+                          <p className="mt-1 text-[11px] font-semibold capitalize text-orange-500">
+                            {user?.role ||
+                              "attendee"}
+                          </p>
+
+                        </div>
+
                       </div>
 
                     </div>
-                  </div>
 
-                  {/* ================================================= */}
-                  {/* MENU OPTIONS */}
-                  {/* ================================================= */}
+                    {/* =================================================
+                        MENU
+                    ================================================= */}
 
-                  <div className="p-2">
+                    <div className="p-2">
 
-                    {/* My Profile */}
+                      {/* ORGANIZER DASHBOARD */}
 
-                    <Link
-                      to="/profile"
-                      onClick={closeProfileMenu}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
-                    >
-                      <User
-                        size={17}
-                        className="text-slate-400"
-                      />
+                      {isOrganizer && (
+                        <Link
+                          to="/organizer"
+                          onClick={() =>
+                            setIsProfileOpen(
+                              false
+                            )
+                          }
+                          className="mb-1 flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-600 transition hover:bg-orange-100"
+                        >
+                          <LayoutDashboard
+                            size={17}
+                          />
 
-                      <span>My Profile</span>
-                    </Link>
+                          Organizer Dashboard
+                        </Link>
+                      )}
 
-                    {/* My Bookings */}
+                      {/* ADMIN DASHBOARD */}
 
-                    <Link
-                      to="/bookings"
-                      onClick={closeProfileMenu}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
-                    >
-                      <CalendarDays
-                        size={17}
-                        className="text-slate-400"
-                      />
+                      {isAdmin && (
+                        <Link
+                          to="/admin"
+                          onClick={() =>
+                            setIsProfileOpen(
+                              false
+                            )
+                          }
+                          className="mb-1 flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-600 transition hover:bg-orange-100"
+                        >
+                          <LayoutDashboard
+                            size={17}
+                          />
 
-                      <span>My Bookings</span>
-                    </Link>
+                          Admin Dashboard
+                        </Link>
+                      )}
 
-                  </div>
+                      {/* PROFILE */}
 
-                  {/* ================================================= */}
-                  {/* LOGOUT */}
-                  {/* ================================================= */}
+<Link
+  to={
+    isOrganizer
+      ? "/organizer/profile"
+      : "/profile"
+  }
+  onClick={closeMobileMenu}
+  className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+>
+  <User
+    size={18}
+    className="text-slate-400"
+  />
 
-                  <div className="border-t border-slate-100 p-2">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
-                    >
-                      <LogOut size={17} />
+  My Profile
+</Link>
 
-                      <span>Logout</span>
-                    </button>
+                      {/* BOOKINGS */}
+
+                      <Link
+                        to="/bookings"
+                        onClick={() =>
+                          setIsProfileOpen(
+                            false
+                          )
+                        }
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                      >
+                        <Search
+                          size={17}
+                          className="text-slate-400"
+                        />
+
+                        My Bookings
+                      </Link>
+
+                    </div>
+
+                    {/* =================================================
+                        LOGOUT
+                    ================================================= */}
+
+                    <div className="border-t border-slate-100 p-2">
+
+                      <button
+                        type="button"
+                        onClick={
+                          handleLogout
+                        }
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                      >
+                        <LogOut
+                          size={17}
+                        />
+
+                        Logout
+                      </button>
+
+                    </div>
+
                   </div>
 
                 </div>
-              </div>
+              )}
+
             </div>
           )}
+
         </div>
 
-        {/* ================================================= */}
-        {/* MOBILE MENU BUTTON */}
-        {/* ================================================= */}
+        {/* ===================================================
+            MOBILE MENU BUTTON
+        =================================================== */}
 
         <button
           type="button"
           onClick={() =>
             setIsMobileMenuOpen(
-              (previous) => !previous
+              (previous) =>
+                !previous
             )
           }
           className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 md:hidden"
@@ -349,23 +430,27 @@ function Navbar() {
             <Menu size={22} />
           )}
         </button>
+
       </div>
 
-      {/* ================================================= */}
-      {/* MOBILE MENU */}
-      {/* ================================================= */}
+      {/* =====================================================
+          MOBILE MENU
+      ===================================================== */}
 
       {isMobileMenuOpen && (
         <div className="border-t border-slate-100 bg-white md:hidden">
+
           <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 
-            {/* Navigation */}
+            {/* PUBLIC NAVIGATION */}
 
             <nav className="space-y-1">
 
               <Link
                 to="/"
-                onClick={closeMobileMenu}
+                onClick={
+                  closeMobileMenu
+                }
                 className="block rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Home
@@ -373,7 +458,9 @@ function Navbar() {
 
               <Link
                 to="/events"
-                onClick={closeMobileMenu}
+                onClick={
+                  closeMobileMenu
+                }
                 className="block rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Events
@@ -383,16 +470,18 @@ function Navbar() {
 
             <div className="my-3 border-t border-slate-100" />
 
-            {/* ================================================= */}
-            {/* MOBILE LOGGED OUT */}
-            {/* ================================================= */}
+            {/* =================================================
+                MOBILE LOGGED OUT
+            ================================================= */}
 
             {!isAuthenticated ? (
               <div className="space-y-2">
 
                 <Link
                   to="/login"
-                  onClick={closeMobileMenu}
+                  onClick={
+                    closeMobileMenu
+                  }
                   className="block rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Login
@@ -400,7 +489,9 @@ function Navbar() {
 
                 <Link
                   to="/register"
-                  onClick={closeMobileMenu}
+                  onClick={
+                    closeMobileMenu
+                  }
                   className="block rounded-xl bg-orange-500 px-3 py-3 text-center text-sm font-semibold text-white transition hover:bg-orange-600"
                 >
                   Get Started
@@ -408,19 +499,20 @@ function Navbar() {
 
               </div>
             ) : (
-
-              /* ================================================= */
-              /* MOBILE LOGGED IN */
-              /* ================================================= */
+              /* =================================================
+                 MOBILE LOGGED IN
+              ================================================= */
 
               <div>
 
-                {/* User */}
+                {/* USER */}
 
                 <div className="mb-2 flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-3">
 
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
-                    {getInitials(user?.name)}
+                    {getInitials(
+                      user?.name
+                    )}
                   </span>
 
                   <div className="min-w-0">
@@ -434,15 +526,58 @@ function Navbar() {
                       {user?.email}
                     </p>
 
+                    <p className="mt-1 text-[11px] font-semibold capitalize text-orange-500">
+                      {user?.role ||
+                        "attendee"}
+                    </p>
+
                   </div>
 
                 </div>
 
-                {/* My Profile */}
+                {/* ORGANIZER DASHBOARD */}
+
+                {isOrganizer && (
+                  <Link
+                    to="/organizer"
+                    onClick={
+                      closeMobileMenu
+                    }
+                    className="mb-1 flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-100"
+                  >
+                    <LayoutDashboard
+                      size={18}
+                    />
+
+                    Organizer Dashboard
+                  </Link>
+                )}
+
+                {/* ADMIN DASHBOARD */}
+
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    onClick={
+                      closeMobileMenu
+                    }
+                    className="mb-1 flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-100"
+                  >
+                    <LayoutDashboard
+                      size={18}
+                    />
+
+                    Admin Dashboard
+                  </Link>
+                )}
+
+                {/* PROFILE */}
 
                 <Link
                   to="/profile"
-                  onClick={closeMobileMenu}
+                  onClick={
+                    closeMobileMenu
+                  }
                   className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   <User
@@ -453,14 +588,16 @@ function Navbar() {
                   My Profile
                 </Link>
 
-                {/* My Bookings */}
+                {/* BOOKINGS */}
 
                 <Link
                   to="/bookings"
-                  onClick={closeMobileMenu}
+                  onClick={
+                    closeMobileMenu
+                  }
                   className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  <CalendarDays
+                  <Search
                     size={18}
                     className="text-slate-400"
                   />
@@ -468,23 +605,30 @@ function Navbar() {
                   My Bookings
                 </Link>
 
-                {/* Logout */}
+                {/* LOGOUT */}
 
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={
+                    handleLogout
+                  }
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                 >
-                  <LogOut size={18} />
+                  <LogOut
+                    size={18}
+                  />
 
                   Logout
                 </button>
 
               </div>
             )}
+
           </div>
+
         </div>
       )}
+
     </header>
   );
 }

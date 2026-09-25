@@ -21,69 +21,91 @@ const VALID_ROLES = [
   "admin",
 ];
 
-// ===========================================================
-// AUTH UPDATE EVENT
-// ===========================================================
-
 function notifyAuthUpdated() {
   window.dispatchEvent(
     new Event(AUTH_UPDATED_EVENT)
   );
 }
 
-// ===========================================================
-// NORMALIZE ROLE
-// ===========================================================
-
 function normalizeRole(role) {
-  return VALID_ROLES.includes(role)
-    ? role
+  const normalized = String(
+    role || DEFAULT_ROLE
+  )
+    .trim()
+    .toLowerCase();
+
+  return VALID_ROLES.includes(normalized)
+    ? normalized
     : DEFAULT_ROLE;
 }
 
-// ===========================================================
-// AUTH PROVIDER
-// ===========================================================
+function normalizeUser(user) {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+
+  if (!user.id || !user.email) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    name: user.name || "",
+    email: String(user.email)
+      .trim()
+      .toLowerCase(),
+    role: normalizeRole(user.role),
+  };
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // =========================================================
-  // RESTORE CURRENT USER
-  // =========================================================
-
   useEffect(() => {
     try {
-      const storedUser = localStorage.getItem(
-        USER_STORAGE_KEY
-      );
+      const storedUser =
+        localStorage.getItem(
+          USER_STORAGE_KEY
+        );
 
       if (!storedUser) {
-        setIsLoading(false);
         return;
       }
 
-      const parsedUser = JSON.parse(storedUser);
+      const parsedUser =
+        JSON.parse(storedUser);
 
-      if (
-        parsedUser &&
-        typeof parsedUser === "object" &&
-        parsedUser.id &&
-        parsedUser.email
-      ) {
-        const restoredUser = {
-          id: parsedUser.id,
-          name: parsedUser.name || "",
-          email: String(parsedUser.email)
-            .trim()
-            .toLowerCase(),
-          role: normalizeRole(parsedUser.role),
+      const normalizedUser =
+        normalizeUser(parsedUser);
+
+      if (normalizedUser) {
+        const accounts = getAccounts();
+
+        const account = accounts.find(
+          (item) =>
+            String(item.id) ===
+            String(normalizedUser.id)
+        );
+
+        const migratedUser = {
+          ...normalizedUser,
+          role: normalizeRole(
+            account?.role ||
+              normalizedUser.role
+          ),
         };
 
-        setUser(restoredUser);
+        setUser(migratedUser);
+
+        localStorage.setItem(
+          USER_STORAGE_KEY,
+          JSON.stringify(migratedUser)
+        );
       } else {
-        localStorage.removeItem(USER_STORAGE_KEY);
+        localStorage.removeItem(
+          USER_STORAGE_KEY
+        );
       }
     } catch (error) {
       console.error(
@@ -91,21 +113,20 @@ export function AuthProvider({ children }) {
         error
       );
 
-      localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem(
+        USER_STORAGE_KEY
+      );
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // =========================================================
-  // GET ACCOUNTS
-  // =========================================================
-
-  const getAccounts = () => {
+  function getAccounts() {
     try {
-      const storedAccounts = localStorage.getItem(
-        ACCOUNTS_STORAGE_KEY
-      );
+      const storedAccounts =
+        localStorage.getItem(
+          ACCOUNTS_STORAGE_KEY
+        );
 
       if (!storedAccounts) {
         return [];
@@ -118,7 +139,14 @@ export function AuthProvider({ children }) {
         return [];
       }
 
-      return parsedAccounts;
+      return parsedAccounts.map(
+        (account) => ({
+          ...account,
+          role: normalizeRole(
+            account.role
+          ),
+        })
+      );
     } catch (error) {
       console.error(
         "Unable to read EventON accounts:",
@@ -127,13 +155,9 @@ export function AuthProvider({ children }) {
 
       return [];
     }
-  };
+  }
 
-  // =========================================================
-  // SAVE ACCOUNTS
-  // =========================================================
-
-  const saveAccounts = (accounts) => {
+  function saveAccounts(accounts) {
     try {
       localStorage.setItem(
         ACCOUNTS_STORAGE_KEY,
@@ -149,32 +173,20 @@ export function AuthProvider({ children }) {
 
       return false;
     }
-  };
-
-  // =========================================================
-  // REGISTER
-  // =========================================================
+  }
 
   const register = (userData) => {
     const accounts = getAccounts();
 
-    const normalizedName = String(
-      userData?.name || ""
-    ).trim();
-
     const normalizedEmail = String(
-      userData?.email || ""
+      userData.email || ""
     )
       .trim()
       .toLowerCase();
 
-    const password = String(
-      userData?.password || ""
-    );
-
-    // -------------------------------------------------------
-    // NAME VALIDATION
-    // -------------------------------------------------------
+    const normalizedName = String(
+      userData.name || ""
+    ).trim();
 
     if (!normalizedName) {
       return {
@@ -182,18 +194,6 @@ export function AuthProvider({ children }) {
         error: "Name is required.",
       };
     }
-
-    if (normalizedName.length < 2) {
-      return {
-        success: false,
-        error:
-          "Name must contain at least 2 characters.",
-      };
-    }
-
-    // -------------------------------------------------------
-    // EMAIL VALIDATION
-    // -------------------------------------------------------
 
     if (!normalizedEmail) {
       return {
@@ -203,47 +203,31 @@ export function AuthProvider({ children }) {
     }
 
     if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
         normalizedEmail
       )
     ) {
       return {
         success: false,
-        error: "Enter a valid email address.",
+        error:
+          "Enter a valid Gmail address ending with @gmail.com.",
       };
     }
 
-    // -------------------------------------------------------
-    // PASSWORD VALIDATION
-    // -------------------------------------------------------
-
-    if (!password) {
+    if (!userData.password) {
       return {
         success: false,
         error: "Password is required.",
       };
     }
 
-    // Register page already validates password length,
-    // but keeping this here protects the auth layer too.
-    if (password.length < 8) {
-      return {
-        success: false,
-        error:
-          "Password must contain at least 8 characters.",
-      };
-    }
-
-    // -------------------------------------------------------
-    // DUPLICATE EMAIL CHECK
-    // -------------------------------------------------------
-
-    const existingAccount = accounts.find(
-      (account) =>
-        String(account.email || "")
-          .trim()
-          .toLowerCase() === normalizedEmail
-    );
+    const existingAccount =
+      accounts.find(
+        (account) =>
+          String(account.email)
+            .toLowerCase() ===
+          normalizedEmail
+      );
 
     if (existingAccount) {
       return {
@@ -253,27 +237,26 @@ export function AuthProvider({ children }) {
       };
     }
 
-    // -------------------------------------------------------
-    // CREATE ACCOUNT
-    // -------------------------------------------------------
+    const selectedRole =
+      String(userData.role || DEFAULT_ROLE)
+        .trim()
+        .toLowerCase();
+
+    const role = [
+      "attendee",
+      "organizer",
+    ].includes(selectedRole)
+      ? selectedRole
+      : DEFAULT_ROLE;
 
     const newAccount = {
       id: `user-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 8)}`,
-
       name: normalizedName,
-
       email: normalizedEmail,
-
-      password,
-
-      // New accounts are attendees by default.
-      role: DEFAULT_ROLE,
-
-      createdAt: new Date().toISOString(),
-
-      updatedAt: new Date().toISOString(),
+      password: userData.password,
+      role,
     };
 
     const updatedAccounts = [
@@ -281,9 +264,8 @@ export function AuthProvider({ children }) {
       newAccount,
     ];
 
-    const saved = saveAccounts(
-      updatedAccounts
-    );
+    const saved =
+      saveAccounts(updatedAccounts);
 
     if (!saved) {
       return {
@@ -293,10 +275,6 @@ export function AuthProvider({ children }) {
       };
     }
 
-    // -------------------------------------------------------
-    // CREATE CURRENT SESSION
-    // -------------------------------------------------------
-
     const loggedInUser = {
       id: newAccount.id,
       name: newAccount.name,
@@ -304,26 +282,12 @@ export function AuthProvider({ children }) {
       role: newAccount.role,
     };
 
-    try {
-      localStorage.setItem(
-        USER_STORAGE_KEY,
-        JSON.stringify(loggedInUser)
-      );
-    } catch (error) {
-      console.error(
-        "Unable to save EventON user:",
-        error
-      );
-
-      return {
-        success: false,
-        error:
-          "Account created, but login session could not be saved.",
-      };
-    }
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(loggedInUser)
+    );
 
     setUser(loggedInUser);
-
     notifyAuthUpdated();
 
     return {
@@ -332,50 +296,20 @@ export function AuthProvider({ children }) {
     };
   };
 
-  // =========================================================
-  // LOGIN
-  // =========================================================
-
   const login = (userData) => {
     const accounts = getAccounts();
 
     const normalizedEmail = String(
-      userData?.email || ""
+      userData.email || ""
     )
       .trim()
       .toLowerCase();
 
-    const password = String(
-      userData?.password || ""
-    );
-
-    // -------------------------------------------------------
-    // BASIC VALIDATION
-    // -------------------------------------------------------
-
-    if (!normalizedEmail) {
-      return {
-        success: false,
-        error: "Email is required.",
-      };
-    }
-
-    if (!password) {
-      return {
-        success: false,
-        error: "Password is required.",
-      };
-    }
-
-    // -------------------------------------------------------
-    // FIND ACCOUNT
-    // -------------------------------------------------------
-
     const account = accounts.find(
       (item) =>
-        String(item.email || "")
-          .trim()
-          .toLowerCase() === normalizedEmail
+        String(item.email)
+          .toLowerCase() ===
+        normalizedEmail
     );
 
     if (!account) {
@@ -386,51 +320,44 @@ export function AuthProvider({ children }) {
       };
     }
 
-    // -------------------------------------------------------
-    // PASSWORD CHECK
-    // -------------------------------------------------------
-
-    if (account.password !== password) {
+    if (
+      account.password !==
+      userData.password
+    ) {
       return {
         success: false,
         error: "Incorrect password.",
       };
     }
 
-    // -------------------------------------------------------
-    // CURRENT SESSION
-    // -------------------------------------------------------
-
-    const loggedInUser = {
-      id: account.id,
-      name: account.name || "",
-      email: String(account.email)
+    const selectedRole =
+      String(userData.role || DEFAULT_ROLE)
         .trim()
-        .toLowerCase(),
+        .toLowerCase();
 
-      role: normalizeRole(account.role),
-    };
+    const accountRole =
+      normalizeRole(account.role);
 
-    try {
-      localStorage.setItem(
-        USER_STORAGE_KEY,
-        JSON.stringify(loggedInUser)
-      );
-    } catch (error) {
-      console.error(
-        "Unable to save EventON user:",
-        error
-      );
-
+    if (selectedRole !== accountRole) {
       return {
         success: false,
-        error:
-          "Login succeeded, but the session could not be saved.",
+        error: `This account is registered as ${accountRole}. Please select ${accountRole} to continue.`,
       };
     }
 
-    setUser(loggedInUser);
+    const loggedInUser = {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: accountRole,
+    };
 
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(loggedInUser)
+    );
+
+    setUser(loggedInUser);
     notifyAuthUpdated();
 
     return {
@@ -439,11 +366,7 @@ export function AuthProvider({ children }) {
     };
   };
 
-  // =========================================================
-  // UPDATE USER
-  // =========================================================
-
-  const updateUser = (updates = {}) => {
+  const updateUser = (updates) => {
     if (!user) {
       return {
         success: false,
@@ -454,43 +377,17 @@ export function AuthProvider({ children }) {
 
     const accounts = getAccounts();
 
-    // -------------------------------------------------------
-    // FIND CURRENT ACCOUNT
-    // -------------------------------------------------------
-
-    const currentAccount = accounts.find(
-      (account) => account.id === user.id
-    );
-
-    if (!currentAccount) {
-      return {
-        success: false,
-        error:
-          "Your account could not be found. Please log in again.",
-      };
-    }
-
-    // -------------------------------------------------------
-    // NORMALIZE VALUES
-    // -------------------------------------------------------
-
     const updatedName =
       updates.name !== undefined
         ? String(updates.name).trim()
-        : currentAccount.name;
+        : user.name;
 
     const updatedEmail =
       updates.email !== undefined
         ? String(updates.email)
             .trim()
             .toLowerCase()
-        : String(currentAccount.email)
-            .trim()
-            .toLowerCase();
-
-    // -------------------------------------------------------
-    // NAME VALIDATION
-    // -------------------------------------------------------
+        : user.email;
 
     if (!updatedName) {
       return {
@@ -507,10 +404,6 @@ export function AuthProvider({ children }) {
       };
     }
 
-    // -------------------------------------------------------
-    // EMAIL VALIDATION
-    // -------------------------------------------------------
-
     if (!updatedEmail) {
       return {
         success: false,
@@ -519,28 +412,41 @@ export function AuthProvider({ children }) {
     }
 
     if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
         updatedEmail
       )
     ) {
       return {
         success: false,
         error:
-          "Enter a valid email address.",
+          "Enter a valid Gmail address ending with @gmail.com.",
       };
     }
 
-    // -------------------------------------------------------
-    // DUPLICATE EMAIL CHECK
-    // -------------------------------------------------------
+    const currentAccount =
+      accounts.find(
+        (account) =>
+          String(account.id) ===
+          String(user.id)
+      );
 
-    const duplicateAccount = accounts.find(
-      (account) =>
-        account.id !== user.id &&
-        String(account.email || "")
-          .trim()
-          .toLowerCase() === updatedEmail
-    );
+    if (!currentAccount) {
+      return {
+        success: false,
+        error:
+          "Your account could not be found. Please log in again.",
+      };
+    }
+
+    const duplicateAccount =
+      accounts.find(
+        (account) =>
+          String(account.id) !==
+            String(user.id) &&
+          String(account.email)
+            .toLowerCase() ===
+            updatedEmail
+      );
 
     if (duplicateAccount) {
       return {
@@ -550,36 +456,38 @@ export function AuthProvider({ children }) {
       };
     }
 
-    // -------------------------------------------------------
-    // UPDATE ACCOUNT
-    // -------------------------------------------------------
+    const currentRole =
+      normalizeRole(
+        currentAccount.role ||
+          user.role
+      );
 
-    const updatedAccounts = accounts.map(
-      (account) => {
-        if (account.id !== user.id) {
+    const updatedUser = {
+      ...user,
+      name: updatedName,
+      email: updatedEmail,
+      role: currentRole,
+    };
+
+    const updatedAccounts =
+      accounts.map((account) => {
+        if (
+          String(account.id) !==
+          String(user.id)
+        ) {
           return account;
         }
 
         return {
           ...account,
-
           name: updatedName,
-
           email: updatedEmail,
-
-          // Never allow profile editing to
-          // accidentally change the role.
-          role: normalizeRole(account.role),
-
-          updatedAt:
-            new Date().toISOString(),
+          role: currentRole,
         };
-      }
-    );
+      });
 
-    const saved = saveAccounts(
-      updatedAccounts
-    );
+    const saved =
+      saveAccounts(updatedAccounts);
 
     if (!saved) {
       return {
@@ -589,42 +497,12 @@ export function AuthProvider({ children }) {
       };
     }
 
-    // -------------------------------------------------------
-    // UPDATE CURRENT SESSION
-    // -------------------------------------------------------
-
-    const updatedUser = {
-      ...user,
-
-      name: updatedName,
-
-      email: updatedEmail,
-
-      role: normalizeRole(
-        currentAccount.role
-      ),
-    };
-
-    try {
-      localStorage.setItem(
-        USER_STORAGE_KEY,
-        JSON.stringify(updatedUser)
-      );
-    } catch (error) {
-      console.error(
-        "Unable to save EventON user:",
-        error
-      );
-
-      return {
-        success: false,
-        error:
-          "Unable to save your profile changes.",
-      };
-    }
+    localStorage.setItem(
+      USER_STORAGE_KEY,
+      JSON.stringify(updatedUser)
+    );
 
     setUser(updatedUser);
-
     notifyAuthUpdated();
 
     return {
@@ -633,24 +511,12 @@ export function AuthProvider({ children }) {
     };
   };
 
-  // =========================================================
-  // LOGOUT
-  // =========================================================
-
   const logout = () => {
-    try {
-      localStorage.removeItem(
-        USER_STORAGE_KEY
-      );
-    } catch (error) {
-      console.error(
-        "Unable to clear EventON session:",
-        error
-      );
-    }
+    localStorage.removeItem(
+      USER_STORAGE_KEY
+    );
 
     setUser(null);
-
     notifyAuthUpdated();
 
     return {
@@ -658,32 +524,18 @@ export function AuthProvider({ children }) {
     };
   };
 
-  // =========================================================
-  // CONTEXT VALUE
-  // =========================================================
-
   const value = useMemo(
     () => ({
       user,
-
       isAuthenticated: Boolean(user),
-
       isLoading,
-
       login,
-
       register,
-
       updateUser,
-
       logout,
     }),
     [user, isLoading]
   );
-
-  // =========================================================
-  // PROVIDER
-  // =========================================================
 
   return (
     <AuthContext.Provider value={value}>
@@ -692,12 +544,9 @@ export function AuthProvider({ children }) {
   );
 }
 
-// ===========================================================
-// useAuth HOOK
-// ===========================================================
-
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(

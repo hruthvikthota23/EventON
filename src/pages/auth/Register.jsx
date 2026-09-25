@@ -8,20 +8,18 @@ import {
   LockKeyhole,
   Mail,
   User,
+  Building2,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
 
 function Register() {
   const navigate = useNavigate();
-
   const { register } = useAuth();
 
-  const [showPassword, setShowPassword] =
-    useState(false);
-
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [role, setRole] = useState("attendee");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -31,9 +29,7 @@ function Register() {
   });
 
   const [errors, setErrors] = useState({});
-
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ---------------------------------------------------------
   // INPUT CHANGE
@@ -55,6 +51,20 @@ function Register() {
   };
 
   // ---------------------------------------------------------
+  // ROLE CHANGE
+  // ---------------------------------------------------------
+
+  const handleRoleChange = (selectedRole) => {
+    setRole(selectedRole);
+
+    setErrors((previous) => ({
+      ...previous,
+      role: "",
+      form: "",
+    }));
+  };
+
+  // ---------------------------------------------------------
   // VALIDATION
   // ---------------------------------------------------------
 
@@ -62,28 +72,24 @@ function Register() {
     const newErrors = {};
 
     if (!formData.name.trim()) {
-      newErrors.name =
-        "Please enter your full name.";
+      newErrors.name = "Please enter your full name.";
     } else if (formData.name.trim().length < 2) {
-      newErrors.name =
-        "Name must contain at least 2 characters.";
+      newErrors.name = "Name must contain at least 2 characters.";
     }
 
-    if (!formData.email.trim()) {
-      newErrors.email =
-        "Please enter your email address.";
+    const email = formData.email.trim().toLowerCase();
+
+    if (!email) {
+      newErrors.email = "Please enter your Gmail address.";
     } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        formData.email.trim()
-      )
+      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email)
     ) {
       newErrors.email =
-        "Please enter a valid email address.";
+        "Please enter a valid Gmail address ending with @gmail.com.";
     }
 
     if (!formData.password) {
-      newErrors.password =
-        "Please create a password.";
+      newErrors.password = "Please create a password.";
     } else if (formData.password.length < 8) {
       newErrors.password =
         "Password must contain at least 8 characters.";
@@ -93,11 +99,13 @@ function Register() {
       newErrors.confirmPassword =
         "Please confirm your password.";
     } else if (
-      formData.password !==
-      formData.confirmPassword
+      formData.password !== formData.confirmPassword
     ) {
-      newErrors.confirmPassword =
-        "Passwords do not match.";
+      newErrors.confirmPassword = "Passwords do not match.";
+    }
+
+    if (!["attendee", "organizer"].includes(role)) {
+      newErrors.role = "Please select an account type.";
     }
 
     setErrors(newErrors);
@@ -112,7 +120,28 @@ function Register() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
+    // Final server-style validation guard.
+    // This runs immediately before register() so an invalid
+    // domain can never reach the account creation logic.
+    const normalizedEmail = formData.email.trim().toLowerCase();
+    const isValidGmail =
+      /^[a-zA-Z0-9._%+-]+@gmail\\.com$/i.test(
+        normalizedEmail
+      );
+
     if (!validateForm()) {
+      return;
+    }
+
+    if (!isValidGmail) {
+      setErrors((previous) => ({
+        ...previous,
+        email:
+          "Please enter a valid Gmail address ending with @gmail.com.",
+        form: "",
+      }));
+
+      setIsSubmitting(false);
       return;
     }
 
@@ -121,36 +150,35 @@ function Register() {
     try {
       const result = register({
         name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: normalizedEmail,
         password: formData.password,
+        role,
       });
 
-      // -----------------------------------------------------
-      // REGISTRATION FAILED
-      // -----------------------------------------------------
-
-      if (!result.success) {
+      if (!result?.success) {
         setErrors({
-          form: result.error,
+          form:
+            result?.error ||
+            "Unable to create your account.",
         });
 
         setIsSubmitting(false);
-
         return;
       }
 
-      // -----------------------------------------------------
-      // REGISTRATION SUCCESSFUL
-      // -----------------------------------------------------
+      const registeredRole =
+        result.user?.role || role;
 
-      navigate("/", {
-        replace: true,
-      });
-    } catch (error) {
-      console.error(
-        "Registration failed:",
-        error
+      navigate(
+        registeredRole === "organizer"
+          ? "/organizer"
+          : "/",
+        {
+          replace: true,
+        }
       );
+    } catch (error) {
+      console.error("Registration failed:", error);
 
       setErrors({
         form:
@@ -165,18 +193,13 @@ function Register() {
     <main className="h-full overflow-hidden bg-slate-50">
       <div className="grid h-full lg:grid-cols-2">
 
-        {/* =================================================
-            LEFT PANEL
-        ================================================== */}
+        {/* LEFT PANEL */}
 
         <section className="relative hidden h-full overflow-hidden bg-[#070b14] lg:flex">
-
           <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
-
           <div className="absolute -bottom-32 right-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
 
           <div className="relative z-10 flex w-full items-center px-12 xl:px-16">
-
             <div className="max-w-lg">
 
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-lg font-bold text-white shadow-lg shadow-orange-500/20">
@@ -200,7 +223,6 @@ function Register() {
               </p>
 
               <div className="mt-7 space-y-3">
-
                 {[
                   "Discover events that match your interests",
                   "Book tickets in just a few steps",
@@ -211,10 +233,7 @@ function Register() {
                     className="flex items-center gap-3"
                   >
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-orange-400">
-                      <Check
-                        size={12}
-                        strokeWidth={3}
-                      />
+                      <Check size={12} strokeWidth={3} />
                     </span>
 
                     <span className="text-sm text-slate-300">
@@ -222,24 +241,18 @@ function Register() {
                     </span>
                   </div>
                 ))}
-
               </div>
+
             </div>
           </div>
         </section>
 
-        {/* =================================================
-            RIGHT PANEL
-        ================================================== */}
+        {/* RIGHT PANEL */}
 
         <section className="flex h-full items-center justify-center overflow-hidden px-5 py-4 sm:px-8 lg:px-12">
-
           <div className="w-full max-w-md">
 
-            {/* Header */}
-
             <div className="mb-4">
-
               <p className="text-xs font-semibold text-orange-500">
                 Create your account
               </p>
@@ -249,13 +262,9 @@ function Register() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                Create an account to book and manage your
-                event experiences.
+                Create an account to book, manage, or organize events.
               </p>
-
             </div>
-
-            {/* Form */}
 
             <form
               onSubmit={handleSubmit}
@@ -263,18 +272,95 @@ function Register() {
               className="space-y-3"
             >
 
-              {/* General Error */}
-
               {errors.form && (
                 <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
                   {errors.form}
                 </div>
               )}
 
+              {/* ACCOUNT TYPE */}
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  Account type
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+
+                  <button
+                    type="button"
+                    onClick={() => handleRoleChange("attendee")}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      role === "attendee"
+                        ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                          role === "attendee"
+                            ? "bg-orange-500 text-white"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        <User size={17} />
+                      </span>
+
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">
+                          Attendee
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Book events
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRoleChange("organizer")}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      role === "organizer"
+                        ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                          role === "organizer"
+                            ? "bg-orange-500 text-white"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        <Building2 size={17} />
+                      </span>
+
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">
+                          Organizer
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Create events
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                </div>
+
+                {errors.role && (
+                  <p className="mt-0.5 text-[11px] text-red-500">
+                    {errors.role}
+                  </p>
+                )}
+              </div>
+
               {/* NAME */}
 
               <div>
-
                 <label
                   htmlFor="register-name"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -283,7 +369,6 @@ function Register() {
                 </label>
 
                 <div className="relative">
-
                   <User
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -303,7 +388,6 @@ function Register() {
                         : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     }`}
                   />
-
                 </div>
 
                 {errors.name && (
@@ -311,22 +395,19 @@ function Register() {
                     {errors.name}
                   </p>
                 )}
-
               </div>
 
               {/* EMAIL */}
 
               <div>
-
                 <label
                   htmlFor="register-email"
                   className="mb-1 block text-sm font-semibold text-slate-700"
                 >
-                  Email address
+                  Gmail address
                 </label>
 
                 <div className="relative">
-
                   <Mail
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -338,29 +419,45 @@ function Register() {
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    placeholder="you@example.com"
+                    onBlur={() => {
+                      const email = formData.email.trim().toLowerCase();
+
+                      if (
+                        email &&
+                        !/^[a-zA-Z0-9._%+-]+@gmail\\.com$/i.test(email)
+                      ) {
+                        setErrors((previous) => ({
+                          ...previous,
+                          email:
+                            "Please enter a valid Gmail address ending with @gmail.com.",
+                        }));
+                      }
+                    }}
+                    placeholder="you@gmail.com"
                     autoComplete="email"
+                    inputMode="email"
                     className={`h-10.5 w-full rounded-xl border bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${
                       errors.email
                         ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
                         : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     }`}
                   />
-
                 </div>
+
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Only Gmail addresses ending in @gmail.com are accepted.
+                </p>
 
                 {errors.email && (
                   <p className="mt-0.5 text-[11px] text-red-500">
                     {errors.email}
                   </p>
                 )}
-
               </div>
 
               {/* PASSWORD */}
 
               <div>
-
                 <label
                   htmlFor="register-password"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -369,7 +466,6 @@ function Register() {
                 </label>
 
                 <div className="relative">
-
                   <LockKeyhole
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -378,11 +474,7 @@ function Register() {
                   <input
                     id="register-password"
                     name="password"
-                    type={
-                      showPassword
-                        ? "text"
-                        : "password"
-                    }
+                    type={showPassword ? "text" : "password"}
                     value={formData.password}
                     onChange={handleChange}
                     placeholder="Create a password"
@@ -396,25 +488,12 @@ function Register() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setShowPassword(
-                        (previous) => !previous
-                      )
-                    }
-                    aria-label={
-                      showPassword
-                        ? "Hide password"
-                        : "Show password"
-                    }
+                    onClick={() => setShowPassword((previous) => !previous)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    {showPassword ? (
-                      <EyeOff size={17} />
-                    ) : (
-                      <Eye size={17} />
-                    )}
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
-
                 </div>
 
                 {errors.password && (
@@ -422,13 +501,11 @@ function Register() {
                     {errors.password}
                   </p>
                 )}
-
               </div>
 
               {/* CONFIRM PASSWORD */}
 
               <div>
-
                 <label
                   htmlFor="register-confirm-password"
                   className="mb-1 block text-sm font-semibold text-slate-700"
@@ -437,7 +514,6 @@ function Register() {
                 </label>
 
                 <div className="relative">
-
                   <LockKeyhole
                     size={17}
                     className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -446,11 +522,7 @@ function Register() {
                   <input
                     id="register-confirm-password"
                     name="confirmPassword"
-                    type={
-                      showConfirmPassword
-                        ? "text"
-                        : "password"
-                    }
+                    type={showConfirmPassword ? "text" : "password"}
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     placeholder="Confirm your password"
@@ -464,11 +536,7 @@ function Register() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setShowConfirmPassword(
-                        (previous) => !previous
-                      )
-                    }
+                    onClick={() => setShowConfirmPassword((previous) => !previous)}
                     aria-label={
                       showConfirmPassword
                         ? "Hide password"
@@ -476,13 +544,8 @@ function Register() {
                     }
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   >
-                    {showConfirmPassword ? (
-                      <EyeOff size={17} />
-                    ) : (
-                      <Eye size={17} />
-                    )}
+                    {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
-
                 </div>
 
                 {errors.confirmPassword && (
@@ -490,7 +553,6 @@ function Register() {
                     {errors.confirmPassword}
                   </p>
                 )}
-
               </div>
 
               {/* SUBMIT */}
@@ -500,9 +562,7 @@ function Register() {
                 disabled={isSubmitting}
                 className="group mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmitting
-                  ? "Creating account..."
-                  : "Create account"}
+                {isSubmitting ? "Creating account..." : "Create account"}
 
                 {!isSubmitting && (
                   <ArrowRight
@@ -511,14 +571,10 @@ function Register() {
                   />
                 )}
               </button>
-
             </form>
-
-            {/* LOGIN LINK */}
 
             <p className="mt-4 text-center text-sm text-slate-500">
               Already have an account?{" "}
-
               <Link
                 to="/login"
                 className="font-semibold text-orange-600 hover:text-orange-700"
@@ -526,8 +582,6 @@ function Register() {
                 Sign in
               </Link>
             </p>
-
-            {/* Terms */}
 
             <p className="mt-3 text-center text-[11px] leading-4 text-slate-400">
               By creating an account, you agree to EventON's

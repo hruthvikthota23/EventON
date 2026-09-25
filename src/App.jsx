@@ -14,6 +14,17 @@ import BookingDetails from "./pages/attendee/BookingDetails";
 import Profile from "./pages/attendee/Profile";
 import EditProfile from "./pages/attendee/EditProfile";
 
+import OrganizerLayout from "./layouts/OrganizerLayout";
+import OrganizerDashboard from "./pages/organizer/OrganizerDashboard";
+import OrganizerEvents from "./pages/organizer/OrganizerEvents";
+import CreateEvent from "./pages/organizer/CreateEvent";
+import OrganizerEventDetails from "./pages/organizer/OrganizerEventDetails";
+import EditEvent from "./pages/organizer/EditEvent";
+import OrganizerBookings from "./pages/organizer/OrganizerBookings";
+import OrganizerBookingDetails from "./pages/organizer/OrganizerBookingDetails";
+import OrganizerProfile from "./pages/organizer/OrganizerProfile";
+
+import RoleRoute from "./components/common/RoleRoute";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 
@@ -54,6 +65,43 @@ function App() {
             element={<Register />}
           />
         </Route>
+
+<Route element={<RoleRoute allowedRoles={["organizer"]} />}>
+<Route element={<OrganizerLayout />}>
+  <Route
+    path="/organizer"
+    element={<OrganizerDashboard />}
+  />
+    <Route
+    path="/organizer/events"
+    element={<OrganizerEvents />}
+  />
+    <Route
+    path="/organizer/events/create"
+    element={<CreateEvent />}
+    />
+    <Route
+    path="/organizer/events/:id/edit"
+    element={<EditEvent />}
+    />
+    <Route
+    path="/organizer/events/:id"
+    element={<OrganizerEventDetails />}
+  />
+    <Route
+    path="/organizer/bookings"
+    element={<OrganizerBookings />}
+  />
+    <Route
+    path="/organizer/bookings/:bookingId"
+    element={<OrganizerBookingDetails />}
+  />
+    <Route
+    path="/organizer/profile"
+    element={<OrganizerProfile />}
+  />
+</Route>
+</Route>
       </Routes>
     </BrowserRouter>
   );
