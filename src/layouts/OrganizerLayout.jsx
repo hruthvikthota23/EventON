@@ -23,7 +23,7 @@ function OrganizerLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/");
   };
 
   // =========================================================

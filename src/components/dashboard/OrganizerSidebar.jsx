@@ -66,7 +66,7 @@ function OrganizerSidebar({
       onClose();
     }
 
-    navigate("/login", {
+    navigate("/", {
       replace: true,
     });
   };

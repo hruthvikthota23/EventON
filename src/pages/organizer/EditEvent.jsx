@@ -7,7 +7,6 @@ import {
   IndianRupee,
   MapPin,
   Save,
-  Ticket,
   Users,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -73,6 +72,86 @@ function normalizeDateForInput(value) {
 }
 
 // =========================================================
+// EDIT EVENT DATE/TIME HELPERS
+// =========================================================
+
+function getTodayString() {
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = String(
+    today.getMonth() + 1
+  ).padStart(2, "0");
+  const day = String(
+    today.getDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseTimeToMinutes(value) {
+  if (!value) {
+    return null;
+  }
+
+  const match = String(value)
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const period = match[3].toUpperCase();
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    minutes > 59 ||
+    hours < 1 ||
+    hours > 12
+  ) {
+    return null;
+  }
+
+  if (period === "AM") {
+    if (hours === 12) hours = 0;
+  } else if (hours !== 12) {
+    hours += 12;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function getTimeMinutes(value) {
+  if (!value) return null;
+
+  if (/AM|PM/i.test(String(value))) {
+    return parseTimeToMinutes(value);
+  }
+
+  const match = String(value)
+    .trim()
+    .match(/^(\d{2}):(\d{2})$/);
+
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    hours > 23 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+// =========================================================
 // MAIN
 // =========================================================
 
@@ -108,6 +187,7 @@ function EditEvent() {
 
     const storedEvent =
       getStoredEventById(id);
+
     if (!storedEvent) {
       setEvent(null);
       setLoading(false);
@@ -234,6 +314,38 @@ function EditEvent() {
         "Start time is required.";
     }
 
+    // Event date cannot be in the past.
+    // If the event is today, its start time must
+    // still be in the future.
+    if (form.date) {
+      const today = getTodayString();
+
+      if (form.date < today) {
+        nextErrors.date =
+          "Event date cannot be in the past.";
+      } else if (
+        form.date === today &&
+        form.time
+      ) {
+        const startMinutes =
+          getTimeMinutes(form.time);
+
+        const now = new Date();
+
+        const currentMinutes =
+          now.getHours() * 60 +
+          now.getMinutes();
+
+        if (
+          startMinutes !== null &&
+          startMinutes <= currentMinutes
+        ) {
+          nextErrors.time =
+            "Start time must be later than the current time.";
+        }
+      }
+    }
+
     if (!form.location.trim()) {
       nextErrors.location =
         "Event location is required.";
@@ -264,11 +376,22 @@ function EditEvent() {
 
     if (
       form.endTime &&
-      form.time &&
-      form.endTime <= form.time
+      form.time
     ) {
-      nextErrors.endTime =
-        "End time must be after start time.";
+      const startMinutes =
+        getTimeMinutes(form.time);
+
+      const endMinutes =
+        getTimeMinutes(form.endTime);
+
+      if (
+        startMinutes !== null &&
+        endMinutes !== null &&
+        endMinutes <= startMinutes
+      ) {
+        nextErrors.endTime =
+          "End time must be after start time.";
+      }
     }
 
     // Do not allow capacity below already sold tickets.
@@ -305,6 +428,30 @@ function EditEvent() {
       });
 
       return;
+    }
+
+    // Final same-day guard immediately before persistence.
+    if (form.date === getTodayString()) {
+      const startMinutes =
+        getTimeMinutes(form.time);
+
+      const now = new Date();
+
+      const currentMinutes =
+        now.getHours() * 60 +
+        now.getMinutes();
+
+      if (
+        startMinutes !== null &&
+        startMinutes <= currentMinutes
+      ) {
+        setErrors({
+          time:
+            "Start time must be later than the current time.",
+        });
+
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -673,6 +820,7 @@ function EditEvent() {
                   <input
                     id="date"
                     name="date"
+                min={getTodayString()}
                     type="date"
                     value={form.date}
                     onChange={handleChange}

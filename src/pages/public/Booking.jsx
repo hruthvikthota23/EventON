@@ -462,6 +462,9 @@ function Booking() {
 
         eventId: latestEvent.id,
 
+        // Primary attendee relationship.
+        attendeeId: user.id || null,
+
         attendee: {
           userId: user.id || null,
           name: formData.name.trim(),
@@ -482,25 +485,12 @@ function Booking() {
       };
 
       // =====================================================
-      // SAVE BOOKING
+      // UPDATE EVENT SEAT COUNT FIRST
       // =====================================================
-
-      const savedBooking =
-        saveBooking(booking);
-
-      if (!savedBooking) {
-        setErrors({
-          form:
-            "Unable to save your booking. Please try again.",
-        });
-
-        setIsSubmitting(false);
-
-        return;
-      }
-
-      // =====================================================
-      // UPDATE EVENT SEAT COUNT
+      //
+      // We update the event before saving the booking so the
+      // availability is reserved first. If saving the booking
+      // fails, the event seat count is rolled back below.
       // =====================================================
 
       const newBookedSeats =
@@ -515,24 +505,69 @@ function Booking() {
 
         // Keep the event status in sync.
         status:
-          newBookedSeats >=
-          latestCapacity
+          newBookedSeats >= latestCapacity
             ? "sold-out"
-            : latestEvent.status ===
-                "sold-out"
+            : latestEvent.status === "sold-out"
               ? "published"
               : latestEvent.status,
       };
 
-      updateStoredEvent(
-        latestEvent.id,
-        {
-          bookedSeats:
-            updatedEvent.bookedSeats,
-          status:
-            updatedEvent.status,
-        }
-      );
+      const eventUpdateResult =
+        updateStoredEvent(
+          latestEvent.id,
+          {
+            bookedSeats:
+              updatedEvent.bookedSeats,
+            status:
+              updatedEvent.status,
+          }
+        );
+
+      // updateStoredEvent returns the updated event list.
+      // If it fails to return a valid result, do not create
+      // a booking that is not reflected in event availability.
+      if (!eventUpdateResult) {
+        setErrors({
+          form:
+            "Unable to reserve seats. Please try again.",
+        });
+
+        setIsSubmitting(false);
+
+        return;
+      }
+
+      // =====================================================
+      // SAVE BOOKING
+      // =====================================================
+
+      const savedBooking =
+        saveBooking(booking);
+
+      if (!savedBooking) {
+        // Roll the seats back because the booking could not
+        // be persisted successfully.
+        updateStoredEvent(
+          latestEvent.id,
+          {
+            bookedSeats:
+              latestBookedSeats,
+            status:
+              latestEvent.status,
+          }
+        );
+
+        setEvent(latestEvent);
+
+        setErrors({
+          form:
+            "Unable to save your booking. Your seats were not charged.",
+        });
+
+        setIsSubmitting(false);
+
+        return;
+      }
 
       // =====================================================
       // GO TO CONFIRMATION

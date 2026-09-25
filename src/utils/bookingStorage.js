@@ -4,13 +4,96 @@ export const BOOKINGS_UPDATED_EVENT =
   "eventon:bookings-updated";
 
 // =========================================================
-// NOTIFY BOOKING UPDATES
+// INTERNAL HELPERS
 // =========================================================
 
 function notifyBookingsUpdated() {
   window.dispatchEvent(
     new Event(BOOKINGS_UPDATED_EVENT)
   );
+}
+
+function normalizeId(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeBookingId(value) {
+  return normalizeId(value).toUpperCase();
+}
+
+function normalizeBooking(booking) {
+  if (!booking || typeof booking !== "object") {
+    return null;
+  }
+
+  const bookingId = normalizeBookingId(
+    booking.bookingId
+  );
+
+  if (!bookingId) {
+    return null;
+  }
+
+  const attendeeUserId =
+    booking.attendeeId ??
+    booking.attendee?.userId ??
+    null;
+
+  const eventId =
+    booking.eventId ??
+    booking.event?.id ??
+    null;
+
+  return {
+    ...booking,
+
+    // Primary booking identifier
+    bookingId,
+
+    // Primary relationships
+    eventId:
+      eventId !== null
+        ? normalizeId(eventId)
+        : null,
+
+    attendeeId:
+      attendeeUserId !== null
+        ? normalizeId(attendeeUserId)
+        : null,
+
+    // Keep the existing attendee object for
+    // display/details compatibility.
+    attendee: booking.attendee
+      ? {
+          ...booking.attendee,
+          userId:
+            attendeeUserId !== null
+              ? normalizeId(attendeeUserId)
+              : null,
+        }
+      : {
+          userId:
+            attendeeUserId !== null
+              ? normalizeId(attendeeUserId)
+              : null,
+        },
+
+    ticketCount: Math.max(
+      Number(booking.ticketCount) || 0,
+      0
+    ),
+
+    totalPrice: Math.max(
+      Number(booking.totalPrice) || 0,
+      0
+    ),
+
+    status: booking.status || "confirmed",
+
+    createdAt:
+      booking.createdAt ||
+      new Date().toISOString(),
+  };
 }
 
 // =========================================================
@@ -29,9 +112,13 @@ export function getStoredBookings() {
     const parsedBookings =
       JSON.parse(storedBookings);
 
-    return Array.isArray(parsedBookings)
-      ? parsedBookings
-      : [];
+    if (!Array.isArray(parsedBookings)) {
+      return [];
+    }
+
+    return parsedBookings
+      .map(normalizeBooking)
+      .filter(Boolean);
   } catch (error) {
     console.error(
       "Unable to read EventON bookings:",
@@ -46,23 +133,22 @@ export function getStoredBookings() {
 // GET BOOKING BY ID
 // =========================================================
 
-export function getStoredBookingById(bookingId) {
-  if (!bookingId) {
+export function getStoredBookingById(
+  bookingId
+) {
+  const normalizedBookingId =
+    normalizeBookingId(bookingId);
+
+  if (!normalizedBookingId) {
     return null;
   }
 
-  const normalizedBookingId = String(bookingId)
-    .trim()
-    .toUpperCase();
-
-  const bookings = getStoredBookings();
-
   return (
-    bookings.find(
+    getStoredBookings().find(
       (booking) =>
-        String(booking?.bookingId || "")
-          .trim()
-          .toUpperCase() === normalizedBookingId
+        normalizeBookingId(
+          booking.bookingId
+        ) === normalizedBookingId
     ) || null
   );
 }
@@ -74,17 +160,28 @@ export function getStoredBookingById(bookingId) {
 export function getStoredBookingsByUser(
   userId
 ) {
-  if (!userId) {
+  const normalizedUserId =
+    normalizeId(userId);
+
+  if (!normalizedUserId) {
     return [];
   }
 
-  const bookings = getStoredBookings();
-
-  return bookings.filter(
+  return getStoredBookings().filter(
     (booking) =>
-      String(booking?.attendee?.userId) ===
-      String(userId)
+      normalizeId(booking.attendeeId) ===
+      normalizedUserId
   );
+}
+
+// =========================================================
+// ALIAS — ATTENDEE
+// =========================================================
+
+export function getStoredBookingsByAttendee(
+  attendeeId
+) {
+  return getStoredBookingsByUser(attendeeId);
 }
 
 // =========================================================
@@ -94,16 +191,17 @@ export function getStoredBookingsByUser(
 export function getStoredBookingsByEvent(
   eventId
 ) {
-  if (!eventId) {
+  const normalizedEventId =
+    normalizeId(eventId);
+
+  if (!normalizedEventId) {
     return [];
   }
 
-  const bookings = getStoredBookings();
-
-  return bookings.filter(
+  return getStoredBookings().filter(
     (booking) =>
-      String(booking.eventId) ===
-      String(eventId)
+      normalizeId(booking.eventId) ===
+      normalizedEventId
   );
 }
 
@@ -113,9 +211,36 @@ export function getStoredBookingsByEvent(
 
 export function saveBooking(booking) {
   try {
-    if (!booking?.bookingId) {
+    const normalizedBooking =
+      normalizeBooking(booking);
+
+    if (!normalizedBooking) {
       console.error(
         "Unable to save EventON booking: bookingId is required."
+      );
+
+      return null;
+    }
+
+    if (!normalizedBooking.eventId) {
+      console.error(
+        "Unable to save EventON booking: eventId is required."
+      );
+
+      return null;
+    }
+
+    if (!normalizedBooking.attendeeId) {
+      console.error(
+        "Unable to save EventON booking: attendeeId is required."
+      );
+
+      return null;
+    }
+
+    if (normalizedBooking.ticketCount < 1) {
+      console.error(
+        "Unable to save EventON booking: ticketCount must be at least 1."
       );
 
       return null;
@@ -124,29 +249,16 @@ export function saveBooking(booking) {
     const existingBookings =
       getStoredBookings();
 
-    const bookingToSave = {
-      ...booking,
-
-      bookingId: String(
-        booking.bookingId
-      ),
-
-      eventId:
-        booking.eventId ??
-        booking.event?.id ??
-        null,
-
-      createdAt:
-        booking.createdAt ||
-        new Date().toISOString(),
-    };
-
     const updatedBookings = [
-      bookingToSave,
+      normalizedBooking,
       ...existingBookings.filter(
         (item) =>
-          String(item.bookingId) !==
-          String(bookingToSave.bookingId)
+          normalizeBookingId(
+            item.bookingId
+          ) !==
+          normalizeBookingId(
+            normalizedBooking.bookingId
+          )
       ),
     ];
 
@@ -157,7 +269,7 @@ export function saveBooking(booking) {
 
     notifyBookingsUpdated();
 
-    return bookingToSave;
+    return normalizedBooking;
   } catch (error) {
     console.error(
       "Unable to save EventON booking:",
@@ -177,7 +289,10 @@ export function updateStoredBooking(
   updates
 ) {
   try {
-    if (!bookingId) {
+    const normalizedBookingId =
+      normalizeBookingId(bookingId);
+
+    if (!normalizedBookingId) {
       return getStoredBookings();
     }
 
@@ -187,26 +302,36 @@ export function updateStoredBooking(
     const bookingExists =
       existingBookings.some(
         (booking) =>
-          String(booking.bookingId) ===
-          String(bookingId)
+          normalizeBookingId(
+            booking.bookingId
+          ) === normalizedBookingId
       );
 
     if (!bookingExists) {
       return existingBookings;
     }
 
+    const safeUpdates = {
+      ...updates,
+    };
+
+    // Booking identity must never change.
+    delete safeUpdates.bookingId;
+
     const updatedBookings =
-      existingBookings.map(
-        (booking) =>
-          String(booking.bookingId) ===
-          String(bookingId)
-            ? {
-                ...booking,
-                ...updates,
-                updatedAt:
-                  new Date().toISOString(),
-              }
-            : booking
+      existingBookings.map((booking) =>
+        normalizeBookingId(
+          booking.bookingId
+        ) === normalizedBookingId
+          ? normalizeBooking({
+              ...booking,
+              ...safeUpdates,
+              bookingId:
+                booking.bookingId,
+              updatedAt:
+                new Date().toISOString(),
+            })
+          : booking
       );
 
     localStorage.setItem(
@@ -235,7 +360,10 @@ export function removeStoredBooking(
   bookingId
 ) {
   try {
-    if (!bookingId) {
+    const normalizedBookingId =
+      normalizeBookingId(bookingId);
+
+    if (!normalizedBookingId) {
       return getStoredBookings();
     }
 
@@ -245,8 +373,9 @@ export function removeStoredBooking(
     const updatedBookings =
       existingBookings.filter(
         (booking) =>
-          String(booking.bookingId) !==
-          String(bookingId)
+          normalizeBookingId(
+            booking.bookingId
+          ) !== normalizedBookingId
       );
 
     localStorage.setItem(
@@ -275,7 +404,10 @@ export function cancelStoredBooking(
   bookingId
 ) {
   try {
-    if (!bookingId) {
+    const normalizedBookingId =
+      normalizeBookingId(bookingId);
+
+    if (!normalizedBookingId) {
       return {
         success: false,
         error: "Booking ID is required.",
@@ -288,8 +420,9 @@ export function cancelStoredBooking(
     const booking =
       existingBookings.find(
         (item) =>
-          String(item.bookingId) ===
-          String(bookingId)
+          normalizeBookingId(
+            item.bookingId
+          ) === normalizedBookingId
       );
 
     if (!booking) {
@@ -303,6 +436,7 @@ export function cancelStoredBooking(
       return {
         success: false,
         error: "Booking is already cancelled.",
+        booking,
       };
     }
 
@@ -311,23 +445,25 @@ export function cancelStoredBooking(
         success: false,
         error:
           "Completed bookings cannot be cancelled.",
+        booking,
       };
     }
 
+    const now =
+      new Date().toISOString();
+
     const updatedBookings =
-      existingBookings.map(
-        (item) =>
-          String(item.bookingId) ===
-          String(bookingId)
-            ? {
-                ...item,
-                status: "cancelled",
-                cancelledAt:
-                  new Date().toISOString(),
-                updatedAt:
-                  new Date().toISOString(),
-              }
-            : item
+      existingBookings.map((item) =>
+        normalizeBookingId(
+          item.bookingId
+        ) === normalizedBookingId
+          ? {
+              ...item,
+              status: "cancelled",
+              cancelledAt: now,
+              updatedAt: now,
+            }
+          : item
       );
 
     localStorage.setItem(
@@ -337,14 +473,17 @@ export function cancelStoredBooking(
 
     notifyBookingsUpdated();
 
+    const updatedBooking =
+      updatedBookings.find(
+        (item) =>
+          normalizeBookingId(
+            item.bookingId
+          ) === normalizedBookingId
+      ) || null;
+
     return {
       success: true,
-      booking:
-        updatedBookings.find(
-          (item) =>
-            String(item.bookingId) ===
-            String(bookingId)
-        ) || null,
+      booking: updatedBooking,
     };
   } catch (error) {
     console.error(

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ArrowRight,
+  Check,
   Eye,
   EyeOff,
   LockKeyhole,
@@ -28,12 +29,8 @@ function Login() {
   });
 
   const [errors, setErrors] = useState({});
-
-  const [showPassword, setShowPassword] =
-    useState(false);
-
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ---------------------------------------------------------
   // INPUT CHANGE
@@ -62,8 +59,7 @@ function Login() {
     const newErrors = {};
 
     if (!formData.email.trim()) {
-      newErrors.email =
-        "Please enter your email.";
+      newErrors.email = "Please enter your email.";
     } else if (
       !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
         formData.email.trim()
@@ -76,9 +72,7 @@ function Login() {
     if (!formData.password) {
       newErrors.password =
         "Please enter your password.";
-    } else if (
-      formData.password.length < 6
-    ) {
+    } else if (formData.password.length < 6) {
       newErrors.password =
         "Password must be at least 6 characters.";
     }
@@ -132,23 +126,11 @@ function Login() {
       // LOGIN SUCCESSFUL
       // -----------------------------------------------------
 
-      // -----------------------------------------------------
-      // ROLE-BASED REDIRECT
-      // -----------------------------------------------------
-      //
-      // Never send an attendee back to an organizer route.
-      // This can happen when an organizer logs out while
-      // /organizer is the current URL and the next login is
-      // performed by an attendee.
-      //
-      // Organizers always enter the organizer dashboard.
-      // Attendees can return to a safe public destination.
-      // -----------------------------------------------------
-
-      const loggedInRole =
-        String(result.user?.role || "attendee")
-          .trim()
-          .toLowerCase();
+      const loggedInRole = String(
+        result.user?.role || "attendee"
+      )
+        .trim()
+        .toLowerCase();
 
       const requestedDestination =
         location.state?.from;
@@ -165,7 +147,7 @@ function Login() {
       let destination = "/";
 
       if (loggedInRole === "organizer") {
-        destination = "/organizer";
+        destination = "/";
       } else if (
         requestedDestination &&
         !isOrganizerDestination &&
@@ -197,392 +179,448 @@ function Login() {
   // ---------------------------------------------------------
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-slate-50">
+    <main className="h-full min-h-0 overflow-hidden bg-slate-50">
 
-      {/* =====================================================
-          LEFT SIDE
-      ====================================================== */}
+      <div className="grid h-full min-h-0 lg:grid-cols-2">
 
-      <section className="hidden flex-1 items-center justify-center bg-slate-900 px-10 lg:flex">
-        <div className="max-w-md">
+        {/* =====================================================
+            LEFT PANEL
+        ====================================================== */}
 
-          <Link
-            to="/"
-            className="inline-flex items-center gap-3"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white shadow-lg">
-              <span className="text-lg font-bold">
-                E
-              </span>
+        <section className="relative hidden min-h-0 overflow-hidden bg-[#070b14] lg:flex">
+
+          {/* Background glow */}
+
+          <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
+
+          <div className="absolute -bottom-32 right-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+
+          {/* Content */}
+
+          <div className="relative z-10 flex w-full items-center px-10 xl:px-14">
+
+            <div className="max-w-lg">
+
+              {/* Small heading */}
+
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">
+                Welcome back
+              </p>
+
+              {/* Main heading */}
+
+              <h1 className="mt-3 text-4xl font-bold leading-[1.08] tracking-tight text-white xl:text-[46px]">
+                Discover events.
+                <br />
+                Create memories.
+              </h1>
+
+              {/* Description */}
+
+              <p className="mt-5 max-w-md text-sm leading-6 text-slate-400">
+                Sign in to manage your bookings,
+                discover upcoming events, and keep
+                everything in one place.
+              </p>
+
+              {/* Features */}
+
+              <div className="mt-7 space-y-3">
+
+                {[
+                  "Manage all your bookings easily",
+                  "Discover upcoming events",
+                  "Keep everything organized in one place",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="flex items-center gap-3"
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-orange-400">
+                      <Check
+                        size={12}
+                        strokeWidth={3}
+                      />
+                    </span>
+
+                    <span className="text-sm text-slate-300">
+                      {item}
+                    </span>
+                  </div>
+                ))}
+
+              </div>
+
             </div>
 
-            <div className="text-2xl font-bold tracking-tight text-white">
-              Event
-              <span className="text-orange-500">
-                ON
-              </span>
-            </div>
-          </Link>
-
-          <div className="mt-14">
-
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-400">
-              Welcome back
-            </p>
-
-            <h1 className="mt-4 text-4xl font-bold leading-tight text-white">
-              Discover events.
-              <br />
-              Create memories.
-            </h1>
-
-            <p className="mt-5 text-base leading-7 text-slate-400">
-              Sign in to manage your bookings,
-              discover upcoming events and keep
-              everything in one place.
-            </p>
-
-          </div>
-        </div>
-      </section>
-
-      {/* =====================================================
-          RIGHT SIDE
-      ====================================================== */}
-
-      <section className="flex min-w-0 flex-1 items-center justify-center overflow-y-auto px-5 py-8 sm:px-8 lg:max-w-xl">
-
-        <div className="w-full max-w-md">
-
-          {/* =================================================
-              MOBILE LOGO
-          ================================================= */}
-
-          <div className="mb-8 lg:hidden">
-
-            <Link
-              to="/"
-              className="inline-flex items-center gap-3"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-white">
-                <span className="font-bold">
-                  E
-                </span>
-              </div>
-
-              <div className="text-xl font-bold tracking-tight text-slate-900">
-                Event
-                <span className="text-orange-500">
-                  ON
-                </span>
-              </div>
-            </Link>
-
           </div>
 
-          {/* =================================================
-              HEADING
-          ================================================= */}
+        </section>
 
-          <div>
+        {/* =====================================================
+            RIGHT PANEL
+        ====================================================== */}
 
-            <p className="text-sm font-semibold text-orange-500">
-              Welcome back
-            </p>
+        <section className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden px-5 py-5 sm:px-8 lg:px-10">
 
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-              Sign in to EventON
-            </h1>
-
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Enter your details to continue.
-            </p>
-
-          </div>
-
-          {/* =================================================
-              FORM
-          ================================================= */}
-
-          <form
-            onSubmit={handleSubmit}
-            className="mt-8 space-y-5"
-          >
-
-            {/* General Error */}
-
-            {errors.form && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-                {errors.form}
-              </div>
-            )}
+          <div className="w-full max-w-[450px]">
 
             {/* =================================================
-                ACCOUNT TYPE
+                MOBILE LOGO
             ================================================= */}
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Login as
-              </label>
+            <div className="mb-6 lg:hidden">
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData((previous) => ({
-                      ...previous,
-                      role: "attendee",
-                    }))
-                  }
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    formData.role === "attendee"
-                      ? "border-orange-500 bg-orange-50 ring-2 ring-orange-100"
-                      : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm ${
-                        formData.role === "attendee"
-                          ? "bg-orange-500 text-white"
-                          : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
-                      👤
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">
-                        Attendee
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        Book events
-                      </p>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData((previous) => ({
-                      ...previous,
-                      role: "organizer",
-                    }))
-                  }
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    formData.role === "organizer"
-                      ? "border-orange-500 bg-orange-50 ring-2 ring-orange-100"
-                      : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm ${
-                        formData.role === "organizer"
-                          ? "bg-orange-500 text-white"
-                          : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
-                      🏢
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">
-                        Organizer
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        Manage events
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* =================================================
-                EMAIL
-            ================================================= */}
-
-            <div>
-
-              <label
-                htmlFor="email"
-                className="mb-2 block text-sm font-semibold text-slate-700"
+              <Link
+                to="/"
+                className="inline-flex h-10 shrink-0 items-center gap-3"
+                aria-label="Go to EventON home"
               >
-                Email address
-              </label>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm">
+                  <span className="text-sm font-bold">
+                    E
+                  </span>
+                </span>
 
-              <div className="relative">
+                <span className="whitespace-nowrap text-[22px] font-bold leading-10 tracking-tight text-slate-900">
+                  Event
+                  <span className="text-orange-500">
+                    ON
+                  </span>
+                </span>
+              </Link>
 
-                <Mail
-                  size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+            </div>
 
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="you@example.com"
-                  className={`h-12 w-full rounded-xl border bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
-                    errors.email
-                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
-                      : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
-                  }`}
-                />
+            {/* =================================================
+                HEADER
+            ================================================= */}
 
-              </div>
+            <div className="mb-5">
 
-              {errors.email && (
-                <p className="mt-1.5 text-xs font-medium text-red-500">
-                  {errors.email}
-                </p>
+              <p className="text-[11px] font-semibold text-orange-500">
+                Welcome back
+              </p>
+
+              <h2 className="mt-1 text-[28px] font-bold leading-tight tracking-tight text-slate-900">
+                Sign in to EventON
+              </h2>
+
+              <p className="mt-1.5 text-[13px] leading-5 text-slate-500">
+                Enter your details to continue.
+              </p>
+
+            </div>
+
+            {/* =================================================
+                FORM
+            ================================================= */}
+
+            <form
+              onSubmit={handleSubmit}
+              noValidate
+              className="space-y-4"
+            >
+
+              {/* FORM ERROR */}
+
+              {errors.form && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium leading-5 text-red-600">
+                  {errors.form}
+                </div>
               )}
 
-            </div>
+              {/* =================================================
+                  ACCOUNT TYPE
+              ================================================= */}
 
-            {/* =================================================
-                PASSWORD
-            ================================================= */}
+              <div>
 
-            <div>
-
-              <div className="mb-2 flex items-center justify-between">
-
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-semibold text-slate-700"
-                >
-                  Password
+                <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                  Login as
                 </label>
 
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-orange-500 transition hover:text-orange-600"
-                >
-                  Forgot password?
-                </button>
+                <div className="grid grid-cols-2 gap-2.5">
+
+                  {/* ATTENDEE */}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((previous) => ({
+                        ...previous,
+                        role: "attendee",
+                      }))
+                    }
+                    className={`rounded-xl border p-2.5 text-left transition ${
+                      formData.role === "attendee"
+                        ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+
+                    <div className="flex items-center gap-2.5">
+
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
+                          formData.role === "attendee"
+                            ? "bg-orange-500 text-white"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        👤
+                      </span>
+
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">
+                          Attendee
+                        </p>
+
+                        <p className="text-[10px] text-slate-500">
+                          Book events
+                        </p>
+                      </div>
+
+                    </div>
+
+                  </button>
+
+                  {/* ORGANIZER */}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((previous) => ({
+                        ...previous,
+                        role: "organizer",
+                      }))
+                    }
+                    className={`rounded-xl border p-2.5 text-left transition ${
+                      formData.role === "organizer"
+                        ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+
+                    <div className="flex items-center gap-2.5">
+
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
+                          formData.role === "organizer"
+                            ? "bg-orange-500 text-white"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        🏢
+                      </span>
+
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">
+                          Organizer
+                        </p>
+
+                        <p className="text-[10px] text-slate-500">
+                          Manage events
+                        </p>
+                      </div>
+
+                    </div>
+
+                  </button>
+
+                </div>
 
               </div>
 
-              <div className="relative">
+              {/* =================================================
+                  EMAIL
+              ================================================= */}
 
-                <LockKeyhole
-                  size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+              <div>
 
-                <input
-                  id="password"
-                  name="password"
-                  type={
-                    showPassword
-                      ? "text"
-                      : "password"
-                  }
-                  autoComplete="current-password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Enter your password"
-                  className={`h-12 w-full rounded-xl border bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
-                    errors.password
-                      ? "border-red-300 focus:border-red-400 focus:ring-red-50"
-                      : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
-                  }`}
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowPassword(
-                      (previous) =>
-                        !previous
-                    )
-                  }
-                  aria-label={
-                    showPassword
-                      ? "Hide password"
-                      : "Show password"
-                  }
-                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                <label
+                  htmlFor="email"
+                  className="mb-1.5 block text-xs font-semibold text-slate-700"
                 >
-                  {showPassword ? (
-                    <EyeOff size={18} />
-                  ) : (
-                    <Eye size={18} />
-                  )}
-                </button>
+                  Email address
+                </label>
+
+                <div className="relative">
+
+                  <Mail
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="you@gmail.com"
+                    className={`h-11 w-full rounded-xl border bg-white pl-10 pr-3.5 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 ${
+                      errors.email
+                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                        : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    }`}
+                  />
+
+                </div>
+
+                {errors.email && (
+                  <p className="mt-1 text-[10px] font-medium text-red-500">
+                    {errors.email}
+                  </p>
+                )}
 
               </div>
 
-              {errors.password && (
-                <p className="mt-1.5 text-xs font-medium text-red-500">
-                  {errors.password}
-                </p>
-              )}
+              {/* =================================================
+                  PASSWORD
+              ================================================= */}
+
+              <div>
+
+                <div className="mb-1.5 flex items-center justify-between">
+
+                  <label
+                    htmlFor="password"
+                    className="block text-xs font-semibold text-slate-700"
+                  >
+                    Password
+                  </label>
+
+                  <button
+                    type="button"
+                    className="text-[10px] font-semibold text-orange-500 transition hover:text-orange-600"
+                  >
+                    Forgot password?
+                  </button>
+
+                </div>
+
+                <div className="relative">
+
+                  <LockKeyhole
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    id="password"
+                    name="password"
+                    type={
+                      showPassword
+                        ? "text"
+                        : "password"
+                    }
+                    autoComplete="current-password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Enter your password"
+                    className={`h-11 w-full rounded-xl border bg-white pl-10 pr-11 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 ${
+                      errors.password
+                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                        : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    }`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword(
+                        (previous) => !previous
+                      )
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={16} />
+                    ) : (
+                      <Eye size={16} />
+                    )}
+                  </button>
+
+                </div>
+
+                {errors.password && (
+                  <p className="mt-1 text-[10px] font-medium text-red-500">
+                    {errors.password}
+                  </p>
+                )}
+
+              </div>
+
+              {/* =================================================
+                  SIGN IN
+              ================================================= */}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="group mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting
+                  ? "Signing in..."
+                  : "Sign in"}
+
+                {!isSubmitting && (
+                  <ArrowRight
+                    size={16}
+                    className="transition-transform group-hover:translate-x-0.5"
+                  />
+                )}
+              </button>
+
+            </form>
+
+            {/* =================================================
+                REGISTER
+            ================================================= */}
+
+            <p className="mt-4 text-center text-xs text-slate-500">
+
+              Don't have an account?{" "}
+
+              <Link
+                to="/register"
+                state={location.state}
+                className="font-semibold text-orange-600 transition hover:text-orange-700"
+              >
+                Create account
+              </Link>
+
+            </p>
+
+            {/* =================================================
+                RETURN HOME
+            ================================================= */}
+
+            <div className="mt-2 flex justify-center">
+
+              <Link
+                to="/"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-semibold text-slate-400 transition-all duration-200 hover:bg-slate-100 hover:text-orange-500"
+              >
+                Return to EventON
+              </Link>
 
             </div>
 
-            {/* =================================================
-                SUBMIT
-            ================================================= */}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting
-                ? "Signing in..."
-                : "Sign in"}
-
-              {!isSubmitting && (
-                <ArrowRight size={17} />
-              )}
-            </button>
-
-          </form>
-
-          {/* =================================================
-              REGISTER
-          ================================================= */}
-
-          <p className="mt-7 text-center text-sm text-slate-500">
-            Don't have an account?{" "}
-
-            <Link
-              to="/register"
-              state={location.state}
-              className="font-semibold text-orange-500 transition hover:text-orange-600"
-            >
-              Create account
-            </Link>
-
-          </p>
-
-          {/* =================================================
-              BACK HOME
-          ================================================= */}
-
-          <div className="mt-6 text-center">
-
-            <Link
-              to="/"
-              className="text-xs font-medium text-slate-400 transition hover:text-slate-600"
-            >
-              ← Back to home
-            </Link>
-
           </div>
 
-        </div>
-      </section>
-    </div>
+        </section>
+
+      </div>
+
+    </main>
   );
 }
 

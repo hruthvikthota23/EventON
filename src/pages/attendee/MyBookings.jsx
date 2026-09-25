@@ -70,7 +70,7 @@ function MyBookings() {
     const loadBookings = () => {
       if (
         !isAuthenticated ||
-        !user?.email
+        !user?.id
       ) {
         setBookingList([]);
         return;
@@ -79,17 +79,38 @@ function MyBookings() {
       const allBookings =
         getStoredBookings();
 
+      const normalizedUserId =
+        String(user.id);
+
       const userEmail =
-        user.email.trim().toLowerCase();
+        user.email?.trim().toLowerCase();
 
       const userBookings =
-        allBookings.filter(
-          (booking) =>
+        allBookings.filter((booking) => {
+          const attendeeId =
+            booking.attendeeId ??
+            booking.attendee?.userId;
+
+          if (
+            attendeeId !== null &&
+            attendeeId !== undefined &&
+            String(attendeeId) ===
+              normalizedUserId
+          ) {
+            return true;
+          }
+
+          // Legacy compatibility for older
+          // bookings created before attendeeId
+          // was introduced.
+          return (
+            Boolean(userEmail) &&
             booking.attendee?.email
               ?.trim()
               .toLowerCase() ===
-            userEmail
-        );
+              userEmail
+          );
+        });
 
       setBookingList(userBookings);
     };
@@ -133,6 +154,7 @@ function MyBookings() {
     };
   }, [
     isAuthenticated,
+    user?.id,
     user?.email,
   ]);
 
@@ -324,27 +346,15 @@ function MyBookings() {
     const currentBooking =
       storedBookings.find(
         (item) =>
-          item.bookingId ===
-          booking.bookingId
+          String(item.bookingId).toUpperCase() ===
+          String(booking.bookingId).toUpperCase()
       );
 
     if (!currentBooking) {
-      setBookingList(
-        storedBookings.filter(
-          (item) =>
-            item.attendee?.email
-              ?.trim()
-              .toLowerCase() ===
-            user?.email
-              ?.trim()
-              .toLowerCase()
-        )
-      );
-
       return;
     }
 
-    // Prevent cancelling twice
+    // Never process an already-cancelled booking.
     if (
       currentBooking.status !==
       "confirmed"
@@ -352,8 +362,97 @@ function MyBookings() {
       return;
     }
 
+    // Make sure this booking belongs to the
+    // currently authenticated attendee.
+    const bookingAttendeeId =
+      currentBooking.attendeeId ??
+      currentBooking.attendee?.userId;
+
+    const isOwner =
+      bookingAttendeeId !== null &&
+      bookingAttendeeId !== undefined &&
+      String(bookingAttendeeId) ===
+        String(user?.id);
+
+    if (!isOwner) {
+      return;
+    }
+
     // =======================================================
-    // UPDATE BOOKING
+    // GET CURRENT EVENT
+    // =======================================================
+
+    const eventId =
+      currentBooking.eventId ??
+      currentBooking.event?.id;
+
+    const currentEvent = eventId
+      ? getStoredEventById(eventId)
+      : null;
+
+    if (!currentEvent) {
+      return;
+    }
+
+    const currentBookedSeats =
+      Math.max(
+        Number(
+          currentEvent.bookedSeats
+        ) || 0,
+        0
+      );
+
+    const cancelledTickets =
+      Math.max(
+        Number(
+          currentBooking.ticketCount
+        ) || 0,
+        0
+      );
+
+    if (cancelledTickets < 1) {
+      return;
+    }
+
+    // =======================================================
+    // RESTORE EVENT SEATS
+    // =======================================================
+    //
+    // Restore seats BEFORE marking the booking cancelled.
+    // If the event update fails, the booking stays confirmed
+    // and can safely be retried.
+    // =======================================================
+
+    const restoredBookedSeats =
+      Math.max(
+        currentBookedSeats -
+          cancelledTickets,
+        0
+      );
+
+    const updatedEvents =
+      updateStoredEvent(
+        eventId,
+        {
+          bookedSeats:
+            restoredBookedSeats,
+
+          status:
+            currentEvent.status ===
+              "sold-out"
+              ? "published"
+              : currentEvent.status,
+        }
+      );
+
+    if (
+      !Array.isArray(updatedEvents)
+    ) {
+      return;
+    }
+
+    // =======================================================
+    // CANCEL BOOKING
     // =======================================================
 
     const updatedBookings =
@@ -366,94 +465,65 @@ function MyBookings() {
         }
       );
 
-    if (!updatedBookings) {
-      console.warn(
-        "Booking status could not be persisted."
+    if (
+      !Array.isArray(updatedBookings)
+    ) {
+      // Roll the event seats back if the
+      // booking status could not be saved.
+      updateStoredEvent(
+        eventId,
+        {
+          bookedSeats:
+            currentBookedSeats,
+          status:
+            currentEvent.status,
+        }
       );
 
       return;
     }
 
     // =======================================================
-    // RESTORE EVENT SEATS
-    // =======================================================
-
-    const eventId =
-      currentBooking.eventId ||
-      currentBooking.event?.id;
-
-    if (eventId) {
-      const currentEvent =
-        getStoredEventById(
-          eventId
-        );
-
-      if (currentEvent) {
-        const currentBookedSeats =
-          Number(
-            currentEvent.bookedSeats
-          ) || 0;
-
-        const cancelledTickets =
-          Number(
-            currentBooking.ticketCount
-          ) || 0;
-
-        const restoredBookedSeats =
-          Math.max(
-            currentBookedSeats -
-              cancelledTickets,
-            0
-          );
-
-        updateStoredEvent(
-          eventId,
-          {
-            bookedSeats:
-              restoredBookedSeats,
-
-            status:
-              currentEvent.status ===
-                "sold-out" ||
-              currentEvent.status ===
-                "published"
-                ? "published"
-                : currentEvent.status,
-          }
-        );
-      }
-    }
-
-    // =======================================================
-    // REFRESH USER BOOKINGS
+    // REFRESH
     // =======================================================
 
     const refreshedBookings =
       getStoredBookings();
 
+    const normalizedUserId =
+      String(user.id);
+
+    const userEmail =
+      user.email?.trim().toLowerCase();
+
     const refreshedUserBookings =
       refreshedBookings.filter(
-        (item) =>
-          item.attendee?.email
-            ?.trim()
-            .toLowerCase() ===
-          user?.email
-            ?.trim()
-            .toLowerCase()
+        (item) => {
+          const attendeeId =
+            item.attendeeId ??
+            item.attendee?.userId;
+
+          if (
+            attendeeId !== null &&
+            attendeeId !== undefined &&
+            String(attendeeId) ===
+              normalizedUserId
+          ) {
+            return true;
+          }
+
+          return (
+            Boolean(userEmail) &&
+            item.attendee?.email
+              ?.trim()
+              .toLowerCase() ===
+              userEmail
+          );
+        }
       );
 
     setBookingList(
       refreshedUserBookings
-    );
-
-    // =======================================================
-    // NOTIFY OTHER COMPONENTS
-    // =======================================================
-
-    window.dispatchEvent(
-      new Event(
-        "eventon:bookings-updated"
-      )
     );
   };
 

@@ -18,7 +18,9 @@ function Register() {
   const { register } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
   const [role, setRole] = useState("attendee");
 
   const [formData, setFormData] = useState({
@@ -73,24 +75,33 @@ function Register() {
 
     // Full name
     if (!formData.name.trim()) {
-      newErrors.name = "Please enter your full name.";
+      newErrors.name =
+        "Please enter your full name.";
     } else if (formData.name.trim().length < 2) {
-      newErrors.name = "Name must contain at least 2 characters.";
+      newErrors.name =
+        "Name must contain at least 2 characters.";
     }
 
     // Gmail
-    const email = formData.email.trim().toLowerCase();
+    const email =
+      formData.email.trim().toLowerCase();
 
     if (!email) {
-      newErrors.email = "Please enter your Gmail address.";
-    } else if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email)) {
+      newErrors.email =
+        "Please enter your Gmail address.";
+    } else if (
+      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
+        email
+      )
+    ) {
       newErrors.email =
         "Please enter a valid Gmail address ending with @gmail.com.";
     }
 
     // Password
     if (!formData.password) {
-      newErrors.password = "Please create a password.";
+      newErrors.password =
+        "Please create a password.";
     } else if (formData.password.length < 8) {
       newErrors.password =
         "Password must contain at least 8 characters.";
@@ -101,14 +112,19 @@ function Register() {
       newErrors.confirmPassword =
         "Please confirm your password.";
     } else if (
-      formData.password !== formData.confirmPassword
+      formData.password !==
+      formData.confirmPassword
     ) {
-      newErrors.confirmPassword = "Passwords do not match.";
+      newErrors.confirmPassword =
+        "Passwords do not match.";
     }
 
     // Role
-    if (!["attendee", "organizer"].includes(role)) {
-      newErrors.role = "Please select an account type.";
+    if (
+      !["attendee", "organizer"].includes(role)
+    ) {
+      newErrors.role =
+        "Please select an account type.";
     }
 
     setErrors(newErrors);
@@ -123,7 +139,8 @@ function Register() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    const normalizedEmail = formData.email.trim().toLowerCase();
+    const normalizedEmail =
+      formData.email.trim().toLowerCase();
 
     const isValidGmail =
       /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
@@ -142,6 +159,7 @@ function Register() {
       }));
 
       setIsSubmitting(false);
+
       return;
     }
 
@@ -163,6 +181,7 @@ function Register() {
         });
 
         setIsSubmitting(false);
+
         return;
       }
 
@@ -178,7 +197,10 @@ function Register() {
         }
       );
     } catch (error) {
-      console.error("Registration failed:", error);
+      console.error(
+        "Registration failed:",
+        error
+      );
 
       setErrors({
         form:
@@ -189,37 +211,41 @@ function Register() {
     }
   };
 
-  return (
-    <main className="min-h-[calc(100vh-64px)] bg-slate-50">
+  // =========================================================
+  // UI
+  // =========================================================
 
-      <div className="grid min-h-[calc(100vh-64px)] lg:grid-cols-2">
+  return (
+    <main className="h-full min-h-0 overflow-hidden bg-slate-50">
+
+      <div className="grid h-full min-h-0 overflow-hidden lg:grid-cols-2">
 
         {/* =====================================================
             LEFT PANEL
         ====================================================== */}
 
-        <section className="relative hidden min-h-[calc(100vh-64px)] overflow-hidden bg-[#070b14] lg:flex">
+        <section className="relative hidden min-h-0 overflow-hidden bg-[#070b14] lg:flex">
 
           {/* Background glow */}
+
           <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
 
           <div className="absolute -bottom-32 right-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+
+          {/* Content */}
 
           <div className="relative z-10 flex w-full items-center px-10 xl:px-14">
 
             <div className="max-w-lg">
 
-              {/* Logo */}
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-lg font-bold text-white shadow-lg shadow-orange-500/20">
-                E
-              </div>
-
               {/* Small heading */}
-              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">
+
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">
                 Welcome to EventON
               </p>
 
               {/* Main heading */}
+
               <h1 className="mt-2 text-4xl font-bold leading-[1.08] tracking-tight text-white xl:text-[46px]">
                 Your next experience
                 <br />
@@ -227,6 +253,7 @@ function Register() {
               </h1>
 
               {/* Description */}
+
               <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">
                 Create your EventON account and discover
                 events, book experiences, and keep your
@@ -234,6 +261,7 @@ function Register() {
               </p>
 
               {/* Features */}
+
               <div className="mt-6 space-y-2.5">
 
                 {[
@@ -263,19 +291,20 @@ function Register() {
             </div>
 
           </div>
+
         </section>
 
         {/* =====================================================
             RIGHT PANEL
         ====================================================== */}
 
-        <section className="flex min-h-[calc(100vh-64px)] items-start justify-center px-5 py-5 sm:px-8 lg:items-center lg:px-10 lg:py-5">
+        <section className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden px-5 py-4 sm:px-8 lg:px-10 lg:py-5">
 
           <div className="w-full max-w-[450px]">
 
             {/* =================================================
                 HEADER
-            ================================================== */}
+            ================================================= */}
 
             <div className="mb-3">
 
@@ -295,7 +324,7 @@ function Register() {
 
             {/* =================================================
                 FORM
-            ================================================== */}
+            ================================================= */}
 
             <form
               onSubmit={handleSubmit}
@@ -306,14 +335,14 @@ function Register() {
               {/* FORM ERROR */}
 
               {errors.form && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium leading-4 text-red-600">
                   {errors.form}
                 </div>
               )}
 
               {/* =================================================
                   ACCOUNT TYPE
-              ================================================== */}
+              ================================================= */}
 
               <div>
 
@@ -350,6 +379,7 @@ function Register() {
                       </span>
 
                       <div>
+
                         <p className="text-xs font-bold text-slate-900">
                           Attendee
                         </p>
@@ -357,6 +387,7 @@ function Register() {
                         <p className="text-[10px] text-slate-500">
                           Book events
                         </p>
+
                       </div>
 
                     </div>
@@ -390,6 +421,7 @@ function Register() {
                       </span>
 
                       <div>
+
                         <p className="text-xs font-bold text-slate-900">
                           Organizer
                         </p>
@@ -397,6 +429,7 @@ function Register() {
                         <p className="text-[10px] text-slate-500">
                           Create events
                         </p>
+
                       </div>
 
                     </div>
@@ -415,7 +448,7 @@ function Register() {
 
               {/* =================================================
                   NAME
-              ================================================== */}
+              ================================================= */}
 
               <div>
 
@@ -460,7 +493,7 @@ function Register() {
 
               {/* =================================================
                   EMAIL
-              ================================================== */}
+              ================================================= */}
 
               <div>
 
@@ -486,7 +519,9 @@ function Register() {
                     onChange={handleChange}
                     onBlur={() => {
                       const email =
-                        formData.email.trim().toLowerCase();
+                        formData.email
+                          .trim()
+                          .toLowerCase();
 
                       if (
                         email &&
@@ -527,7 +562,7 @@ function Register() {
 
               {/* =================================================
                   PASSWORD
-              ================================================== */}
+              ================================================= */}
 
               <div>
 
@@ -597,7 +632,7 @@ function Register() {
 
               {/* =================================================
                   CONFIRM PASSWORD
-              ================================================== */}
+              ================================================= */}
 
               <div>
 
@@ -667,7 +702,7 @@ function Register() {
 
               {/* =================================================
                   CREATE ACCOUNT
-              ================================================== */}
+              ================================================= */}
 
               <button
                 type="submit"
@@ -690,9 +725,10 @@ function Register() {
 
             {/* =================================================
                 LOGIN
-            ================================================== */}
+            ================================================= */}
 
             <p className="mt-3 text-center text-xs text-slate-500">
+
               Already have an account?{" "}
 
               <Link
@@ -701,11 +737,12 @@ function Register() {
               >
                 Sign in
               </Link>
+
             </p>
 
             {/* =================================================
                 TERMS
-            ================================================== */}
+            ================================================= */}
 
             <p className="mt-2 pb-1 text-center text-[9px] leading-4 text-slate-400">
               By creating an account, you agree to EventON's
@@ -717,6 +754,7 @@ function Register() {
         </section>
 
       </div>
+
     </main>
   );
 }

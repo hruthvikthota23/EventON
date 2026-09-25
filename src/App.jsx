@@ -6,6 +6,8 @@ import AuthLayout from "./layouts/AuthLayout";
 
 import Home from "./pages/public/Home";
 import Events from "./pages/public/Events";
+import About from "./pages/public/About";
+
 import EventDetails from "./pages/public/EventDetails";
 import Booking from "./pages/public/Booking";
 import BookingConfirmation from "./pages/public/BookingConfirmation";
@@ -40,6 +42,7 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/about" element={<About />} />
           <Route path="/events/:id" element={<EventDetails />} />
           <Route path="/events/:id/book" element={<Booking />} />
           <Route path="/booking-confirmation" element={<BookingConfirmation />} />

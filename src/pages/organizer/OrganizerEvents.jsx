@@ -23,6 +23,8 @@ import {
   getStoredEventsByOrganizer,
 } from "../../utils/eventStorage";
 
+import { getStoredBookings } from "../../utils/bookingStorage";
+
 // =========================================================
 // HELPERS
 // =========================================================
@@ -361,6 +363,11 @@ function DeleteModal({
               </span>{" "}
               from your organizer events.
             </p>
+
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-800">
+              Events with active bookings cannot be deleted.
+              Cancelled bookings do not block deletion.
+            </div>
           </div>
 
           <button
@@ -542,14 +549,68 @@ function OrganizerEvents() {
   // =======================================================
 
   const handleDelete = () => {
-    if (!deleteEvent?.id) {
+    if (!deleteEvent?.id || !user?.id) {
       return;
     }
 
-    deleteStoredEvent(deleteEvent.id);
+    // Re-check ownership before deleting.
+    const organizerEvents = getStoredEventsByOrganizer(user.id);
+    const ownedEvent = organizerEvents.find(
+      (event) => String(event.id) === String(deleteEvent.id)
+    );
+
+    if (!ownedEvent) {
+      window.alert(
+        "You do not have permission to delete this event."
+      );
+
+      setDeleteEvent(null);
+      return;
+    }
+
+    // Never delete an event that still has active bookings.
+    // Cancelled/canceled bookings do not block deletion.
+    const activeBookings = getStoredBookings().filter((booking) => {
+      if (String(booking.eventId) !== String(deleteEvent.id)) {
+        return false;
+      }
+
+      const status = String(
+        booking.status || "confirmed"
+      )
+        .trim()
+        .toLowerCase();
+
+      return (
+        status !== "cancelled" &&
+        status !== "canceled"
+      );
+    });
+
+    if (activeBookings.length > 0) {
+      window.alert(
+        `This event cannot be deleted because it has ${activeBookings.length} active booking${
+          activeBookings.length === 1 ? "" : "s"
+        }. Cancel or complete the booking records first.`
+      );
+
+      setDeleteEvent(null);
+      return;
+    }
+
+    const updatedEvents = deleteStoredEvent(
+      deleteEvent.id
+    );
+
+    // Do not close the modal if persistence failed.
+    if (!Array.isArray(updatedEvents)) {
+      window.alert(
+        "Unable to delete the event. Please try again."
+      );
+      return;
+    }
 
     setDeleteEvent(null);
-
     loadEvents();
   };
 
