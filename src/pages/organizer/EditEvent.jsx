@@ -8,6 +8,7 @@ import {
   MapPin,
   Save,
   Users,
+  Ticket,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 

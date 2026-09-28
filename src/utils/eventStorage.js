@@ -166,7 +166,10 @@ export function getAvailableSeats(event) {
     Number(event.capacity) || 0;
 
   const bookedSeats =
-    Number(event.bookedSeats) || 0;
+    Math.max(
+      Number(event.bookedSeats) || 0,
+      0
+    );
 
   return Math.max(
     capacity - bookedSeats,
@@ -187,7 +190,10 @@ export function isStoredEventSoldOut(event) {
     Number(event.capacity) || 0;
 
   const bookedSeats =
-    Number(event.bookedSeats) || 0;
+    Math.max(
+      Number(event.bookedSeats) || 0,
+      0
+    );
 
   if (capacity <= 0) {
     return false;
@@ -198,6 +204,15 @@ export function isStoredEventSoldOut(event) {
 
 // =========================================================
 // SAVE EVENT
+//
+// IMPORTANT:
+// This function protects:
+// - event ID
+// - organizer ownership
+// - booked seat count
+//
+// Booking count must only be changed through the
+// dedicated seat functions below.
 // =========================================================
 
 export function saveEvent(event) {
@@ -223,36 +238,78 @@ export function saveEvent(event) {
     const now =
       new Date().toISOString();
 
+    const existingBookedSeats =
+      Number(
+        existingEvent?.bookedSeats
+      ) || 0;
+
+    const requestedCapacity =
+      Number(event.capacity);
+
+    const safeCapacity =
+      Number.isFinite(requestedCapacity) &&
+      requestedCapacity >= 0
+        ? Math.max(
+            requestedCapacity,
+            existingBookedSeats
+          )
+        : Number(
+            existingEvent?.capacity
+          ) || 0;
+
     const eventToSave = {
       ...event,
 
-      // Never change the ID.
-      id: existingEvent?.id || event.id,
+      // ID can never change.
+      id:
+        existingEvent?.id ||
+        event.id,
 
-      // Preserve original creation date.
+      // Preserve creation date.
       createdAt:
         existingEvent?.createdAt ||
         event.createdAt ||
         now,
 
-      // Always update modification time.
       updatedAt: now,
 
-      // Keep organizer information.
+      /*
+       * Organizer ownership is immutable.
+       *
+       * For a new event, use the supplied organizerId.
+       * For an existing event, always preserve the
+       * original organizer.
+       */
       organizerId:
-        event.organizerId ??
-        existingEvent?.organizerId ??
-        null,
+        existingEvent
+          ? existingEvent.organizerId ?? null
+          : event.organizerId ?? null,
 
-      // Keep sensible booking values.
-      capacity:
-        Number(event.capacity) || 0,
+      capacity: safeCapacity,
 
+      /*
+       * NEVER trust bookedSeats from a normal event save.
+       *
+       * Existing booking count is preserved.
+       * New events always start with zero.
+       */
       bookedSeats:
-        Number(event.bookedSeats) || 0,
+        existingEvent
+          ? Math.min(
+              Math.max(
+                existingBookedSeats,
+                0
+              ),
+              safeCapacity
+            )
+          : 0,
 
       price:
-        Number(event.price) || 0,
+        Number(event.price) >= 0
+          ? Number(event.price)
+          : Number(
+              existingEvent?.price
+            ) || 0,
 
       status:
         event.status ||
@@ -293,6 +350,9 @@ export function saveEvent(event) {
 
 // =========================================================
 // CREATE EVENT
+//
+// Every newly-created event starts with:
+// bookedSeats = 0
 // =========================================================
 
 export function createStoredEvent(event) {
@@ -327,6 +387,12 @@ export function createStoredEvent(event) {
     const now =
       new Date().toISOString();
 
+    const capacity =
+      Math.max(
+        Number(event.capacity) || 0,
+        0
+      );
+
     const eventToCreate = {
       ...event,
 
@@ -340,14 +406,19 @@ export function createStoredEvent(event) {
 
       updatedAt: now,
 
-      capacity:
-        Number(event.capacity) || 0,
+      capacity,
 
-      bookedSeats:
-        Number(event.bookedSeats) || 0,
+      /*
+       * CRITICAL:
+       * New events NEVER have bookings.
+       */
+      bookedSeats: 0,
 
       price:
-        Number(event.price) || 0,
+        Math.max(
+          Number(event.price) || 0,
+          0
+        ),
 
       status:
         event.status || "published",
@@ -384,6 +455,14 @@ export function createStoredEvent(event) {
 
 // =========================================================
 // UPDATE EVENT
+//
+// General event editing CANNOT:
+// - change ID
+// - change organizer
+// - change booked seats
+//
+// Booking count is controlled only by the booking
+// functions below.
 // =========================================================
 
 export function updateStoredEvent(
@@ -401,67 +480,105 @@ export function updateStoredEvent(
     const existingEvents =
       getStoredEvents();
 
-    const eventExists =
-      existingEvents.some(
+    const existingEvent =
+      existingEvents.find(
         (event) =>
           normalizeId(event?.id) ===
           normalizedEventId
       );
 
-    if (!eventExists) {
+    if (!existingEvent) {
       return existingEvents;
     }
 
+    const safeUpdates = {
+      ...(updates || {}),
+    };
+
+    // These fields cannot be changed through
+    // a normal event update.
+    delete safeUpdates.id;
+    delete safeUpdates.organizerId;
+    delete safeUpdates.bookedSeats;
+    delete safeUpdates.createdAt;
+
+    const currentBookedSeats =
+      Math.max(
+        Number(
+          existingEvent.bookedSeats
+        ) || 0,
+        0
+      );
+
+    const requestedCapacity =
+      safeUpdates.capacity !== undefined
+        ? Number(safeUpdates.capacity)
+        : Number(existingEvent.capacity);
+
+    /*
+     * Capacity can never become lower than
+     * the number of already-booked seats.
+     */
+    const safeCapacity =
+      Number.isFinite(requestedCapacity)
+        ? Math.max(
+            requestedCapacity,
+            currentBookedSeats
+          )
+        : Math.max(
+            Number(existingEvent.capacity) ||
+              0,
+            currentBookedSeats
+          );
+
+    delete safeUpdates.capacity;
+
+    const updatedEvent = {
+      ...existingEvent,
+      ...safeUpdates,
+
+      id: existingEvent.id,
+
+      organizerId:
+        existingEvent.organizerId ?? null,
+
+      createdAt:
+        existingEvent.createdAt || "",
+
+      updatedAt:
+        new Date().toISOString(),
+
+      capacity:
+        safeCapacity,
+
+      bookedSeats:
+        Math.min(
+          currentBookedSeats,
+          safeCapacity
+        ),
+
+      price:
+        safeUpdates.price !== undefined
+          ? Math.max(
+              Number(safeUpdates.price) ||
+                0,
+              0
+            )
+          : Math.max(
+              Number(existingEvent.price) ||
+                0,
+              0
+            ),
+    };
+
     const updatedEvents =
-      existingEvents.map((event) => {
-        if (
-          normalizeId(event?.id) !==
+      existingEvents.map(
+        (event) =>
+          normalizeId(event?.id) ===
           normalizedEventId
-        ) {
-          return event;
-        }
-
-        const safeUpdates = {
-          ...(updates || {}),
-        };
-
-        // Event ID can NEVER be changed.
-        delete safeUpdates.id;
-
-        return {
-          ...event,
-          ...safeUpdates,
-
-          id: event.id,
-
-          updatedAt:
-            new Date().toISOString(),
-
-          capacity:
-            safeUpdates.capacity !==
-            undefined
-              ? Number(
-                  safeUpdates.capacity
-                ) || 0
-              : Number(event.capacity) || 0,
-
-          bookedSeats:
-            safeUpdates.bookedSeats !==
-            undefined
-              ? Number(
-                  safeUpdates.bookedSeats
-                ) || 0
-              : Number(event.bookedSeats) || 0,
-
-          price:
-            safeUpdates.price !==
-            undefined
-              ? Number(
-                  safeUpdates.price
-                ) || 0
-              : Number(event.price) || 0,
-        };
-      });
+            ? updatedEvent
+            : event
+      );
 
     localStorage.setItem(
       STORAGE_KEY,
@@ -483,45 +600,94 @@ export function updateStoredEvent(
 
 // =========================================================
 // UPDATE EVENT SEATS
+//
+// ONLY this function changes bookedSeats.
+//
+// It guarantees:
+// 0 <= bookedSeats <= capacity
 // =========================================================
 
 export function updateEventSeats(
   eventId,
   bookedSeats
 ) {
-  if (!isValidId(eventId)) {
+  try {
+    if (!isValidId(eventId)) {
+      return null;
+    }
+
+    const event =
+      getStoredEventById(eventId);
+
+    if (!event) {
+      return null;
+    }
+
+    const capacity =
+      Math.max(
+        Number(event.capacity) || 0,
+        0
+      );
+
+    const requestedSeats =
+      Number(bookedSeats);
+
+    const safeRequestedSeats =
+      Number.isFinite(requestedSeats)
+        ? Math.max(
+            requestedSeats,
+            0
+          )
+        : Number(event.bookedSeats) || 0;
+
+    const safeBookedSeats =
+      Math.min(
+        safeRequestedSeats,
+        capacity
+      );
+
+    const updatedEvents =
+      getStoredEvents().map(
+        (storedEvent) => {
+          if (
+            normalizeId(
+              storedEvent?.id
+            ) !==
+            normalizeId(eventId)
+          ) {
+            return storedEvent;
+          }
+
+          return {
+            ...storedEvent,
+
+            bookedSeats:
+              safeBookedSeats,
+
+            updatedAt:
+              new Date().toISOString(),
+          };
+        }
+      );
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(updatedEvents)
+    );
+
+    notifyEventsUpdated();
+
+    return getStoredEventById(
+      eventId
+    );
+  } catch (error) {
+    console.error(
+      "Unable to update EventON event seats:",
+      error
+    );
+
     return null;
   }
-
-  const event =
-    getStoredEventById(eventId);
-
-  if (!event) {
-    return null;
-  }
-
-  const capacity =
-    Number(event.capacity) || 0;
-
-  const safeBookedSeats = Math.max(
-    0,
-    Math.min(
-      Number(bookedSeats) || 0,
-      capacity || Number(bookedSeats) || 0
-    )
-  );
-
-  const updatedEvents =
-    updateStoredEvent(eventId, {
-      bookedSeats:
-        safeBookedSeats,
-    });
-
-  if (!Array.isArray(updatedEvents)) {
-    return null;
-  }
-
-  return getStoredEventById(eventId);
 }
 
 // =========================================================
@@ -540,25 +706,39 @@ export function incrementEventSeats(
   }
 
   const currentBooked =
-    Number(event.bookedSeats) || 0;
+    Math.max(
+      Number(event.bookedSeats) || 0,
+      0
+    );
 
   const capacity =
-    Number(event.capacity) || 0;
+    Math.max(
+      Number(event.capacity) || 0,
+      0
+    );
 
   const amount =
-    Math.max(Number(quantity) || 0, 0);
+    Math.floor(
+      Number(quantity) || 0
+    );
 
-  const newBookedSeats =
-    capacity > 0
-      ? Math.min(
-          currentBooked + amount,
-          capacity
-        )
-      : currentBooked + amount;
+  if (amount <= 0) {
+    return event;
+  }
+
+  /*
+   * Never allow booking beyond capacity.
+   */
+  if (
+    currentBooked + amount >
+    capacity
+  ) {
+    return null;
+  }
 
   return updateEventSeats(
     eventId,
-    newBookedSeats
+    currentBooked + amount
   );
 }
 
@@ -578,16 +758,28 @@ export function decrementEventSeats(
   }
 
   const currentBooked =
-    Number(event.bookedSeats) || 0;
-
-  const amount =
-    Math.max(Number(quantity) || 0, 0);
-
-  const newBookedSeats =
     Math.max(
-      currentBooked - amount,
+      Number(event.bookedSeats) || 0,
       0
     );
+
+  const amount =
+    Math.floor(
+      Number(quantity) || 0
+    );
+
+  if (amount <= 0) {
+    return event;
+  }
+
+  // A cancellation can never restore more seats than are
+  // currently recorded as booked for the event.
+  if (amount > currentBooked) {
+    return null;
+  }
+
+  const newBookedSeats =
+    currentBooked - amount;
 
   return updateEventSeats(
     eventId,
@@ -611,20 +803,23 @@ export function deleteStoredEvent(eventId) {
     const existingEvents =
       getStoredEvents();
 
+    const eventExists =
+      existingEvents.some(
+        (event) =>
+          normalizeId(event?.id) ===
+          normalizedEventId
+      );
+
+    if (!eventExists) {
+      return existingEvents;
+    }
+
     const updatedEvents =
       existingEvents.filter(
         (event) =>
           normalizeId(event?.id) !==
           normalizedEventId
       );
-
-    // Nothing was deleted.
-    if (
-      updatedEvents.length ===
-      existingEvents.length
-    ) {
-      return existingEvents;
-    }
 
     localStorage.setItem(
       STORAGE_KEY,
@@ -646,6 +841,9 @@ export function deleteStoredEvent(eventId) {
 
 // =========================================================
 // INITIALIZE SEED EVENTS
+//
+// IMPORTANT:
+// All seed events start with ZERO bookings.
 // =========================================================
 
 export function initializeEvents(
@@ -654,7 +852,10 @@ export function initializeEvents(
   const existingEvents =
     getStoredEvents();
 
-  // Never overwrite existing localStorage data.
+  /*
+   * Never overwrite existing localStorage
+   * during normal application startup.
+   */
   if (existingEvents.length > 0) {
     return existingEvents;
   }
@@ -667,38 +868,50 @@ export function initializeEvents(
     new Date().toISOString();
 
   const initializedEvents =
-    seedEvents.map((event) => ({
-      ...event,
+    seedEvents.map((event) => {
+      const capacity =
+        Math.max(
+          Number(event.capacity) || 0,
+          0
+        );
 
-      // Existing seed events are system events
-      // unless an organizerId already exists.
-      organizerId:
-        event.organizerId ||
-        "system-organizer",
+      return {
+        ...event,
 
-      createdAt:
-        event.createdAt ||
-        now,
+        organizerId:
+          event.organizerId ||
+          "system-organizer",
 
-      updatedAt:
-        event.updatedAt ||
-        now,
+        createdAt:
+          event.createdAt ||
+          now,
 
-      capacity:
-        Number(event.capacity) || 0,
+        updatedAt:
+          event.updatedAt ||
+          now,
 
-      bookedSeats:
-        Number(event.bookedSeats) || 0,
+        capacity,
 
-      price:
-        Number(event.price) || 0,
+        /*
+         * CRITICAL:
+         * Ignore all old seed bookedSeats values.
+         */
+        bookedSeats: 0,
 
-      status:
-        event.status || "published",
+        price:
+          Math.max(
+            Number(event.price) || 0,
+            0
+          ),
 
-      featured:
-        Boolean(event.featured),
-    }));
+        status:
+          event.status ||
+          "published",
+
+        featured:
+          Boolean(event.featured),
+      };
+    });
 
   localStorage.setItem(
     STORAGE_KEY,

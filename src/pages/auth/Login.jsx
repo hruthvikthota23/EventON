@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   Check,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
+  ShieldCheck,
+  UserRound,
 } from "lucide-react";
 
 import {
@@ -16,11 +19,22 @@ import {
 
 import { useAuth } from "../../context/AuthContext";
 
+const EMAIL_REGEX =
+  /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
+
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { login } = useAuth();
+  const {
+    user,
+    isLoading,
+    login,
+  } = useAuth();
+
+  // ---------------------------------------------------------
+  // FORM DATA
+  // ---------------------------------------------------------
 
   const [formData, setFormData] = useState({
     email: "",
@@ -28,16 +42,99 @@ function Login() {
     role: "attendee",
   });
 
-  const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // ---------------------------------------------------------
+  // ADMIN MODE
+  //
+  // Admin is hidden from the normal login screen.
+  // It can be opened through "Admin Sign In".
+  // ---------------------------------------------------------
+
+  const [isAdminMode, setIsAdminMode] =
+    useState(false);
+
+  // ---------------------------------------------------------
+  // FIELD ERRORS
+  //
+  // Email    -> directly below email
+  // Password -> directly below password
+  // ---------------------------------------------------------
+
+  const [errors, setErrors] = useState({
+    email: "",
+    password: "",
+  });
+
+  // ---------------------------------------------------------
+  // ACCOUNT / LOGIN ERROR
+  //
+  // Appears below Sign In.
+  //
+  // Examples:
+  //
+  // No account found with this email.
+  //
+  // This account is registered as organizer.
+  // Please select organizer to continue.
+  // ---------------------------------------------------------
+
+  const [loginError, setLoginError] =
+    useState("");
+
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  // ---------------------------------------------------------
+  // REDIRECT IF ALREADY LOGGED IN
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    if (isLoading || !user) {
+      return;
+    }
+
+    const role = String(
+      user.role || "attendee"
+    )
+      .trim()
+      .toLowerCase();
+
+    if (role === "admin") {
+      navigate("/admin", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    if (role === "organizer") {
+      navigate("/", {
+        replace: true,
+      });
+
+      return;
+    }
+
+    navigate("/", {
+      replace: true,
+    });
+  }, [
+    user,
+    isLoading,
+    navigate,
+  ]);
 
   // ---------------------------------------------------------
   // INPUT CHANGE
   // ---------------------------------------------------------
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
+    const {
+      name,
+      value,
+    } = event.target;
 
     setFormData((previous) => ({
       ...previous,
@@ -47,8 +144,71 @@ function Login() {
     setErrors((previous) => ({
       ...previous,
       [name]: "",
-      form: "",
     }));
+
+    setLoginError("");
+  };
+
+  // ---------------------------------------------------------
+  // ROLE CHANGE
+  // ---------------------------------------------------------
+
+  const handleRoleChange = (role) => {
+    setFormData((previous) => ({
+      ...previous,
+      role,
+    }));
+
+    setErrors({
+      email: "",
+      password: "",
+    });
+
+    setLoginError("");
+  };
+
+  // ---------------------------------------------------------
+  // OPEN ADMIN LOGIN
+  // ---------------------------------------------------------
+
+  const handleAdminMode = () => {
+    setIsAdminMode(true);
+
+    setFormData((previous) => ({
+      ...previous,
+      role: "admin",
+    }));
+
+    setErrors({
+      email: "",
+      password: "",
+    });
+
+    setLoginError("");
+
+    setShowPassword(false);
+  };
+
+  // ---------------------------------------------------------
+  // RETURN TO REGULAR LOGIN
+  // ---------------------------------------------------------
+
+  const handleRegularLogin = () => {
+    setIsAdminMode(false);
+
+    setFormData((previous) => ({
+      ...previous,
+      role: "attendee",
+    }));
+
+    setErrors({
+      email: "",
+      password: "",
+    });
+
+    setLoginError("");
+
+    setShowPassword(false);
   };
 
   // ---------------------------------------------------------
@@ -56,30 +216,47 @@ function Login() {
   // ---------------------------------------------------------
 
   const validateForm = () => {
-    const newErrors = {};
+    const newErrors = {
+      email: "",
+      password: "",
+    };
 
-    if (!formData.email.trim()) {
-      newErrors.email = "Please enter your email.";
-    } else if (
-      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
-        formData.email.trim()
-      )
-    ) {
+    const email =
+      formData.email.trim();
+
+    const password =
+      formData.password;
+
+    // -------------------------------------------------------
+    // EMAIL
+    // -------------------------------------------------------
+
+    if (!email) {
+      newErrors.email =
+        "Please enter your Gmail address.";
+    } else if (!EMAIL_REGEX.test(email)) {
       newErrors.email =
         "Please enter a valid Gmail address ending with @gmail.com.";
     }
 
-    if (!formData.password) {
+    // -------------------------------------------------------
+    // PASSWORD
+    // -------------------------------------------------------
+
+    if (!password) {
       newErrors.password =
         "Please enter your password.";
-    } else if (formData.password.length < 6) {
+    } else if (password.length < 6) {
       newErrors.password =
         "Password must be at least 6 characters.";
     }
 
     setErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    return (
+      !newErrors.email &&
+      !newErrors.password
+    );
   };
 
   // ---------------------------------------------------------
@@ -89,7 +266,10 @@ function Login() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    const isValid = validateForm();
+    setLoginError("");
+
+    const isValid =
+      validateForm();
 
     if (!isValid) {
       return;
@@ -98,14 +278,17 @@ function Login() {
     setIsSubmitting(true);
 
     try {
-      const email = formData.email
-        .trim()
-        .toLowerCase();
+      const email =
+        formData.email
+          .trim()
+          .toLowerCase();
 
       const result = login({
         email,
         password: formData.password,
-        role: formData.role,
+        role: isAdminMode
+          ? "admin"
+          : formData.role,
       });
 
       // -----------------------------------------------------
@@ -113,9 +296,96 @@ function Login() {
       // -----------------------------------------------------
 
       if (!result.success) {
-        setErrors({
-          form: result.error,
-        });
+        const message =
+          result.error ||
+          "Unable to sign in. Please check your details.";
+
+        const normalizedMessage =
+          message.toLowerCase();
+
+        // ---------------------------------------------------
+        // ACCOUNT-LEVEL ERROR
+        //
+        // These appear below Sign In.
+        // ---------------------------------------------------
+
+        const isAccountError =
+          normalizedMessage.includes(
+            "account not found"
+          ) ||
+          normalizedMessage.includes(
+            "no account found"
+          ) ||
+          normalizedMessage.includes(
+            "no account"
+          ) ||
+          normalizedMessage.includes(
+            "not registered"
+          ) ||
+          normalizedMessage.includes(
+            "registered as"
+          ) ||
+          normalizedMessage.includes(
+            "select organizer"
+          ) ||
+          normalizedMessage.includes(
+            "select admin"
+          ) ||
+          normalizedMessage.includes(
+            "account type"
+          ) ||
+          normalizedMessage.includes(
+            "role"
+          );
+
+        if (isAccountError) {
+          // -----------------------------------------------
+          // NO ACCOUNT
+          // -----------------------------------------------
+
+          if (
+            normalizedMessage.includes(
+              "account not found"
+            ) ||
+            normalizedMessage.includes(
+              "no account found"
+            ) ||
+            normalizedMessage.includes(
+              "no account"
+            ) ||
+            normalizedMessage.includes(
+              "not registered"
+            )
+          ) {
+            setLoginError(
+              "No account found with this email."
+            );
+          } else {
+            // ---------------------------------------------
+            // WRONG ACCOUNT TYPE
+            // ---------------------------------------------
+
+            setLoginError(message);
+          }
+
+          setErrors({
+            email: "",
+            password: "",
+          });
+        } else {
+          // -----------------------------------------------
+          // PASSWORD / AUTHENTICATION ERROR
+          //
+          // Directly below Password.
+          // -----------------------------------------------
+
+          setErrors({
+            email: "",
+            password: message,
+          });
+
+          setLoginError("");
+        }
 
         setIsSubmitting(false);
 
@@ -127,38 +397,77 @@ function Login() {
       // -----------------------------------------------------
 
       const loggedInRole = String(
-        result.user?.role || "attendee"
+        result.user?.role ||
+          formData.role ||
+          "attendee"
       )
         .trim()
         .toLowerCase();
 
+      // -----------------------------------------------------
+      // ADMIN
+      // -----------------------------------------------------
+
+      if (
+        loggedInRole === "admin"
+      ) {
+        navigate("/admin", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      // -----------------------------------------------------
+      // ORGANIZER
+      // -----------------------------------------------------
+
+      if (
+        loggedInRole === "organizer"
+      ) {
+        navigate("/", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      // -----------------------------------------------------
+      // ATTENDEE
+      // -----------------------------------------------------
+
       const requestedDestination =
         location.state?.from;
 
-      const isOrganizerDestination =
-        typeof requestedDestination === "string" &&
+      const isProtectedDestination =
+        typeof requestedDestination ===
+          "string" &&
         (
-          requestedDestination === "/organizer" ||
           requestedDestination.startsWith(
-            "/organizer/"
+            "/admin"
+          ) ||
+          requestedDestination.startsWith(
+            "/organizer"
           )
         );
 
-      let destination = "/";
-
-      if (loggedInRole === "organizer") {
-        destination = "/";
-      } else if (
+      if (
         requestedDestination &&
-        !isOrganizerDestination &&
-        typeof requestedDestination === "string"
+        !isProtectedDestination &&
+        typeof requestedDestination ===
+          "string"
       ) {
-        destination = requestedDestination;
+        navigate(
+          requestedDestination,
+          {
+            replace: true,
+          }
+        );
+      } else {
+        navigate("/", {
+          replace: true,
+        });
       }
-
-      navigate(destination, {
-        replace: true,
-      });
     } catch (error) {
       console.error(
         "Login failed:",
@@ -166,90 +475,131 @@ function Login() {
       );
 
       setErrors({
-        form:
-          "Unable to login right now. Please try again.",
+        email: "",
+        password:
+          "Unable to sign in. Please try again.",
       });
+
+      setLoginError("");
 
       setIsSubmitting(false);
     }
   };
 
   // ---------------------------------------------------------
+  // LOADING
+  // ---------------------------------------------------------
+
+  if (
+    isLoading ||
+    user
+  ) {
+    return (
+      <main className="login-page">
+
+        <div className="login-loading">
+
+          <div className="login-spinner" />
+
+        </div>
+
+      </main>
+    );
+  }
+
+  // ---------------------------------------------------------
   // UI
   // ---------------------------------------------------------
 
   return (
-    <main className="h-full min-h-0 overflow-hidden bg-slate-50">
+    <main className="login-page">
 
-      <div className="grid h-full min-h-0 lg:grid-cols-2">
+      <div className="login-shell">
 
         {/* =====================================================
-            LEFT PANEL
+            LEFT BRAND PANEL
         ====================================================== */}
 
-        <section className="relative hidden min-h-0 overflow-hidden bg-[#070b14] lg:flex">
+        <section className="login-brand-panel">
 
-          {/* Background glow */}
+          <div className="login-brand-content">
 
-          <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-orange-500/10 blur-3xl" />
+            <div className="login-brand-message">
 
-          <div className="absolute -bottom-32 right-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+              <p className="login-brand-badge">
 
-          {/* Content */}
+                <ShieldCheck size={15} />
 
-          <div className="relative z-10 flex w-full items-center px-10 xl:px-14">
+                Secure Event Platform
 
-            <div className="max-w-lg">
-
-              {/* Small heading */}
-
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-400">
-                Welcome back
               </p>
 
-              {/* Main heading */}
+              <h1>
 
-              <h1 className="mt-3 text-4xl font-bold leading-[1.08] tracking-tight text-white xl:text-[46px]">
-                Discover events.
+                Welcome
+
                 <br />
-                Create memories.
+
+                back to{" "}
+
+                <span>
+                  EventON.
+                </span>
+
               </h1>
 
-              {/* Description */}
+              <p className="login-description">
 
-              <p className="mt-5 max-w-md text-sm leading-6 text-slate-400">
-                Sign in to manage your bookings,
-                discover upcoming events, and keep
-                everything in one place.
+                Sign in to stay connected
+                with your events, bookings,
+                and experiences — all in
+                one place.
+
               </p>
 
-              {/* Features */}
-
-              <div className="mt-7 space-y-3">
+              <div className="login-features">
 
                 {[
-                  "Manage all your bookings easily",
-                  "Discover upcoming events",
-                  "Keep everything organized in one place",
+                  "Stay on top of your bookings",
+                  "Discover events worth attending",
+                  "Manage your event experience effortlessly",
                 ].map((item) => (
+
                   <div
                     key={item}
-                    className="flex items-center gap-3"
+                    className="login-feature"
                   >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-orange-400">
+
+                    <span className="login-check">
+
                       <Check
                         size={12}
                         strokeWidth={3}
                       />
+
                     </span>
 
-                    <span className="text-sm text-slate-300">
+                    <span>
                       {item}
                     </span>
+
                   </div>
+
                 ))}
 
               </div>
+
+            </div>
+
+            <div className="login-brand-footer">
+
+              <span>
+                © {new Date().getFullYear()} EventON
+              </span>
+
+              <span>
+                Events. Experiences. Memories.
+              </span>
 
             </div>
 
@@ -258,56 +608,37 @@ function Login() {
         </section>
 
         {/* =====================================================
-            RIGHT PANEL
+            LOGIN PANEL
         ====================================================== */}
 
-        <section className="flex min-h-0 min-w-0 items-center justify-center overflow-hidden px-5 py-5 sm:px-8 lg:px-10">
+        <section className="login-form-panel">
 
-          <div className="w-full max-w-[450px]">
-
-            {/* =================================================
-                MOBILE LOGO
-            ================================================= */}
-
-            <div className="mb-6 lg:hidden">
-
-              <Link
-                to="/"
-                className="inline-flex h-10 shrink-0 items-center gap-3"
-                aria-label="Go to EventON home"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm">
-                  <span className="text-sm font-bold">
-                    E
-                  </span>
-                </span>
-
-                <span className="whitespace-nowrap text-[22px] font-bold leading-10 tracking-tight text-slate-900">
-                  Event
-                  <span className="text-orange-500">
-                    ON
-                  </span>
-                </span>
-              </Link>
-
-            </div>
+          <div className="login-form-wrapper">
 
             {/* =================================================
                 HEADER
             ================================================= */}
 
-            <div className="mb-5">
+            <div className="login-heading">
 
-              <p className="text-[11px] font-semibold text-orange-500">
-                Welcome back
+              <p className="login-welcome">
+                {isAdminMode
+                  ? "Administrator access"
+                  : "Welcome back"}
               </p>
 
-              <h2 className="mt-1 text-[28px] font-bold leading-tight tracking-tight text-slate-900">
-                Sign in to EventON
+              <h2>
+                {isAdminMode
+                  ? "Admin Sign In"
+                  : "Sign in to EventON"}
               </h2>
 
-              <p className="mt-1.5 text-[13px] leading-5 text-slate-500">
-                Enter your details to continue.
+              <p className="login-subtitle">
+
+                {isAdminMode
+                  ? "Authorized EventON administrators only."
+                  : "Enter your details to continue."}
+
               </p>
 
             </div>
@@ -319,137 +650,169 @@ function Login() {
             <form
               onSubmit={handleSubmit}
               noValidate
-              className="space-y-4"
+              className="login-form"
             >
 
-              {/* FORM ERROR */}
+              {/* ===============================================
+                  ACCOUNT TYPE
+                  
+                  ONLY NORMAL LOGIN
+              ================================================ */}
 
-              {errors.form && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium leading-5 text-red-600">
-                  {errors.form}
+              {!isAdminMode && (
+
+                <div className="login-field login-account-field">
+
+                  <label>
+                    Account type
+                  </label>
+
+                  <div className="login-role-grid">
+
+                    {/* ATTENDEE */}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleRoleChange(
+                          "attendee"
+                        )
+                      }
+                      className={`login-role-card ${
+                        formData.role ===
+                        "attendee"
+                          ? "active"
+                          : ""
+                      }`}
+                    >
+
+                      <span
+                        className={`login-role-icon ${
+                          formData.role ===
+                          "attendee"
+                            ? "active"
+                            : ""
+                        }`}
+                      >
+
+                        <UserRound
+                          size={17}
+                        />
+
+                      </span>
+
+                      <span className="login-role-text">
+
+                        <strong>
+                          Attendee
+                        </strong>
+
+                        <small>
+                          Book events
+                        </small>
+
+                      </span>
+
+                    </button>
+
+                    {/* ORGANIZER */}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleRoleChange(
+                          "organizer"
+                        )
+                      }
+                      className={`login-role-card ${
+                        formData.role ===
+                        "organizer"
+                          ? "active"
+                          : ""
+                      }`}
+                    >
+
+                      <span
+                        className={`login-role-icon ${
+                          formData.role ===
+                          "organizer"
+                            ? "active"
+                            : ""
+                        }`}
+                      >
+
+                        <ShieldCheck
+                          size={17}
+                        />
+
+                      </span>
+
+                      <span className="login-role-text">
+
+                        <strong>
+                          Organizer
+                        </strong>
+
+                        <small>
+                          Manage events
+                        </small>
+
+                      </span>
+
+                    </button>
+
+                  </div>
+
                 </div>
+
               )}
 
-              {/* =================================================
-                  ACCOUNT TYPE
-              ================================================= */}
+              {/* ===============================================
+                  ADMIN MODE INDICATOR
+              ================================================ */}
 
-              <div>
+              {isAdminMode && (
 
-                <label className="mb-1.5 block text-xs font-semibold text-slate-700">
-                  Login as
-                </label>
+                <div className="admin-access-note">
 
-                <div className="grid grid-cols-2 gap-2.5">
+                  <span className="admin-access-icon">
 
-                  {/* ATTENDEE */}
+                    <LockKeyhole
+                      size={16}
+                    />
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((previous) => ({
-                        ...previous,
-                        role: "attendee",
-                      }))
-                    }
-                    className={`rounded-xl border p-2.5 text-left transition ${
-                      formData.role === "attendee"
-                        ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    }`}
-                  >
+                  </span>
 
-                    <div className="flex items-center gap-2.5">
-
-                      <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
-                          formData.role === "attendee"
-                            ? "bg-orange-500 text-white"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        👤
-                      </span>
-
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">
-                          Attendee
-                        </p>
-
-                        <p className="text-[10px] text-slate-500">
-                          Book events
-                        </p>
-                      </div>
-
-                    </div>
-
-                  </button>
-
-                  {/* ORGANIZER */}
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((previous) => ({
-                        ...previous,
-                        role: "organizer",
-                      }))
-                    }
-                    className={`rounded-xl border p-2.5 text-left transition ${
-                      formData.role === "organizer"
-                        ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    }`}
-                  >
-
-                    <div className="flex items-center gap-2.5">
-
-                      <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
-                          formData.role === "organizer"
-                            ? "bg-orange-500 text-white"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        🏢
-                      </span>
-
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">
-                          Organizer
-                        </p>
-
-                        <p className="text-[10px] text-slate-500">
-                          Manage events
-                        </p>
-                      </div>
-
-                    </div>
-
-                  </button>
+                  <span>
+                    Restricted platform
+                    administrator access
+                  </span>
 
                 </div>
 
-              </div>
+              )}
 
-              {/* =================================================
+              {/* ===============================================
                   EMAIL
-              ================================================= */}
+              ================================================ */}
 
-              <div>
+              <div className="login-field">
 
-                <label
-                  htmlFor="email"
-                  className="mb-1.5 block text-xs font-semibold text-slate-700"
-                >
-                  Email address
+                <label htmlFor="email">
+                  Gmail address
                 </label>
 
-                <div className="relative">
+                <div
+                  className={`login-input-wrapper ${
+                    errors.email
+                      ? "error"
+                      : ""
+                  }`}
+                >
 
                   <Mail
-                    size={16}
-                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={18}
+                    className="login-input-icon"
                   />
 
                   <input
@@ -457,55 +820,63 @@ function Login() {
                     name="email"
                     type="email"
                     autoComplete="email"
-                    value={formData.email}
-                    onChange={handleChange}
+                    value={
+                      formData.email
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="you@gmail.com"
-                    className={`h-11 w-full rounded-xl border bg-white pl-10 pr-3.5 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 ${
-                      errors.email
-                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                        : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    }`}
                   />
 
                 </div>
 
-                {errors.email && (
-                  <p className="mt-1 text-[10px] font-medium text-red-500">
-                    {errors.email}
-                  </p>
-                )}
+                {/* EMAIL ERROR */}
+
+                <div className="login-field-error">
+
+                  {errors.email && (
+                    <p>
+                      {errors.email}
+                    </p>
+                  )}
+
+                </div>
 
               </div>
 
-              {/* =================================================
+              {/* ===============================================
                   PASSWORD
-              ================================================= */}
+              ================================================ */}
 
-              <div>
+              <div className="login-field">
 
-                <div className="mb-1.5 flex items-center justify-between">
+                <div className="login-password-label">
 
-                  <label
-                    htmlFor="password"
-                    className="block text-xs font-semibold text-slate-700"
-                  >
+                  <label htmlFor="password">
                     Password
                   </label>
 
                   <button
                     type="button"
-                    className="text-[10px] font-semibold text-orange-500 transition hover:text-orange-600"
+                    className="forgot-password"
                   >
                     Forgot password?
                   </button>
 
                 </div>
 
-                <div className="relative">
+                <div
+                  className={`login-input-wrapper ${
+                    errors.password
+                      ? "error"
+                      : ""
+                  }`}
+                >
 
                   <LockKeyhole
-                    size={16}
-                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={18}
+                    className="login-input-icon"
                   />
 
                   <input
@@ -517,21 +888,21 @@ function Login() {
                         : "password"
                     }
                     autoComplete="current-password"
-                    value={formData.password}
-                    onChange={handleChange}
+                    value={
+                      formData.password
+                    }
+                    onChange={
+                      handleChange
+                    }
                     placeholder="Enter your password"
-                    className={`h-11 w-full rounded-xl border bg-white pl-10 pr-11 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 ${
-                      errors.password
-                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                        : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    }`}
                   />
 
                   <button
                     type="button"
                     onClick={() =>
                       setShowPassword(
-                        (previous) => !previous
+                        (previous) =>
+                          !previous
                       )
                     }
                     aria-label={
@@ -539,86 +910,1815 @@ function Login() {
                         ? "Hide password"
                         : "Show password"
                     }
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    className="password-toggle"
                   >
+
                     {showPassword ? (
-                      <EyeOff size={16} />
+
+                      <EyeOff
+                        size={18}
+                      />
+
                     ) : (
-                      <Eye size={16} />
+
+                      <Eye
+                        size={18}
+                      />
+
                     )}
+
                   </button>
 
                 </div>
 
-                {errors.password && (
-                  <p className="mt-1 text-[10px] font-medium text-red-500">
-                    {errors.password}
+                {/* PASSWORD ERROR */}
+
+                <div className="login-field-error">
+
+                  {errors.password && (
+                    <p>
+                      {errors.password}
+                    </p>
+                  )}
+
+                </div>
+
+              </div>
+
+              {/* ===============================================
+                  SIGN IN
+              ================================================ */}
+
+              <button
+                type="submit"
+                disabled={
+                  isSubmitting
+                }
+                className="login-submit"
+              >
+
+                {isSubmitting
+                  ? "Signing in..."
+                  : isAdminMode
+                    ? "Admin Sign In"
+                    : "Sign In"}
+
+                {!isSubmitting && (
+
+                  <ArrowRight
+                    size={18}
+                    className="login-arrow"
+                  />
+
+                )}
+
+              </button>
+
+              {/* ===============================================
+                  ACCOUNT ERROR
+                  
+                  Fixed height.
+              ================================================ */}
+
+              <div className="login-submit-error">
+
+                {loginError && (
+                  <p>
+                    {loginError}
                   </p>
                 )}
 
               </div>
 
-              {/* =================================================
-                  SIGN IN
-              ================================================= */}
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="group mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting
-                  ? "Signing in..."
-                  : "Sign in"}
-
-                {!isSubmitting && (
-                  <ArrowRight
-                    size={16}
-                    className="transition-transform group-hover:translate-x-0.5"
-                  />
-                )}
-              </button>
-
             </form>
 
             {/* =================================================
-                REGISTER
-            ================================================= */}
+                CREATE ACCOUNT
+            ================================================== */}
 
-            <p className="mt-4 text-center text-xs text-slate-500">
+            {!isAdminMode && (
 
-              Don't have an account?{" "}
+              <p className="login-register">
 
-              <Link
-                to="/register"
-                state={location.state}
-                className="font-semibold text-orange-600 transition hover:text-orange-700"
-              >
-                Create account
-              </Link>
+                <span>
+                  Don't have an account?
+                </span>
 
-            </p>
+                <Link
+                  to="/register"
+                  state={
+                    location.state
+                  }
+                >
+                  Create account
+                </Link>
+
+              </p>
+
+            )}
 
             {/* =================================================
-                RETURN HOME
-            ================================================= */}
+                CONTINUE AS GUEST
+            ================================================== */}
 
-            <div className="mt-2 flex justify-center">
+            {!isAdminMode && (
 
-              <Link
-                to="/"
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-semibold text-slate-400 transition-all duration-200 hover:bg-slate-100 hover:text-orange-500"
-              >
-                Return to EventON
-              </Link>
+              <div className="login-guest">
 
-            </div>
+                <Link to="/">
+                  Continue as Guest
+                </Link>
+
+              </div>
+
+            )}
+
+            {/* =================================================
+                ADMIN ACCESS
+            ================================================== */}
+
+            {!isAdminMode ? (
+
+              <div className="admin-login-link">
+
+                <button
+                  type="button"
+                  onClick={
+                    handleAdminMode
+                  }
+                >
+                  Admin Sign In
+                </button>
+
+              </div>
+
+            ) : (
+
+              <div className="admin-login-link admin-back-link">
+
+                <button
+                  type="button"
+                  onClick={
+                    handleRegularLogin
+                  }
+                >
+
+                  <ArrowLeft
+                    size={14}
+                  />
+
+                  Back to Login
+
+                </button>
+
+              </div>
+
+            )}
+
+            {/* =================================================
+                CONTINUE AS GUEST — ADMIN MODE
+            ================================================== */}
+
+            {isAdminMode && (
+
+              <div className="login-guest">
+
+                <Link to="/">
+                  Continue as Guest
+                </Link>
+
+              </div>
+
+            )}
 
           </div>
 
         </section>
 
       </div>
+
+      {/* =======================================================
+          STYLES
+      ======================================================== */}
+
+      <style>{`
+
+        * {
+          box-sizing: border-box;
+        }
+
+        /* =========================================
+           PAGE
+        ========================================= */
+
+        .login-page {
+          width: 100%;
+
+          height: 100dvh;
+          min-height: 100dvh;
+          max-height: 100dvh;
+
+          overflow: hidden;
+
+          background: #f8fafc;
+        }
+
+        .login-shell {
+          width: 100%;
+          height: 100%;
+
+          min-height: 0;
+
+          display: grid;
+
+          grid-template-columns:
+            60% 40%;
+
+          overflow: hidden;
+        }
+
+        /* =========================================
+           LEFT PANEL
+        ========================================= */
+
+        .login-brand-panel {
+          position: relative;
+
+          width: 100%;
+          height: 100%;
+
+          min-height: 0;
+
+          overflow: hidden;
+
+          background:
+            radial-gradient(
+              circle at 15% 20%,
+              rgba(
+                249,
+                115,
+                22,
+                0.12
+              ),
+              transparent 30%
+            ),
+            radial-gradient(
+              circle at 90% 85%,
+              rgba(
+                59,
+                130,
+                246,
+                0.10
+              ),
+              transparent 32%
+            ),
+            linear-gradient(
+              145deg,
+              #070b14 0%,
+              #0f172a 55%,
+              #111827 100%
+            );
+        }
+
+        .login-brand-content {
+          position: relative;
+
+          z-index: 2;
+
+          width: 100%;
+          height: 100%;
+
+          min-height: 0;
+
+          padding:
+            42px 52px;
+
+          display: flex;
+
+          flex-direction: column;
+
+          justify-content: center;
+
+          overflow: hidden;
+        }
+
+        .login-brand-message {
+          max-width: 500px;
+        }
+
+        .login-brand-badge {
+          width: fit-content;
+
+          margin:
+            0 0 22px;
+
+          padding:
+            8px 12px;
+
+          display: inline-flex;
+
+          align-items: center;
+
+          gap: 7px;
+
+          border:
+            1px solid
+            rgba(
+              255,
+              255,
+              255,
+              0.10
+            );
+
+          border-radius:
+            999px;
+
+          background:
+            rgba(
+              255,
+              255,
+              255,
+              0.04
+            );
+
+          color:
+            #cbd5e1;
+
+          font-size:
+            11px;
+
+          font-weight:
+            600;
+
+          text-transform:
+            uppercase;
+
+          letter-spacing:
+            0.12em;
+        }
+
+        .login-brand-message h1 {
+          margin: 0;
+
+          color:
+            #ffffff;
+
+          font-size:
+            clamp(
+              44px,
+              4.4vw,
+              64px
+            );
+
+          line-height:
+            0.98;
+
+          letter-spacing:
+            -2.8px;
+
+          font-weight:
+            750;
+        }
+
+        .login-brand-message h1 span {
+          color:
+            #f97316;
+        }
+
+        .login-description {
+          max-width:
+            450px;
+
+          margin:
+            22px 0 0;
+
+          color:
+            #94a3b8;
+
+          font-size:
+            15px;
+
+          line-height:
+            1.7;
+        }
+
+        /* =========================================
+           FEATURES
+        ========================================= */
+
+        .login-features {
+          margin-top:
+            30px;
+
+          display:
+            flex;
+
+          flex-direction:
+            column;
+
+          gap:
+            12px;
+        }
+
+        .login-feature {
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          gap:
+            11px;
+
+          color:
+            #cbd5e1;
+
+          font-size:
+            13px;
+        }
+
+        .login-check {
+          width:
+            21px;
+
+          height:
+            21px;
+
+          flex:
+            0 0 21px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          border-radius:
+            50%;
+
+          background:
+            rgba(
+              249,
+              115,
+              22,
+              0.14
+            );
+
+          color:
+            #fb923c;
+        }
+
+        /* =========================================
+           LEFT FOOTER
+        ========================================= */
+
+        .login-brand-footer {
+          position:
+            absolute;
+
+          left:
+            52px;
+
+          right:
+            52px;
+
+          bottom:
+            30px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            space-between;
+
+          gap:
+            20px;
+
+          color:
+            #64748b;
+
+          font-size:
+            11px;
+        }
+
+        /* =========================================
+           RIGHT PANEL
+        ========================================= */
+
+        .login-form-panel {
+          width:
+            100%;
+
+          height:
+            100%;
+
+          min-width:
+            0;
+
+          min-height:
+            0;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          overflow:
+            hidden;
+
+          background:
+            #ffffff;
+        }
+
+        .login-form-wrapper {
+          width:
+            min(
+              500px,
+              calc(100% - 70px)
+            );
+
+          max-height:
+            100%;
+
+          display:
+            flex;
+
+          flex-direction:
+            column;
+
+          overflow:
+            hidden;
+        }
+
+        /* =========================================
+           HEADER
+        ========================================= */
+
+        .login-heading {
+          margin-bottom:
+            20px;
+        }
+
+        .login-welcome {
+          margin:
+            0 0 6px;
+
+          color:
+            #f97316;
+
+          font-size:
+            13px;
+
+          font-weight:
+            700;
+        }
+
+        .login-heading h2 {
+          margin:
+            0;
+
+          color:
+            #0f172a;
+
+          font-size:
+            34px;
+
+          line-height:
+            1.1;
+
+          letter-spacing:
+            -1.2px;
+
+          font-weight:
+            750;
+        }
+
+        .login-subtitle {
+          margin:
+            9px 0 0;
+
+          color:
+            #64748b;
+
+          font-size:
+            14px;
+
+          line-height:
+            1.5;
+        }
+
+        /* =========================================
+           FORM
+        ========================================= */
+
+        .login-form {
+          width:
+            100%;
+
+          display:
+            flex;
+
+          flex-direction:
+            column;
+        }
+
+        .login-field {
+          margin-bottom:
+            9px;
+        }
+
+        .login-field > label,
+        .login-password-label label {
+          display:
+            block;
+
+          color:
+            #334155;
+
+          font-size:
+            13px;
+
+          font-weight:
+            650;
+        }
+
+        /* =========================================
+           ACCOUNT TYPE
+        ========================================= */
+
+        .login-account-field {
+          margin-bottom:
+            11px;
+        }
+
+        .login-account-field > label {
+          margin-bottom:
+            7px;
+        }
+
+        .login-role-grid {
+          display:
+            grid;
+
+          grid-template-columns:
+            repeat(2, 1fr);
+
+          gap:
+            8px;
+        }
+
+        .login-role-card {
+          min-width:
+            0;
+
+          height:
+            62px;
+
+          padding:
+            9px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          gap:
+            8px;
+
+          border:
+            1px solid #e2e8f0;
+
+          border-radius:
+            10px;
+
+          background:
+            #ffffff;
+
+          color:
+            #334155;
+
+          cursor:
+            pointer;
+
+          text-align:
+            left;
+
+          transition:
+            border-color
+              0.2s ease,
+            background
+              0.2s ease,
+            box-shadow
+              0.2s ease;
+        }
+
+        .login-role-card:hover {
+          border-color:
+            #cbd5e1;
+
+          background:
+            #f8fafc;
+        }
+
+        .login-role-card.active {
+          border-color:
+            #fb923c;
+
+          background:
+            #fff7ed;
+
+          box-shadow:
+            0 0 0 2px
+            rgba(
+              249,
+              115,
+              22,
+              0.08
+            );
+        }
+
+        .login-role-icon {
+          width:
+            32px;
+
+          height:
+            32px;
+
+          flex:
+            0 0 32px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          border-radius:
+            8px;
+
+          background:
+            #f1f5f9;
+
+          color:
+            #64748b;
+        }
+
+        .login-role-icon.active {
+          background:
+            #f97316;
+
+          color:
+            #ffffff;
+        }
+
+        .login-role-text {
+          min-width:
+            0;
+
+          display:
+            flex;
+
+          flex-direction:
+            column;
+        }
+
+        .login-role-text strong {
+          overflow:
+            hidden;
+
+          color:
+            #1e293b;
+
+          font-size:
+            12px;
+
+          font-weight:
+            700;
+
+          white-space:
+            nowrap;
+
+          text-overflow:
+            ellipsis;
+        }
+
+        .login-role-text small {
+          margin-top:
+            3px;
+
+          overflow:
+            hidden;
+
+          color:
+            #94a3b8;
+
+          font-size:
+            10px;
+
+          white-space:
+            nowrap;
+
+          text-overflow:
+            ellipsis;
+        }
+
+        /* =========================================
+           ADMIN ACCESS NOTE
+        ========================================= */
+
+        .admin-access-note {
+          height:
+            42px;
+
+          margin-bottom:
+            11px;
+
+          padding:
+            0 12px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          gap:
+            9px;
+
+          border:
+            1px solid #e2e8f0;
+
+          border-radius:
+            10px;
+
+          background:
+            #f8fafc;
+
+          color:
+            #64748b;
+
+          font-size:
+            12px;
+
+          font-weight:
+            550;
+        }
+
+        .admin-access-icon {
+          width:
+            28px;
+
+          height:
+            28px;
+
+          flex:
+            0 0 28px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          border-radius:
+            7px;
+
+          background:
+            #fff7ed;
+
+          color:
+            #f97316;
+        }
+
+        /* =========================================
+           INPUT
+        ========================================= */
+
+        .login-input-wrapper {
+          position:
+            relative;
+
+          width:
+            100%;
+
+          height:
+            44px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          border:
+            1px solid #e2e8f0;
+
+          border-radius:
+            10px;
+
+          background:
+            #ffffff;
+
+          transition:
+            border-color
+              0.2s ease,
+            box-shadow
+              0.2s ease;
+        }
+
+        .login-input-wrapper:focus-within {
+          border-color:
+            #fb923c;
+
+          box-shadow:
+            0 0 0 3px
+            rgba(
+              249,
+              115,
+              22,
+              0.10
+            );
+        }
+
+        .login-input-wrapper.error {
+          border-color:
+            #fca5a5;
+        }
+
+        .login-input-wrapper input {
+          width:
+            100%;
+
+          height:
+            100%;
+
+          min-width:
+            0;
+
+          padding:
+            0 13px 0 41px;
+
+          border:
+            none;
+
+          outline:
+            none;
+
+          background:
+            transparent;
+
+          color:
+            #0f172a;
+
+          font-family:
+            inherit;
+
+          font-size:
+            14px;
+        }
+
+        .login-input-wrapper input::placeholder {
+          color:
+            #94a3b8;
+
+          font-size:
+            13px;
+        }
+
+        .login-input-icon {
+          position:
+            absolute;
+
+          left:
+            13px;
+
+          top:
+            50%;
+
+          transform:
+            translateY(-50%);
+
+          pointer-events:
+            none;
+
+          color:
+            #94a3b8;
+        }
+
+        /* =========================================
+           PASSWORD
+        ========================================= */
+
+        .login-password-label {
+          margin-bottom:
+            7px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            space-between;
+        }
+
+        .forgot-password {
+          padding:
+            0;
+
+          border:
+            none;
+
+          background:
+            transparent;
+
+          color:
+            #f97316;
+
+          font-family:
+            inherit;
+
+          font-size:
+            11px;
+
+          font-weight:
+            650;
+
+          cursor:
+            pointer;
+        }
+
+        .forgot-password:hover {
+          color:
+            #ea580c;
+        }
+
+        .password-toggle {
+          position:
+            absolute;
+
+          right:
+            7px;
+
+          top:
+            50%;
+
+          width:
+            30px;
+
+          height:
+            30px;
+
+          transform:
+            translateY(-50%);
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          border:
+            none;
+
+          border-radius:
+            7px;
+
+          background:
+            transparent;
+
+          color:
+            #94a3b8;
+
+          cursor:
+            pointer;
+        }
+
+        .password-toggle:hover {
+          background:
+            #f1f5f9;
+
+          color:
+            #475569;
+        }
+
+        .login-input-wrapper
+          input[name="password"] {
+          padding-right:
+            44px;
+        }
+
+        /* =========================================
+           FIELD ERROR
+        ========================================= */
+
+        .login-field-error {
+          height:
+            20px;
+
+          display:
+            flex;
+
+          align-items:
+            flex-start;
+
+          overflow:
+            hidden;
+        }
+
+        .login-field-error p {
+          width:
+            100%;
+
+          margin:
+            4px 0 0;
+
+          color:
+            #ef4444;
+
+          font-size:
+            11px;
+
+          line-height:
+            14px;
+
+          font-weight:
+            500;
+
+          white-space:
+            nowrap;
+
+          overflow:
+            hidden;
+
+          text-overflow:
+            ellipsis;
+        }
+
+        /* =========================================
+           SIGN IN BUTTON
+        ========================================= */
+
+        .login-submit {
+          width:
+            100%;
+
+          height:
+            45px;
+
+          margin-top:
+            1px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          gap:
+            8px;
+
+          border:
+            none;
+
+          border-radius:
+            10px;
+
+          background:
+            #f97316;
+
+          color:
+            #ffffff;
+
+          font-family:
+            inherit;
+
+          font-size:
+            14px;
+
+          font-weight:
+            650;
+
+          cursor:
+            pointer;
+
+          box-shadow:
+            0 3px 7px
+            rgba(
+              249,
+              115,
+              22,
+              0.18
+            );
+
+          transition:
+            background
+              0.2s ease,
+            transform
+              0.2s ease,
+            box-shadow
+              0.2s ease;
+        }
+
+        .login-submit:hover:not(:disabled) {
+          background:
+            #ea580c;
+
+          box-shadow:
+            0 6px 14px
+            rgba(
+              249,
+              115,
+              22,
+              0.24
+            );
+        }
+
+        .login-submit:active:not(:disabled) {
+          transform:
+            translateY(1px);
+        }
+
+        .login-submit:disabled {
+          opacity:
+            0.65;
+
+          cursor:
+            not-allowed;
+        }
+
+        .login-arrow {
+          transition:
+            transform
+              0.2s ease;
+        }
+
+        .login-submit:hover
+          .login-arrow {
+          transform:
+            translateX(2px);
+        }
+
+        /* =========================================
+           ACCOUNT ERROR
+        ========================================= */
+
+        .login-submit-error {
+          height:
+            31px;
+
+          display:
+            flex;
+
+          align-items:
+            flex-start;
+
+          justify-content:
+            center;
+
+          overflow:
+            hidden;
+        }
+
+        .login-submit-error p {
+          width:
+            100%;
+
+          margin:
+            5px 0 0;
+
+          color:
+            #ef4444;
+
+          font-size:
+            11px;
+
+          line-height:
+            14px;
+
+          font-weight:
+            500;
+
+          text-align:
+            center;
+
+          overflow:
+            hidden;
+
+          text-overflow:
+            ellipsis;
+        }
+
+        /* =========================================
+           ADMIN LOGIN LINK
+        ========================================= */
+
+        .admin-login-link {
+          min-height:
+            24px;
+
+          margin:
+            0 0 4px;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          gap:
+            5px;
+
+          color:
+            #64748b;
+
+          font-size:
+            12px;
+        }
+
+        .admin-login-link button {
+          padding:
+            0;
+
+          border:
+            none;
+
+          background:
+            transparent;
+
+          color:
+            #ea580c;
+
+          font-family:
+            inherit;
+
+          font-size:
+            12px;
+
+          font-weight:
+            650;
+
+          cursor:
+            pointer;
+        }
+
+        .admin-login-link button:hover {
+          color:
+            #c2410c;
+
+          text-decoration:
+            underline;
+        }
+
+        .admin-back-link button {
+          display:
+            inline-flex;
+
+          align-items:
+            center;
+
+          gap:
+            5px;
+        }
+
+        /* =========================================
+           CREATE ACCOUNT
+        ========================================= */
+
+        .login-register {
+          margin:
+            4px 0 0;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+
+          gap:
+            5px;
+
+          color:
+            #64748b;
+
+          font-size:
+            12px;
+        }
+
+        .login-register a {
+          color:
+            #ea580c;
+
+          font-weight:
+            650;
+
+          text-decoration:
+            none;
+        }
+
+        .login-register a:hover {
+          text-decoration:
+            underline;
+        }
+
+        /* =========================================
+           CONTINUE AS GUEST
+        ========================================= */
+
+        .login-guest {
+          margin-top:
+            3px;
+
+          display:
+            flex;
+
+          justify-content:
+            center;
+        }
+
+        .login-guest a {
+          padding:
+            6px 10px;
+
+          border-radius:
+            7px;
+
+          color:
+            #94a3b8;
+
+          font-size:
+            11px;
+
+          font-weight:
+            600;
+
+          text-decoration:
+            none;
+
+          transition:
+            background
+              0.2s ease,
+            color
+              0.2s ease;
+        }
+
+        .login-guest a:hover {
+          background:
+            #fff7ed;
+
+          color:
+            #f97316;
+        }
+
+        /* =========================================
+           LOADING
+        ========================================= */
+
+        .login-loading {
+          width:
+            100%;
+
+          height:
+            100%;
+
+          display:
+            flex;
+
+          align-items:
+            center;
+
+          justify-content:
+            center;
+        }
+
+        .login-spinner {
+          width:
+            28px;
+
+          height:
+            28px;
+
+          border:
+            3px solid #e2e8f0;
+
+          border-top-color:
+            #f97316;
+
+          border-radius:
+            50%;
+
+          animation:
+            login-spin
+            0.8s linear infinite;
+        }
+
+        @keyframes login-spin {
+
+          to {
+            transform:
+              rotate(360deg);
+          }
+
+        }
+
+        /* =========================================
+           TABLET
+        ========================================= */
+
+        @media (max-width: 950px) {
+
+          .login-shell {
+            grid-template-columns:
+              55% 45%;
+          }
+
+          .login-brand-content {
+            padding:
+              32px;
+          }
+
+          .login-brand-footer {
+            left:
+              32px;
+
+            right:
+              32px;
+          }
+
+          .login-form-wrapper {
+            width:
+              min(
+                500px,
+                calc(100% - 40px)
+              );
+          }
+
+          .login-brand-message h1 {
+            font-size:
+              44px;
+          }
+
+        }
+
+        /* =========================================
+           MOBILE
+        ========================================= */
+
+        @media (max-width: 720px) {
+
+          .login-page {
+            height:
+              100dvh;
+
+            min-height:
+              100dvh;
+
+            max-height:
+              100dvh;
+
+            overflow:
+              hidden;
+          }
+
+          .login-shell {
+            display:
+              block;
+
+            width:
+              100%;
+
+            height:
+              100%;
+
+            overflow:
+              hidden;
+          }
+
+          .login-brand-panel {
+            display:
+              none;
+          }
+
+          .login-form-panel {
+            width:
+              100%;
+
+            height:
+              100%;
+
+            overflow:
+              hidden;
+          }
+
+          .login-form-wrapper {
+            width:
+              min(
+                500px,
+                calc(100% - 32px)
+              );
+
+            height:
+              100%;
+
+            max-height:
+              100%;
+
+            margin:
+              0 auto;
+
+            justify-content:
+              center;
+
+            overflow:
+              hidden;
+          }
+
+          .login-heading {
+            margin-bottom:
+              16px;
+          }
+
+          .login-welcome {
+            font-size:
+              12px;
+          }
+
+          .login-heading h2 {
+            font-size:
+              29px;
+          }
+
+          .login-subtitle {
+            font-size:
+              13px;
+          }
+
+          .login-role-grid {
+            gap:
+              6px;
+          }
+
+          .login-role-card {
+            height:
+              59px;
+
+            padding:
+              7px;
+          }
+
+          .login-role-icon {
+            width:
+              29px;
+
+            height:
+              29px;
+
+            flex-basis:
+              29px;
+          }
+
+          .login-role-text strong {
+            font-size:
+              10px;
+          }
+
+          .login-role-text small {
+            font-size:
+              8px;
+          }
+
+          .login-input-wrapper {
+            height:
+              43px;
+          }
+
+          .login-input-wrapper input {
+            font-size:
+              13px;
+          }
+
+        }
+
+        /* =========================================
+           SMALL MOBILE
+        ========================================= */
+
+        @media (max-width: 390px) {
+
+          .login-form-wrapper {
+            width:
+              calc(100% - 24px);
+          }
+
+          .login-heading {
+            margin-bottom:
+              11px;
+          }
+
+          .login-heading h2 {
+            font-size:
+              25px;
+          }
+
+          .login-subtitle {
+            font-size:
+              11px;
+          }
+
+          .login-role-card {
+            height:
+              54px;
+
+            padding:
+              6px;
+          }
+
+          .login-role-text small {
+            display:
+              none;
+          }
+
+          .login-field {
+            margin-bottom:
+              5px;
+          }
+
+          .login-field-error {
+            height:
+              17px;
+          }
+
+          .login-submit {
+            height:
+              42px;
+          }
+
+          .login-submit-error {
+            height:
+              27px;
+          }
+
+          .admin-access-note {
+            height:
+              38px;
+
+            font-size:
+              10px;
+          }
+
+          .admin-login-link {
+            font-size:
+              10px;
+          }
+
+          .admin-login-link button {
+            font-size:
+              10px;
+          }
+
+          .login-register {
+            font-size:
+              10px;
+          }
+
+          .login-guest a {
+            font-size:
+              10px;
+          }
+
+        }
+
+      `}</style>
 
     </main>
   );

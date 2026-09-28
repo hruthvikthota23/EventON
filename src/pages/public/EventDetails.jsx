@@ -16,8 +16,76 @@ import {
   EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
+function getEventTimestamp(event) {
+  if (!event?.date) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const rawDate = String(event.date).trim();
+  let date;
+
+  // Treat YYYY-MM-DD as a local calendar date to avoid timezone shifts.
+  const dateOnlyMatch = rawDate.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+
+  if (dateOnlyMatch) {
+    date = new Date(
+      Number(dateOnlyMatch[1]),
+      Number(dateOnlyMatch[2]) - 1,
+      Number(dateOnlyMatch[3]),
+      0,
+      0,
+      0,
+      0
+    );
+  } else {
+    date = new Date(rawDate);
+  }
+
+  if (Number.isNaN(date.getTime())) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const time = String(event.time || "").trim();
+  const match = time.match(
+    /^(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)?$/i
+  );
+
+  if (match) {
+    let hours = Number(match[1]);
+    const minutes = Number(match[2] || 0);
+    const period = match[3]?.toUpperCase();
+
+    if (period === "PM" && hours < 12) {
+      hours += 12;
+    }
+
+    if (period === "AM" && hours === 12) {
+      hours = 0;
+    }
+
+    if (
+      hours >= 0 &&
+      hours <= 23 &&
+      minutes >= 0 &&
+      minutes <= 59
+    ) {
+      date.setHours(hours, minutes, 0, 0);
+    }
+  }
+
+  return date.getTime();
+}
+
+function isEventCompleted(event, currentTime = Date.now()) {
+  const timestamp = getEventTimestamp(event);
+
+  return Number.isFinite(timestamp) && timestamp < currentTime;
+}
+
 function EventDetails() {
   const { id } = useParams();
+
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // =========================================================
   // EVENT STATE
@@ -62,6 +130,16 @@ function EventDetails() {
     };
   }, [id]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   // =========================================================
   // EVENT NOT FOUND
   // =========================================================
@@ -103,11 +181,16 @@ function EventDetails() {
   }
 
   // =========================================================
-  // AVAILABILITY
+  // EVENT LIFECYCLE + AVAILABILITY
   // =========================================================
 
+  const eventCompleted = isEventCompleted(event, currentTime);
+
   const capacity = Number(event.capacity) || 0;
-  const bookedSeats = Number(event.bookedSeats) || 0;
+  const bookedSeats = Math.min(
+    Math.max(Number(event.bookedSeats) || 0, 0),
+    Math.max(capacity, 0)
+  );
 
   const availableSeats = Math.max(
     capacity - bookedSeats,
@@ -115,8 +198,13 @@ function EventDetails() {
   );
 
   const soldOut =
-    availableSeats <= 0 ||
-    event.status === "sold-out";
+    !eventCompleted &&
+    (availableSeats <= 0 ||
+      String(event.status || "").trim().toLowerCase() === "sold-out");
+
+  // A completed event must never expose a booking action, even if
+  // its stored status still says "published" or it has free seats.
+  const bookingClosed = eventCompleted || soldOut;
 
   // =========================================================
   // DATE
@@ -195,14 +283,22 @@ function EventDetails() {
                 </span>
               </div>
 
-              {/* Sold Out */}
+              {/* Event lifecycle */}
 
-              {soldOut && (
+              {eventCompleted ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
                   <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900">
-                    Sold Out
+                    Completed
                   </span>
                 </div>
+              ) : (
+                soldOut && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
+                    <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900">
+                      Sold Out
+                    </span>
+                  </div>
+                )
               )}
 
             </div>
@@ -410,9 +506,11 @@ function EventDetails() {
                       </p>
 
                       <p className="mt-1 text-sm font-semibold text-slate-900">
-                        {soldOut
-                          ? "Sold out"
-                          : `${availableSeats} seats left`}
+                        {eventCompleted
+                          ? "Event completed"
+                          : soldOut
+                            ? "Sold out"
+                            : `${availableSeats} seats left`}
                       </p>
 
                     </div>
@@ -451,9 +549,15 @@ function EventDetails() {
 
                   </div>
 
-                  {!soldOut && (
+                  {!bookingClosed && (
                     <span className="text-xs font-semibold text-green-600">
                       {availableSeats} left
+                    </span>
+                  )}
+
+                  {eventCompleted && (
+                    <span className="text-xs font-semibold text-slate-500">
+                      Completed
                     </span>
                   )}
 
@@ -463,7 +567,15 @@ function EventDetails() {
 
                 {/* Booking Button */}
 
-                {soldOut ? (
+                {eventCompleted ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex h-12 w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 text-sm font-semibold text-slate-500"
+                  >
+                    Event Completed
+                  </button>
+                ) : soldOut ? (
                   <button
                     type="button"
                     disabled
@@ -481,7 +593,11 @@ function EventDetails() {
                 )}
 
                 <p className="mt-4 text-center text-xs leading-5 text-slate-400">
-                  Secure your spot before tickets run out.
+                  {eventCompleted
+                    ? "This event has already ended."
+                    : soldOut
+                      ? "Tickets for this event are sold out."
+                      : "Secure your spot before tickets run out."}
                 </p>
 
               </div>

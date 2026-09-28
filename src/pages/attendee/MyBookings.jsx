@@ -24,6 +24,8 @@ import {
 import {
   getStoredEventById,
   updateStoredEvent,
+  decrementEventSeats,
+  incrementEventSeats,
   EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
@@ -368,13 +370,31 @@ function MyBookings() {
       currentBooking.attendeeId ??
       currentBooking.attendee?.userId;
 
-    const isOwner =
+    const bookingAttendeeEmail =
+      currentBooking.attendee?.email ??
+      currentBooking.attendeeEmail ??
+      currentBooking.userEmail ??
+      currentBooking.email;
+
+    const normalizedBookingEmail =
+      bookingAttendeeEmail?.trim().toLowerCase();
+
+    const normalizedUserEmail =
+      user?.email?.trim().toLowerCase();
+
+    const ownsById =
       bookingAttendeeId !== null &&
       bookingAttendeeId !== undefined &&
       String(bookingAttendeeId) ===
         String(user?.id);
 
-    if (!isOwner) {
+    const ownsByEmail =
+      Boolean(normalizedBookingEmail) &&
+      Boolean(normalizedUserEmail) &&
+      normalizedBookingEmail ===
+        normalizedUserEmail;
+
+    if (!ownsById && !ownsByEmail) {
       return;
     }
 
@@ -394,6 +414,26 @@ function MyBookings() {
       return;
     }
 
+    // Confirmed bookings for events that have already started
+    // cannot be cancelled from the attendee side.
+    const eventDateTime =
+      currentEvent.date && currentEvent.time
+        ? new Date(
+            `${currentEvent.date}T${currentEvent.time}`
+          ).getTime()
+        : currentEvent.date
+        ? new Date(
+            `${currentEvent.date}T00:00:00`
+          ).getTime()
+        : NaN;
+
+    if (
+      Number.isFinite(eventDateTime) &&
+      eventDateTime <= Date.now()
+    ) {
+      return;
+    }
+
     const currentBookedSeats =
       Math.max(
         Number(
@@ -405,7 +445,10 @@ function MyBookings() {
     const cancelledTickets =
       Math.max(
         Number(
-          currentBooking.ticketCount
+          currentBooking.quantity ??
+            currentBooking.tickets ??
+            currentBooking.ticketCount ??
+            0
         ) || 0,
         0
       );
@@ -418,37 +461,37 @@ function MyBookings() {
     // RESTORE EVENT SEATS
     // =======================================================
     //
-    // Restore seats BEFORE marking the booking cancelled.
-    // If the event update fails, the booking stays confirmed
-    // and can safely be retried.
+    // IMPORTANT:
+    // bookedSeats is protected by eventStorage.js.
+    // updateStoredEvent() cannot modify bookedSeats.
+    //
+    // Therefore cancellation MUST use the dedicated
+    // decrementEventSeats() function.
     // =======================================================
 
-    const restoredBookedSeats =
-      Math.max(
-        currentBookedSeats -
-          cancelledTickets,
-        0
+    const updatedEvent =
+      decrementEventSeats(
+        eventId,
+        cancelledTickets
       );
 
-    const updatedEvents =
+    if (!updatedEvent) {
+      return;
+    }
+
+    // If the event was sold out, reopening seats makes it
+    // available for booking again. Do not change any other
+    // event status here.
+    if (
+      currentEvent.status ===
+      "sold-out"
+    ) {
       updateStoredEvent(
         eventId,
         {
-          bookedSeats:
-            restoredBookedSeats,
-
-          status:
-            currentEvent.status ===
-              "sold-out"
-              ? "published"
-              : currentEvent.status,
+          status: "published",
         }
       );
-
-    if (
-      !Array.isArray(updatedEvents)
-    ) {
-      return;
     }
 
     // =======================================================
@@ -468,17 +511,25 @@ function MyBookings() {
     if (
       !Array.isArray(updatedBookings)
     ) {
-      // Roll the event seats back if the
+      // Roll the seats back if the
       // booking status could not be saved.
-      updateStoredEvent(
+      incrementEventSeats(
         eventId,
-        {
-          bookedSeats:
-            currentBookedSeats,
-          status:
-            currentEvent.status,
-        }
+        cancelledTickets
       );
+
+      // Restore the original event status.
+      if (
+        currentEvent.status ===
+        "sold-out"
+      ) {
+        updateStoredEvent(
+          eventId,
+          {
+            status: currentEvent.status,
+          }
+        );
+      }
 
       return;
     }

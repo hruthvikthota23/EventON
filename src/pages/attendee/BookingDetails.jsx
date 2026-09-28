@@ -23,10 +23,13 @@ import { useAuth } from "../../context/AuthContext";
 
 import {
   getStoredBookingById,
+  updateStoredBooking,
 } from "../../utils/bookingStorage";
 
 import {
   getStoredEventById,
+  incrementEventSeats,
+  decrementEventSeats,
   EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
@@ -49,6 +52,10 @@ function BookingDetails() {
   const [booking, setBooking] = useState(null);
   const [isLoadingBooking, setIsLoadingBooking] =
     useState(true);
+  const [isCancelling, setIsCancelling] =
+    useState(false);
+  const [cancelError, setCancelError] =
+    useState("");
 
   // =========================================================
   // LOAD BOOKING
@@ -304,6 +311,137 @@ function BookingDetails() {
   const event =
     storedEvent ||
     booking.event;
+
+  // =========================================================
+  // CANCEL BOOKING
+  // =========================================================
+
+  const handleCancelBooking = () => {
+    if (isCancelling || !booking || isCancelled) {
+      return;
+    }
+
+    const latestBooking =
+      getStoredBookingById(booking.bookingId);
+
+    if (!latestBooking) {
+      setCancelError(
+        "This booking could not be found. Please refresh and try again."
+      );
+      return;
+    }
+
+    if (String(latestBooking.status).toLowerCase() === "cancelled") {
+      setBooking(latestBooking);
+      return;
+    }
+
+    const latestEvent =
+      eventId ? getStoredEventById(eventId) : null;
+
+    if (!latestEvent) {
+      setCancelError(
+        "The event information is no longer available."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Cancel this booking for ${latestBooking.ticketCount} ${
+        Number(latestBooking.ticketCount) === 1
+          ? "ticket"
+          : "tickets"
+      }?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setCancelError("");
+
+    try {
+      const ticketQuantity = Math.max(
+        Number(latestBooking.ticketCount) || 0,
+        0
+      );
+
+      if (ticketQuantity < 1) {
+        setCancelError(
+          "This booking has an invalid ticket quantity."
+        );
+        return;
+      }
+
+      const updatedEvent = decrementEventSeats(
+        latestEvent.id,
+        ticketQuantity
+      );
+
+      if (!updatedEvent) {
+        setCancelError(
+          "Unable to restore event availability. The booking was not cancelled."
+        );
+        return;
+      }
+
+      const updatedBooking = updateStoredBooking(
+        latestBooking.bookingId,
+        {
+          status: "cancelled",
+          cancelledAt: new Date().toISOString(),
+        }
+      );
+
+      if (!updatedBooking) {
+        incrementEventSeats(
+          latestEvent.id,
+          ticketQuantity
+        );
+
+        setCancelError(
+          "Unable to cancel your booking. Please try again."
+        );
+        return;
+      }
+
+      const remainingSeats = Math.max(
+        (Number(updatedEvent.capacity) || 0) -
+          (Number(updatedEvent.bookedSeats) || 0),
+        0
+      );
+
+      if (
+        String(updatedEvent.status).toLowerCase() === "sold-out" &&
+        remainingSeats > 0
+      ) {
+        updateStoredEvent(latestEvent.id, {
+          status: "published",
+        });
+      }
+
+      window.dispatchEvent(
+        new Event("eventon:bookings-updated")
+      );
+
+      const refreshedBooking =
+        getStoredBookingById(latestBooking.bookingId);
+
+      setBooking(refreshedBooking || updatedBooking);
+    } catch (error) {
+      console.error(
+        "Unable to cancel booking:",
+        error
+      );
+
+      setCancelError(
+        "Something went wrong while cancelling your booking. Please try again."
+      );
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // =========================================================
   // EVENT NOT FOUND
@@ -820,6 +958,28 @@ function BookingDetails() {
                   </p>
                 </div>
               </div>
+
+              {cancelError && (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium leading-5 text-red-600">
+                  {cancelError}
+                </div>
+              )}
+
+              {/* CANCEL BOOKING */}
+
+              {!isCancelled && (
+                <button
+                  type="button"
+                  onClick={handleCancelBooking}
+                  disabled={isCancelling}
+                  className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <XCircle size={17} />
+                  {isCancelling
+                    ? "Cancelling booking..."
+                    : "Cancel Booking"}
+                </button>
+              )}
 
               {/* VIEW EVENT */}
 

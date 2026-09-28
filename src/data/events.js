@@ -89,7 +89,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 999,
     capacity: 500,
-    bookedSeats: 342,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -113,7 +113,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 799,
     capacity: 300,
-    bookedSeats: 187,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -137,7 +137,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 0,
     capacity: 200,
-    bookedSeats: 126,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -161,7 +161,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 699,
     capacity: 350,
-    bookedSeats: 214,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -189,7 +189,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 499,
     capacity: 250,
-    bookedSeats: 121,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -213,7 +213,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 1499,
     capacity: 450,
-    bookedSeats: 286,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -237,7 +237,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 899,
     capacity: 300,
-    bookedSeats: 174,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -265,7 +265,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 1299,
     capacity: 2000,
-    bookedSeats: 1450,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -289,7 +289,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 699,
     capacity: 800,
-    bookedSeats: 526,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -313,7 +313,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 1799,
     capacity: 3000,
-    bookedSeats: 2180,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -341,7 +341,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 599,
     capacity: 1500,
-    bookedSeats: 920,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -365,7 +365,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 399,
     capacity: 5000,
-    bookedSeats: 3125,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -393,7 +393,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 299,
     capacity: 400,
-    bookedSeats: 275,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -417,7 +417,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 0,
     capacity: 1000,
-    bookedSeats: 624,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -445,7 +445,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 199,
     capacity: 300,
-    bookedSeats: 98,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1561214115-f2f134cc4912?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -469,7 +469,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 299,
     capacity: 1200,
-    bookedSeats: 734,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1514222134-b57cbb8ce073?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -497,7 +497,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 499,
     capacity: 1500,
-    bookedSeats: 816,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -525,7 +525,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 149,
     capacity: 2500,
-    bookedSeats: 1630,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=1200&q=80",
     featured: true,
@@ -553,7 +553,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 399,
     capacity: 2000,
-    bookedSeats: 1120,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80",
     featured: false,
@@ -581,7 +581,7 @@ export const events = [
     organizerId: SYSTEM_ORGANIZER_ID,
     price: 1199,
     capacity: 1800,
-    bookedSeats: 1048,
+    bookedSeats: 0,
     image:
       "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80",
     featured: true,

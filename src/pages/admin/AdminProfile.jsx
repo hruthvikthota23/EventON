@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Edit3,
   Mail,
-  Phone,
   Save,
   ShieldCheck,
   UserRound,
@@ -17,7 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 
 const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
 
-function OrganizerProfile() {
+function AdminProfile() {
   const { user, updateUser } = useAuth();
 
   const [account, setAccount] = useState(user || null);
@@ -26,7 +25,6 @@ function OrganizerProfile() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    mobile: "",
   });
 
   const [errors, setErrors] = useState({});
@@ -77,10 +75,7 @@ function OrganizerProfile() {
       loadAccount();
     };
 
-    window.addEventListener(
-      "storage",
-      handleUpdate
-    );
+    window.addEventListener("storage", handleUpdate);
 
     window.addEventListener(
       "eventon:auth-updated",
@@ -109,7 +104,7 @@ function OrganizerProfile() {
       name:
         account?.name ||
         user?.name ||
-        "Organizer",
+        "User",
 
       email:
         account?.email ||
@@ -119,24 +114,21 @@ function OrganizerProfile() {
       role:
         account?.role ||
         user?.role ||
-        "organizer",
+        "attendee",
 
       id:
         account?.id ||
         user?.id ||
         "Not available",
 
-      mobile:
-        account?.mobile ||
+      phone:
         account?.phone ||
-        user?.mobile ||
         user?.phone ||
         "Not provided",
 
       createdAt:
         account?.createdAt ||
         account?.registeredAt ||
-        user?.createdAt ||
         null,
     };
   }, [account, user]);
@@ -172,9 +164,7 @@ function OrganizerProfile() {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) =>
-      part.charAt(0)
-    )
+    .map((part) => part.charAt(0))
     .join("")
     .toUpperCase();
 
@@ -183,13 +173,14 @@ function OrganizerProfile() {
   // =========================================================
 
   const formattedCreatedDate = profile.createdAt
-    ? new Date(
-        profile.createdAt
-      ).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
+    ? new Date(profile.createdAt).toLocaleDateString(
+        "en-IN",
+        {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }
+      )
     : "Not available";
 
   // =========================================================
@@ -200,10 +191,6 @@ function OrganizerProfile() {
     setFormData({
       name: profile.name,
       email: profile.email,
-      mobile:
-        profile.mobile === "Not provided"
-          ? ""
-          : profile.mobile,
     });
 
     setErrors({});
@@ -219,10 +206,6 @@ function OrganizerProfile() {
     setFormData({
       name: profile.name,
       email: profile.email,
-      mobile:
-        profile.mobile === "Not provided"
-          ? ""
-          : profile.mobile,
     });
 
     setErrors({});
@@ -259,17 +242,7 @@ function OrganizerProfile() {
     const newErrors = {};
 
     const name = formData.name.trim();
-    const email = formData.email
-      .trim()
-      .toLowerCase();
-
-    const mobile = formData.mobile
-      .replace(/\D/g, "")
-      .trim();
-
-    // -------------------------------------------------------
-    // NAME
-    // -------------------------------------------------------
+    const email = formData.email.trim().toLowerCase();
 
     if (!name) {
       newErrors.name = "Name is required.";
@@ -278,10 +251,6 @@ function OrganizerProfile() {
         "Name must contain at least 2 characters.";
     }
 
-    // -------------------------------------------------------
-    // EMAIL
-    // -------------------------------------------------------
-
     if (!email) {
       newErrors.email = "Email is required.";
     } else if (
@@ -289,18 +258,6 @@ function OrganizerProfile() {
     ) {
       newErrors.email =
         "Enter a valid email address.";
-    }
-
-    // -------------------------------------------------------
-    // MOBILE
-    // -------------------------------------------------------
-
-    if (!mobile) {
-      newErrors.mobile =
-        "Mobile number is required.";
-    } else if (!/^[6-9]\d{9}$/.test(mobile)) {
-      newErrors.mobile =
-        "Enter a valid 10-digit Indian mobile number.";
     }
 
     setErrors(newErrors);
@@ -321,28 +278,19 @@ function OrganizerProfile() {
 
     setIsSaving(true);
     setSuccessMessage("");
-    setErrors({});
 
     try {
       const result = updateUser({
         name: formData.name.trim(),
-        email: formData.email
-          .trim()
-          .toLowerCase(),
-        mobile: formData.mobile.replace(
-          /\D/g,
-          ""
-        ),
+        email: formData.email.trim().toLowerCase(),
       });
 
       if (!result?.success) {
-        setErrors(
-          result?.fields || {
-            form:
-              result?.error ||
-              "Unable to save your profile.",
-          }
-        );
+        setErrors({
+          form:
+            result?.error ||
+            "Unable to save your profile.",
+        });
 
         return;
       }
@@ -356,7 +304,7 @@ function OrganizerProfile() {
       setIsEditing(false);
     } catch (error) {
       console.error(
-        "Unable to update organizer profile:",
+        "Unable to update admin profile:",
         error
       );
 
@@ -370,48 +318,19 @@ function OrganizerProfile() {
   };
 
   // =========================================================
-  // NO USER
-  // =========================================================
-
-  if (!user) {
-    return (
-      <section className="flex min-h-[70vh] items-center justify-center bg-slate-50 px-5">
-        <div className="text-center">
-
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-            <UserRound size={25} />
-          </div>
-
-          <h1 className="mt-5 text-xl font-bold text-slate-900">
-            Organizer login required
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Please log in to view your profile.
-          </p>
-
-        </div>
-      </section>
-    );
-  }
-
-  // =========================================================
   // RENDER
   // =========================================================
 
   return (
     <div className="min-h-full bg-slate-50">
-
       {/* =====================================================
           HEADER
-      ====================================================== */}
+      ===================================================== */}
 
       <section className="border-b border-slate-200 bg-white">
-
         <div className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
-
           <Link
-            to="/organizer"
+            to="/admin"
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-orange-600"
           >
             <ArrowLeft size={16} />
@@ -419,9 +338,7 @@ function OrganizerProfile() {
           </Link>
 
           <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-
             <div>
-
               <p className="text-sm font-semibold text-orange-500">
                 Account
               </p>
@@ -431,10 +348,9 @@ function OrganizerProfile() {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                View and manage your EventON organizer
-                account information.
+                View and manage your EventON account
+                information.
               </p>
-
             </div>
 
             {!isEditing && (
@@ -447,70 +363,50 @@ function OrganizerProfile() {
                 Edit Profile
               </button>
             )}
-
           </div>
-
         </div>
-
       </section>
 
       {/* =====================================================
           MAIN
-      ====================================================== */}
+      ===================================================== */}
 
       <main className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
-
-        {/* SUCCESS */}
-
         {successMessage && (
           <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-
             <CheckCircle2
               size={18}
               className="shrink-0"
             />
 
-            <span>
-              {successMessage}
-            </span>
-
+            <span>{successMessage}</span>
           </div>
         )}
 
-        {/* =================================================
-            TWO COLUMN LAYOUT
-        ================================================== */}
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-
           {/* =================================================
               PROFILE
-          ================================================== */}
+          ================================================= */}
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-
             {/* PROFILE HERO */}
 
             <div className="relative overflow-hidden bg-slate-900 px-6 py-8 sm:px-8">
-
               <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-orange-500/10 blur-2xl" />
 
               <div className="absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
 
               <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
-
                 {/* AVATAR */}
 
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-2xl font-bold text-white shadow-lg">
-                  {initials || "O"}
+                  {initials || "U"}
                 </div>
 
                 {/* IDENTITY */}
 
                 <div className="min-w-0">
-
                   <div className="flex flex-wrap items-center gap-2">
-
                     <h2 className="text-xl font-bold text-white sm:text-2xl">
                       {profile.name}
                     </h2>
@@ -519,66 +415,49 @@ function OrganizerProfile() {
                       <ShieldCheck size={13} />
                       {roleLabel}
                     </span>
-
                   </div>
 
                   <p className="mt-1 flex items-center gap-2 break-all text-sm text-slate-300">
-
                     <Mail
                       size={14}
                       className="shrink-0"
                     />
-
                     {profile.email}
-
                   </p>
-
                 </div>
-
               </div>
-
             </div>
 
             {/* =================================================
                 ACCOUNT INFORMATION
-            ================================================== */}
+            ================================================= */}
 
             <div className="p-6 sm:p-8">
-
               <div className="flex items-center justify-between gap-4">
-
                 <div>
-
                   <h3 className="text-base font-semibold text-slate-900">
                     Account Information
                   </h3>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    Your current EventON organizer account
-                    details.
+                    Your current EventON account details.
                   </p>
-
                 </div>
 
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
                   <UserRound size={18} />
                 </div>
-
               </div>
 
               {/* =================================================
                   EDIT FORM
-              ================================================== */}
+              ================================================= */}
 
               {isEditing ? (
-
                 <form
                   onSubmit={handleSave}
                   className="mt-6"
                 >
-
-                  {/* FORM ERROR */}
-
                   {errors.form && (
                     <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-600">
                       {errors.form}
@@ -586,9 +465,6 @@ function OrganizerProfile() {
                   )}
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-                    {/* NAME */}
-
                     <FormField
                       label="Full Name"
                       name="name"
@@ -597,8 +473,6 @@ function OrganizerProfile() {
                       icon={UserRound}
                       error={errors.name}
                     />
-
-                    {/* EMAIL */}
 
                     <FormField
                       label="Email Address"
@@ -609,34 +483,17 @@ function OrganizerProfile() {
                       icon={Mail}
                       error={errors.email}
                     />
-
-                    {/* MOBILE */}
-
-                    <FormField
-                      label="Mobile Number"
-                      name="mobile"
-                      type="tel"
-                      value={formData.mobile}
-                      onChange={handleChange}
-                      icon={Phone}
-                      error={errors.mobile}
-                      placeholder="10-digit mobile number"
-                    />
-
                   </div>
 
-                  {/* ROLE */}
+                  {/* ROLE - READ ONLY */}
 
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-
                     <div className="flex items-start gap-3">
-
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm">
                         <ShieldCheck size={17} />
                       </div>
 
                       <div className="min-w-0">
-
                         <p className="text-xs font-medium text-slate-500">
                           Role
                         </p>
@@ -650,17 +507,13 @@ function OrganizerProfile() {
                           EventON and cannot be changed
                           from your profile.
                         </p>
-
                       </div>
-
                     </div>
-
                   </div>
 
                   {/* BUTTONS */}
 
                   <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-
                     <button
                       type="button"
                       onClick={handleCancelEdit}
@@ -682,79 +535,62 @@ function OrganizerProfile() {
                         ? "Saving..."
                         : "Save Changes"}
                     </button>
-
                   </div>
-
                 </form>
-
               ) : (
-
-                /* =================================================
-                   VIEW MODE
-                ================================================== */
-
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-                  <InfoField
-                    label="Full Name"
-                    value={profile.name}
-                    icon={UserRound}
-                  />
-
-                  <InfoField
-                    label="Email Address"
-                    value={profile.email}
-                    icon={Mail}
-                    breakValue
-                  />
-
-                  <InfoField
-                    label="Role"
-                    value={roleLabel}
-                    icon={ShieldCheck}
-                  />
-
-                  <InfoField
-                    label="Mobile Number"
-                    value={profile.mobile}
-                    icon={Phone}
-                  />
-
-                  <div className="sm:col-span-2">
+                <>
+                  <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <InfoField
+                      label="Full Name"
+                      value={profile.name}
+                      icon={UserRound}
+                    />
 
                     <InfoField
-                      label="User ID"
-                      value={profile.id}
-                      icon={UserRound}
+                      label="Email Address"
+                      value={profile.email}
+                      icon={Mail}
                       breakValue
                     />
 
+                    <InfoField
+                      label="Role"
+                      value={roleLabel}
+                      icon={ShieldCheck}
+                    />
+
+                    <InfoField
+                      label="Phone"
+                      value={profile.phone}
+                      icon={UserRound}
+                    />
+
+                    <div className="sm:col-span-2">
+                      <InfoField
+                        label="User ID"
+                        value={profile.id}
+                        icon={UserRound}
+                        breakValue
+                      />
+                    </div>
                   </div>
-
-                </div>
-
+                </>
               )}
-
             </div>
-
           </section>
 
           {/* =================================================
               RIGHT COLUMN
-          ================================================== */}
+          ================================================= */}
 
           <aside className="space-y-6">
-
             {/* =================================================
                 ACCOUNT STATUS
-            ================================================== */}
+            ================================================= */}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
               <div className="flex items-start justify-between gap-4">
-
                 <div>
-
                   <h2 className="text-base font-semibold text-slate-900">
                     Account Status
                   </h2>
@@ -762,71 +598,54 @@ function OrganizerProfile() {
                   <p className="mt-1 text-xs text-slate-500">
                     Current account access
                   </p>
-
                 </div>
 
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                   <CheckCircle2 size={18} />
                 </div>
-
               </div>
 
               <div className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-
                 <div className="flex items-center gap-3">
-
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm">
                     <CheckCircle2 size={18} />
                   </div>
 
                   <div>
-
                     <p className="text-sm font-semibold text-slate-900">
                       Active
                     </p>
 
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Your organizer account is currently
-                      active.
+                      Your account is currently active.
                     </p>
-
                   </div>
-
                 </div>
-
               </div>
-
             </section>
 
             {/* =================================================
                 ACCESS ROLE
-            ================================================== */}
+            ================================================= */}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
               <div className="flex items-start justify-between gap-4">
-
                 <div>
-
                   <h2 className="text-base font-semibold text-slate-900">
                     Access Role
                   </h2>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    Permissions associated with your
-                    account.
+                    Permissions associated with your account.
                   </p>
-
                 </div>
 
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
                   <ShieldCheck size={18} />
                 </div>
-
               </div>
 
               <div className="mt-5 rounded-xl bg-slate-50 p-4">
-
                 <p className="text-xs font-medium text-slate-500">
                   Current role
                 </p>
@@ -838,25 +657,20 @@ function OrganizerProfile() {
                 <p className="mt-1 text-xs leading-5 text-slate-500">
                   {roleDescription}
                 </p>
-
               </div>
-
             </section>
 
             {/* =================================================
                 ACCOUNT CREATED
-            ================================================== */}
+            ================================================= */}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
               <div className="flex items-start gap-3">
-
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
                   <CalendarDays size={18} />
                 </div>
 
                 <div className="min-w-0">
-
                   <p className="text-xs font-medium text-slate-500">
                     Account Created
                   </p>
@@ -864,63 +678,47 @@ function OrganizerProfile() {
                   <p className="mt-1 text-sm font-semibold text-slate-900">
                     {formattedCreatedDate}
                   </p>
-
                 </div>
-
               </div>
-
             </section>
-
           </aside>
-
         </div>
 
         {/* =====================================================
             ACCOUNT INFORMATION FOOTER
-        ====================================================== */}
+        ===================================================== */}
 
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
             <div className="flex items-start gap-3">
-
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                 <ShieldCheck size={20} />
               </div>
 
               <div>
-
                 <h2 className="text-sm font-semibold text-slate-900">
-                  Organizer Account
+                  {roleLabel} Account
                 </h2>
 
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
                   {roleDescription}
                 </p>
-
               </div>
-
             </div>
 
             <Link
-              to="/organizer"
+              to="/admin"
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
             >
               Go to Dashboard
-
               <ArrowLeft
                 size={14}
                 className="rotate-180"
               />
             </Link>
-
           </div>
-
         </section>
-
       </main>
-
     </div>
   );
 }
@@ -937,9 +735,7 @@ function InfoField({
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-
       <div className="flex items-center gap-2">
-
         <Icon
           size={15}
           className="shrink-0 text-slate-400"
@@ -948,19 +744,15 @@ function InfoField({
         <p className="text-xs font-medium text-slate-500">
           {label}
         </p>
-
       </div>
 
       <p
         className={`mt-2 text-sm font-semibold text-slate-900 ${
-          breakValue
-            ? "break-all"
-            : "truncate"
+          breakValue ? "break-all" : "truncate"
         }`}
       >
         {value || "Not available"}
       </p>
-
     </div>
   );
 }
@@ -977,11 +769,9 @@ function FormField({
   onChange,
   icon: Icon,
   error,
-  placeholder,
 }) {
   return (
     <div>
-
       <label
         htmlFor={name}
         className="mb-2 block text-xs font-semibold text-slate-700"
@@ -990,7 +780,6 @@ function FormField({
       </label>
 
       <div className="relative">
-
         <Icon
           size={16}
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1002,14 +791,12 @@ function FormField({
           type={type}
           value={value}
           onChange={onChange}
-          placeholder={placeholder}
           className={`h-11 w-full rounded-xl border bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${
             error
               ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-50"
               : "border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-50"
           }`}
         />
-
       </div>
 
       {error && (
@@ -1017,9 +804,8 @@ function FormField({
           {error}
         </p>
       )}
-
     </div>
   );
 }
 
-export default OrganizerProfile;
+export default AdminProfile;

@@ -62,6 +62,7 @@ function getEventTimestamp(event) {
 }
 
 function UpcomingEvents() {
+  const [currentTime] = useState(() => Date.now());
   const [events, setEvents] = useState([]);
 
   // =========================================================
@@ -124,7 +125,7 @@ function UpcomingEvents() {
   // =========================================================
 
   const upcomingEvents = useMemo(() => {
-    const now = Date.now();
+    const now = currentTime;
 
     return events
       .filter(isPublished)
@@ -142,7 +143,7 @@ function UpcomingEvents() {
       )
       .slice(0, 4)
       .map(({ event }) => event);
-  }, [events]);
+  }, [events, currentTime]);
 
   return (
     <section className="bg-white py-20 sm:py-24">

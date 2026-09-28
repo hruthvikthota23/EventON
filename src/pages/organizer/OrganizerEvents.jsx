@@ -8,7 +8,6 @@ import {
   MoreVertical,
   Plus,
   Search,
-  Ticket,
   Trash2,
   Users,
   X,
@@ -51,29 +50,81 @@ function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
-function getEventDate(event) {
+function getEventTimestamp(event) {
   if (!event?.date) {
-    return null;
+    return Number.POSITIVE_INFINITY;
   }
 
   const date = new Date(event.date);
 
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isUpcoming(event) {
-  const date = getEventDate(event);
-
-  if (!date) {
-    return false;
+  if (Number.isNaN(date.getTime())) {
+    return Number.POSITIVE_INFINITY;
   }
 
-  const today = new Date();
+  const time = String(event.time || "").trim();
 
-  today.setHours(0, 0, 0, 0);
-  date.setHours(0, 0, 0, 0);
+  const match = time.match(
+    /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i
+  );
 
-  return date >= today;
+  if (match) {
+    let hours = Number(match[1]);
+    const minutes = Number(match[2] || 0);
+    const period = match[3]?.toUpperCase();
+
+    if (period === "PM" && hours < 12) {
+      hours += 12;
+    }
+
+    if (period === "AM" && hours === 12) {
+      hours = 0;
+    }
+
+    if (
+      hours >= 0 &&
+      hours <= 23 &&
+      minutes >= 0 &&
+      minutes <= 59
+    ) {
+      date.setHours(hours, minutes, 0, 0);
+    }
+  }
+
+  return date.getTime();
+}
+
+function getLifecycleStatus(event, now = Date.now()) {
+  const storedStatus = String(event?.status || "published")
+    .trim()
+    .toLowerCase();
+
+  if (
+    storedStatus === "draft" ||
+    storedStatus === "cancelled"
+  ) {
+    return storedStatus;
+  }
+
+  const timestamp = getEventTimestamp(event);
+
+  if (
+    Number.isFinite(timestamp) &&
+    timestamp <= now
+  ) {
+    return "completed";
+  }
+
+  return storedStatus;
+}
+
+function isUpcoming(event, now = Date.now()) {
+  const status = getLifecycleStatus(event, now);
+
+  return (
+    status !== "completed" &&
+    status !== "cancelled" &&
+    status !== "draft"
+  );
 }
 
 function getStatusClasses(status) {
@@ -137,7 +188,9 @@ function OrganizerEventCard({
         )
       : 0;
 
+  const lifecycleStatus = getLifecycleStatus(event);
   const upcoming = isUpcoming(event);
+  const displayStatus = lifecycleStatus;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -158,26 +211,27 @@ function OrganizerEventCard({
         {/* Status */}
         <span
           className={`absolute left-4 top-4 rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
-            event.status
+            displayStatus
           )}`}
         >
-          {formatStatus(event.status)}
+          {formatStatus(displayStatus)}
         </span>
 
         {/* Menu */}
-        <div className="absolute right-3 top-3">
-          <button
-            type="button"
-            onClick={() =>
-              setMenuOpen((current) => !current)
-            }
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm backdrop-blur transition hover:bg-white hover:text-slate-900"
-            aria-label="Event actions"
-          >
-            <MoreVertical size={18} />
-          </button>
+        {lifecycleStatus !== "completed" && (
+          <div className="absolute right-3 top-3">
+            <button
+              type="button"
+              onClick={() =>
+                setMenuOpen((current) => !current)
+              }
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm backdrop-blur transition hover:bg-white hover:text-slate-900"
+              aria-label="Event actions"
+            >
+              <MoreVertical size={18} />
+            </button>
 
-          {menuOpen && (
+            {menuOpen && (
             <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
               <Link
                 to={`/organizer/events/${event.id}/edit`}
@@ -202,8 +256,9 @@ function OrganizerEventCard({
                 Delete event
               </button>
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -316,9 +371,13 @@ function OrganizerEventCard({
                 : "text-slate-500"
             }`}
           >
-            {upcoming
-              ? "Upcoming event"
-              : "Past event"}
+            {lifecycleStatus === "completed"
+              ? "Completed event"
+              : lifecycleStatus === "cancelled"
+                ? "Cancelled event"
+                : lifecycleStatus === "draft"
+                  ? "Draft event"
+                  : "Upcoming event"}
           </span>
 
           <Link
@@ -484,6 +543,8 @@ function OrganizerEvents() {
       .trim()
       .toLowerCase();
 
+    const now = Date.now();
+
     return events.filter((event) => {
       const matchesSearch =
         !query ||
@@ -500,11 +561,12 @@ function OrganizerEvents() {
           .toLowerCase()
           .includes(query);
 
+      const lifecycleStatus =
+        getLifecycleStatus(event, now);
+
       const matchesStatus =
         statusFilter === "all" ||
-        String(event.status || "")
-          .toLowerCase() ===
-          statusFilter;
+        lifecycleStatus === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -515,31 +577,33 @@ function OrganizerEvents() {
   // =======================================================
 
   const counts = useMemo(() => {
+    const now = Date.now();
+
     return {
       all: events.length,
 
       published: events.filter(
         (event) =>
-          String(event.status || "")
-            .toLowerCase() === "published"
+          getLifecycleStatus(event, now) ===
+          "published"
       ).length,
 
       draft: events.filter(
         (event) =>
-          String(event.status || "")
-            .toLowerCase() === "draft"
+          getLifecycleStatus(event, now) ===
+          "draft"
       ).length,
 
       completed: events.filter(
         (event) =>
-          String(event.status || "")
-            .toLowerCase() === "completed"
+          getLifecycleStatus(event, now) ===
+          "completed"
       ).length,
 
       cancelled: events.filter(
         (event) =>
-          String(event.status || "")
-            .toLowerCase() === "cancelled"
+          getLifecycleStatus(event, now) ===
+          "cancelled"
       ).length,
     };
   }, [events]);
@@ -562,6 +626,20 @@ function OrganizerEvents() {
     if (!ownedEvent) {
       window.alert(
         "You do not have permission to delete this event."
+      );
+
+      setDeleteEvent(null);
+      return;
+    }
+
+    // Completed events are historical records and must remain
+    // available to the organizer. They cannot be deleted.
+    if (
+      getLifecycleStatus(ownedEvent) ===
+      "completed"
+    ) {
+      window.alert(
+        "Completed events are kept as historical records and cannot be deleted."
       );
 
       setDeleteEvent(null);

@@ -22,11 +22,17 @@ import {
 import { useAuth } from "../../context/AuthContext";
 
 import {
+  cancelStoredBooking,
   getStoredBookings,
+  BOOKINGS_UPDATED_EVENT,
 } from "../../utils/bookingStorage";
 
 import {
+  decrementEventSeats,
+  getStoredEventById,
   getStoredEventsByOrganizer,
+  updateStoredEvent,
+  EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
 function OrganizerBookingDetails() {
@@ -38,6 +44,8 @@ function OrganizerBookingDetails() {
   const [event, setEvent] = useState(null);
   const [attendee, setAttendee] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
     if (!user?.id || !bookingId) {
@@ -45,79 +53,109 @@ function OrganizerBookingDetails() {
       return;
     }
 
-    const organizerEvents =
-      getStoredEventsByOrganizer(user.id);
+    const loadBooking = () => {
+      const organizerEvents =
+        getStoredEventsByOrganizer(user.id);
 
-    const allBookings = getStoredBookings();
+      const allBookings = getStoredBookings();
 
-    const foundBooking = allBookings.find(
-      (item) =>
-        String(
-          item.id || item.bookingId
-        ) === String(bookingId)
-    );
-
-    if (!foundBooking) {
-      setLoading(false);
-      return;
-    }
-
-    const organizerEvent = organizerEvents.find(
-      (item) =>
-        String(item.id) ===
-        String(foundBooking.eventId)
-    );
-
-    if (!organizerEvent) {
-      setLoading(false);
-      return;
-    }
-
-    let accounts = [];
-
-    try {
-      const raw =
-        localStorage.getItem("eventon_accounts");
-
-      if (raw) {
-        const parsed = JSON.parse(raw);
-
-        if (Array.isArray(parsed)) {
-          accounts = parsed;
-        }
-      }
-    } catch (error) {
-      console.error(
-        "Unable to load accounts:",
-        error
+      const foundBooking = allBookings.find(
+        (item) =>
+          String(
+            item.id || item.bookingId
+          ) === String(bookingId)
       );
-    }
 
-   const foundAttendee = {
-  name:
-    foundBooking.attendee?.name ||
-    foundBooking.attendeeName ||
-    foundBooking.userName ||
-    foundBooking.name ||
-    "Attendee",
+      if (!foundBooking) {
+        setBooking(null);
+        setEvent(null);
+        setAttendee(null);
+        setLoading(false);
+        return;
+      }
 
-  email:
-    foundBooking.attendee?.email ||
-    foundBooking.attendeeEmail ||
-    foundBooking.userEmail ||
-    foundBooking.email ||
-    "No email",
+      const foundEventId =
+        foundBooking.eventId ??
+        foundBooking.event?.id;
 
-  phone:
-    foundBooking.attendee?.phone ||
-    foundBooking.phone ||
-    "No phone",
-};
+      const organizerEvent = organizerEvents.find(
+        (item) =>
+          String(item.id) ===
+          String(foundEventId)
+      );
 
-    setBooking(foundBooking);
-    setEvent(organizerEvent);
-    setAttendee(foundAttendee);
-    setLoading(false);
+      if (!organizerEvent) {
+        setBooking(null);
+        setEvent(null);
+        setAttendee(null);
+        setLoading(false);
+        return;
+      }
+
+      const foundAttendee = {
+        name:
+          foundBooking.attendee?.name ||
+          foundBooking.attendeeName ||
+          foundBooking.userName ||
+          foundBooking.name ||
+          "Attendee",
+
+        email:
+          foundBooking.attendee?.email ||
+          foundBooking.attendeeEmail ||
+          foundBooking.userEmail ||
+          foundBooking.email ||
+          "No email",
+
+        phone:
+          foundBooking.attendee?.phone ||
+          foundBooking.phone ||
+          "No phone",
+      };
+
+      setBooking(foundBooking);
+      setEvent(organizerEvent);
+      setAttendee(foundAttendee);
+      setLoading(false);
+    };
+
+    loadBooking();
+
+    const handleUpdate = () => {
+      loadBooking();
+    };
+
+    window.addEventListener(
+      BOOKINGS_UPDATED_EVENT,
+      handleUpdate
+    );
+
+    window.addEventListener(
+      EVENTS_UPDATED_EVENT,
+      handleUpdate
+    );
+
+    window.addEventListener(
+      "storage",
+      handleUpdate
+    );
+
+    return () => {
+      window.removeEventListener(
+        BOOKINGS_UPDATED_EVENT,
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        EVENTS_UPDATED_EVENT,
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleUpdate
+      );
+    };
   }, [user?.id, bookingId]);
 
   const status = useMemo(() => {
@@ -143,6 +181,189 @@ function OrganizerBookingDetails() {
 
     return "confirmed";
   }, [booking]);
+
+  const handleCancelBooking = () => {
+    if (status !== "confirmed" || cancelling) {
+      return;
+    }
+
+    const shouldCancel = window.confirm(
+      `Are you sure you want to cancel booking ${
+        booking?.bookingId ||
+        booking?.id ||
+        bookingId
+      }?`
+    );
+
+    if (!shouldCancel) {
+      return;
+    }
+
+    setCancelling(true);
+    setActionMessage("");
+
+    try {
+      const latestBookings = getStoredBookings();
+
+      const currentBooking = latestBookings.find(
+        (item) =>
+          String(
+            item.bookingId ||
+              item.id
+          ) === String(bookingId)
+      );
+
+      if (!currentBooking) {
+        setActionMessage(
+          "This booking is no longer available."
+        );
+        return;
+      }
+
+      const currentStatus = String(
+        currentBooking.status || "confirmed"
+      ).toLowerCase();
+
+      if (currentStatus !== "confirmed") {
+        setBooking(currentBooking);
+        setActionMessage(
+          "This booking is no longer confirmed."
+        );
+        return;
+      }
+
+      const eventId =
+        currentBooking.eventId ??
+        currentBooking.event?.id;
+
+      if (!eventId) {
+        setActionMessage(
+          "The event linked to this booking could not be found."
+        );
+        return;
+      }
+
+      const currentEvent =
+        getStoredEventById(eventId);
+
+      if (!currentEvent) {
+        setActionMessage(
+          "The event linked to this booking could not be found."
+        );
+        return;
+      }
+
+      const cancelledQuantity = Math.max(
+        1,
+        Number(
+          currentBooking.quantity ??
+            currentBooking.tickets ??
+            currentBooking.ticketCount ??
+            1
+        )
+      );
+
+      const currentBookedSeats = Math.max(
+        Number(currentEvent.bookedSeats) || 0,
+        0
+      );
+
+      // Restore seats first. If this fails, the booking
+      // remains confirmed and can safely be retried.
+      const updatedEvent =
+        decrementEventSeats(
+          eventId,
+          cancelledQuantity
+        );
+
+      if (!updatedEvent) {
+        setActionMessage(
+          "The event seats could not be restored. Please try again."
+        );
+        return;
+      }
+
+      // A previously sold-out event becomes bookable again
+      // once a cancellation restores at least one seat.
+      if (
+        currentEvent.status ===
+          "sold-out" &&
+        Number(updatedEvent.bookedSeats) <
+          Number(updatedEvent.capacity)
+      ) {
+        updateStoredEvent(
+          eventId,
+          {
+            status: "published",
+          }
+        );
+      }
+
+      const storedBookingId =
+        currentBooking.bookingId ||
+        currentBooking.id;
+
+      const cancellationResult =
+        cancelStoredBooking(
+          storedBookingId
+        );
+
+      if (!cancellationResult?.success) {
+        // Roll the event seats back if booking
+        // cancellation could not be persisted.
+        // This prevents double-counting or seat loss.
+        const rollbackEvent =
+          getStoredEventById(eventId);
+
+        if (rollbackEvent) {
+          updateStoredEvent(
+            eventId,
+            {
+              bookedSeats:
+                currentBookedSeats,
+              status:
+                currentEvent.status,
+            }
+          );
+        }
+
+        setActionMessage(
+          cancellationResult?.error ||
+            "The booking could not be cancelled."
+        );
+        return;
+      }
+
+      const refreshedEvent =
+        getStoredEventById(eventId);
+
+      setBooking(
+        cancellationResult.booking || {
+          ...currentBooking,
+          status: "cancelled",
+          cancelledAt:
+            new Date().toISOString(),
+        }
+      );
+      setEvent(
+        refreshedEvent || updatedEvent
+      );
+      setActionMessage(
+        "Booking cancelled successfully."
+      );
+    } catch (error) {
+      console.error(
+        "Unable to cancel organizer booking:",
+        error
+      );
+
+      setActionMessage(
+        "Unable to cancel this booking. Please try again."
+      );
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const quantity = Math.max(
     1,
@@ -427,6 +648,53 @@ function OrganizerBookingDetails() {
             />
 
           </div>
+
+          {status === "confirmed" && (
+            <div className="border-t border-slate-100 px-5 py-5 sm:px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Booking Actions
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Cancelling this booking will restore its tickets to the event.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCancelBooking}
+                  disabled={cancelling}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <XCircle size={16} />
+                  {cancelling
+                    ? "Cancelling..."
+                    : "Cancel Booking"}
+                </button>
+              </div>
+
+              {actionMessage && (
+                <p
+                  className={`mt-3 text-sm font-medium ${
+                    actionMessage.includes("successfully")
+                      ? "text-emerald-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {actionMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {status === "cancelled" && actionMessage && (
+            <div className="border-t border-slate-100 px-5 py-5 sm:px-6">
+              <p className="text-sm font-medium text-emerald-600">
+                {actionMessage}
+              </p>
+            </div>
+          )}
         </div>
 
       </div>

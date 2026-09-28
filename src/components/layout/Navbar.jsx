@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import {
   CalendarDays,
   ChevronDown,
@@ -9,32 +14,55 @@ import {
   User,
   X,
 } from "lucide-react";
+
 import {
   Link,
   useLocation,
   useNavigate,
 } from "react-router-dom";
+
 import { useAuth } from "../../context/AuthContext";
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user, isAuthenticated, logout } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    logout,
+  } = useAuth();
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAccountOpen, setIsAccountOpen] = useState(false);
+  // =========================================================
+  // STATE
+  // =========================================================
 
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] =
+    useState(false);
+
+  const [isAccountOpen, setIsAccountOpen] =
+    useState(false);
+
+  const [isSearchOpen, setIsSearchOpen] =
+    useState(false);
+
+  const [searchQuery, setSearchQuery] =
+    useState("");
+
+  // =========================================================
+  // REFS
+  // =========================================================
 
   const searchInputRef = useRef(null);
+  const searchContainerRef = useRef(null);
 
   // =========================================================
   // ROLE
   // =========================================================
 
-  const role = String(user?.role || "attendee")
+  const role = String(
+    user?.role || "attendee"
+  )
     .trim()
     .toLowerCase();
 
@@ -56,10 +84,13 @@ function Navbar() {
     }
 
     if (words.length === 1) {
-      return words[0].slice(0, 2).toUpperCase();
+      return words[0]
+        .slice(0, 2)
+        .toUpperCase();
     }
 
-    return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+    return `${words[0][0]}${words[words.length - 1][0]}`
+      .toUpperCase();
   };
 
   // =========================================================
@@ -101,49 +132,42 @@ function Navbar() {
   };
 
   // =========================================================
-  // SEARCH
+  // DESKTOP SEARCH
   // =========================================================
 
-  /*
-    Search behavior:
-
-    CLOSED
-      [                         🔍 ]
-
-    CLICK SEARCH ICON
-      [              🔍 Search... ]
-
-    OPEN
-      - Typing does NOT close the search.
-      - Moving from icon to input does NOT close it.
-      - Pressing Enter performs the search.
-      - Search remains open after Enter.
-      - Search text is cleared after Enter.
-      - Moving mouse outside the complete search area closes it.
-      - Search text is cleared when it closes.
-  */
-
   const handleSearchIconClick = () => {
-    setIsSearchOpen(true);
+    // -------------------------------------------------------
+    // OPEN SEARCH
+    // -------------------------------------------------------
 
-    setIsAccountOpen(false);
-    setIsMobileMenuOpen(false);
+    setIsSearchOpen((previous) => {
+      const nextState = !previous;
 
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
+      if (nextState) {
+        // Search opens -> close everything else
+        setIsAccountOpen(false);
+        setIsMobileMenuOpen(false);
+      }
+
+      return nextState;
     });
+
+    // If search is being closed, clear the text
+    if (isSearchOpen) {
+      setSearchQuery("");
+    }
   };
 
-  const handleSearchAreaLeave = () => {
-    setIsSearchOpen(false);
-    setSearchQuery("");
-  };
+  // =========================================================
+  // SEARCH SUBMIT
+  // =========================================================
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();
 
     const query = searchQuery.trim();
 
+    // Empty search
     if (!query) {
       searchInputRef.current?.focus();
       return;
@@ -153,19 +177,13 @@ function Navbar() {
       `/events?search=${encodeURIComponent(query)}`
     );
 
-    // Keep search open.
-    setIsSearchOpen(true);
-
-    // Clear previous search.
+    // Close search after navigation
     setSearchQuery("");
-
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
+    setIsSearchOpen(false);
   };
 
   // =========================================================
-  // FOCUS SEARCH WHEN OPENED
+  // SEARCH INPUT FOCUS
   // =========================================================
 
   useEffect(() => {
@@ -175,12 +193,71 @@ function Navbar() {
 
     const timer = setTimeout(() => {
       searchInputRef.current?.focus();
-    }, 280);
+    }, 100);
 
     return () => {
       clearTimeout(timer);
     };
   }, [isSearchOpen]);
+
+  // =========================================================
+  // CLOSE SEARCH WHEN CLICKING OUTSIDE
+  // =========================================================
+
+  useEffect(() => {
+    if (!isSearchOpen) {
+      return;
+    }
+
+    const handleOutsideClick = (event) => {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(
+          event.target
+        )
+      ) {
+        setIsSearchOpen(false);
+        setSearchQuery("");
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleOutsideClick
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick
+      );
+    };
+  }, [isSearchOpen]);
+
+  // =========================================================
+  // ESCAPE KEY
+  // =========================================================
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsSearchOpen(false);
+        setSearchQuery("");
+      }
+    };
+
+    document.addEventListener(
+      "keydown",
+      handleEscape
+    );
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleEscape
+      );
+    };
+  }, []);
 
   // =========================================================
   // ACCOUNT
@@ -189,13 +266,28 @@ function Navbar() {
   const handleAccountClick = () => {
     setIsAccountOpen((previous) => !previous);
 
+    // Account opens -> search must close
     setIsSearchOpen(false);
     setSearchQuery("");
 
     setIsMobileMenuOpen(false);
   };
 
+  // =========================================================
+  // ACCOUNT HOVER
+  // =========================================================
+
   const handleAccountMouseEnter = () => {
+    // -------------------------------------------------------
+    // IMPORTANT:
+    // Do NOT open account dropdown while search is open.
+    // This prevents the two popups from overlapping.
+    // -------------------------------------------------------
+
+    if (isSearchOpen) {
+      return;
+    }
+
     setIsAccountOpen(true);
   };
 
@@ -228,6 +320,7 @@ function Navbar() {
     setIsMobileMenuOpen((previous) => !previous);
 
     setIsAccountOpen(false);
+
     setIsSearchOpen(false);
     setSearchQuery("");
   };
@@ -240,18 +333,22 @@ function Navbar() {
   };
 
   // =========================================================
-  // COMMON NAV STYLE
+  // COMMON DESKTOP NAV STYLE
   // =========================================================
 
   const desktopNavLink =
     "inline-flex h-10 items-center whitespace-nowrap text-[15px] font-medium leading-5 !text-slate-600 no-underline transition-colors duration-200 hover:!text-orange-500";
 
+  // =========================================================
+  // RENDER
+  // =========================================================
+
   return (
     <header className="sticky top-0 z-50 h-16 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md">
 
       {/* =====================================================
-          FIXED HEIGHT NAVBAR
-      ===================================================== */}
+          DESKTOP / MAIN NAVBAR
+      ====================================================== */}
 
       <div className="relative mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
 
@@ -282,9 +379,12 @@ function Navbar() {
 
         {/* ===================================================
             CENTER NAVIGATION
+
+            Search is NOT inside this area.
+            Therefore it cannot overlap these links.
         =================================================== */}
 
-        <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-10 md:flex">
+        <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex lg:gap-10">
 
           <Link
             to="/"
@@ -317,31 +417,25 @@ function Navbar() {
         <div className="ml-auto flex h-10 items-center">
 
           {/* =================================================
-              SEARCH AREA
-
-              FIXED 240px WIDTH
-
-              Opens ONLY by CLICK.
-              Closes when mouse leaves the area.
+              DESKTOP SEARCH
           ================================================= */}
 
           <div
-            className="relative hidden h-10 w-[240px] shrink-0 items-center md:flex"
-            onMouseLeave={handleSearchAreaLeave}
+            ref={searchContainerRef}
+            className="relative hidden h-10 md:block"
           >
 
-            {/* ---------------------------------------------
-                SEARCH ICON
-            --------------------------------------------- */}
+            {/* SEARCH BUTTON */}
 
             <button
               type="button"
               aria-label="Search events"
+              aria-expanded={isSearchOpen}
               onClick={handleSearchIconClick}
-              className={`absolute right-0 top-0 z-30 flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-slate-100 hover:text-orange-500 ${
+              className={`flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-orange-500 ${
                 isSearchOpen
-                  ? "pointer-events-none scale-75 opacity-0"
-                  : "scale-100 opacity-100"
+                  ? "bg-slate-100 text-orange-500"
+                  : ""
               }`}
             >
               <Search
@@ -350,56 +444,77 @@ function Navbar() {
               />
             </button>
 
-            {/* ---------------------------------------------
-                SEARCH BAR
-            --------------------------------------------- */}
+            {/* =================================================
+                FLOATING SEARCH POPUP
+            ================================================= */}
 
-            <form
-              onSubmit={handleSearchSubmit}
-              className={`absolute right-0 top-0 z-20 flex h-10 origin-right items-center overflow-hidden rounded-xl border bg-slate-50 shadow-sm transition-[width,opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            <div
+              className={`absolute right-0 top-[calc(100%+10px)] z-[70] w-[min(320px,calc(100vw-32px))] origin-top-right transition-all duration-200 ${
                 isSearchOpen
-                  ? "w-[240px] scale-100 border-slate-200 opacity-100"
-                  : "pointer-events-none w-10 scale-[0.82] border-transparent opacity-0"
+                  ? "visible translate-y-0 scale-100 opacity-100"
+                  : "invisible -translate-y-2 scale-95 opacity-0"
               }`}
             >
 
-              {/* SEARCH ICON INSIDE BAR */}
+              <form
+                onSubmit={handleSearchSubmit}
+                className="flex h-11 items-center rounded-xl border border-slate-200 bg-white px-2 shadow-lg shadow-slate-200/50"
+              >
 
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center text-slate-400">
                 <Search
-                  size={17}
+                  size={18}
                   strokeWidth={2}
+                  className="ml-2 shrink-0 text-slate-400"
                 />
-              </span>
 
-              {/* INPUT */}
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => {
+                    setSearchQuery(
+                      event.target.value
+                    );
+                  }}
+                  placeholder="Search events..."
+                  autoComplete="off"
+                  className="min-w-0 flex-1 bg-transparent px-3 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400"
+                />
 
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                }}
-                placeholder="Search events..."
-                autoComplete="off"
-                className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400"
-              />
+                {/* CLOSE SEARCH */}
 
-            </form>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSearchOpen(false);
+                    setSearchQuery("");
+                  }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Close search"
+                >
+                  <X size={16} />
+                </button>
+
+              </form>
+
+            </div>
 
           </div>
 
           {/* =================================================
-              ACCOUNT AREA
+              ACCOUNT
           ================================================= */}
 
           {isAuthenticated ? (
 
             <div
               className="relative ml-2 hidden h-10 md:block"
-              onMouseEnter={handleAccountMouseEnter}
-              onMouseLeave={handleAccountMouseLeave}
+              onMouseEnter={
+                handleAccountMouseEnter
+              }
+              onMouseLeave={
+                handleAccountMouseLeave
+              }
             >
 
               {/* ACCOUNT BUTTON */}
@@ -451,6 +566,7 @@ function Navbar() {
                 {/* USER INFO */}
 
                 <div className="border-b border-slate-100 px-3 py-3">
+
                   <p className="truncate text-sm font-semibold text-slate-900">
                     {user?.name || "User"}
                   </p>
@@ -458,6 +574,7 @@ function Navbar() {
                   <p className="mt-0.5 truncate text-xs text-slate-500">
                     {user?.email || ""}
                   </p>
+
                 </div>
 
                 {/* ORGANIZER DASHBOARD */}
@@ -499,11 +616,7 @@ function Navbar() {
                 {/* MY PROFILE */}
 
                 <Link
-                  to={
-                    isOrganizer
-                      ? "/organizer/profile"
-                      : "/profile"
-                  }
+                  to="/profile"
                   onClick={() =>
                     setIsAccountOpen(false)
                   }
@@ -581,7 +694,7 @@ function Navbar() {
           )}
 
           {/* =================================================
-              MOBILE BUTTON
+              MOBILE MENU BUTTON
           ================================================= */}
 
           <button
@@ -604,7 +717,7 @@ function Navbar() {
 
       {/* =====================================================
           MOBILE MENU
-      ===================================================== */}
+      ====================================================== */}
 
       <div
         className={`overflow-hidden border-t border-slate-100 bg-white transition-all duration-300 md:hidden ${
@@ -616,7 +729,9 @@ function Navbar() {
 
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 
-          {/* MOBILE SEARCH */}
+          {/* =================================================
+              MOBILE SEARCH
+          ================================================= */}
 
           <form
             onSubmit={(event) => {
@@ -625,6 +740,7 @@ function Navbar() {
             }}
             className="mb-4 flex h-11 items-center rounded-xl border border-slate-200 bg-slate-50 px-3"
           >
+
             <Search
               size={18}
               className="mr-2 shrink-0 text-slate-400"
@@ -634,15 +750,20 @@ function Navbar() {
               type="text"
               value={searchQuery}
               onChange={(event) =>
-                setSearchQuery(event.target.value)
+                setSearchQuery(
+                  event.target.value
+                )
               }
               placeholder="Search events..."
               autoComplete="off"
               className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
             />
+
           </form>
 
-          {/* MOBILE NAV */}
+          {/* =================================================
+              MOBILE NAVIGATION
+          ================================================= */}
 
           <nav className="flex flex-col gap-1">
 
@@ -740,11 +861,7 @@ function Navbar() {
               {/* MY PROFILE */}
 
               <Link
-                to={
-                  isOrganizer
-                    ? "/organizer/profile"
-                    : "/profile"
-                }
+                to="/profile"
                 onClick={handleMobileNavigation}
                 className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
               >

@@ -21,7 +21,26 @@ function getEventTimestamp(event) {
     return Number.POSITIVE_INFINITY;
   }
 
-  const date = new Date(event.date);
+  const rawDate = String(event.date).trim();
+  let date;
+
+  // Parse YYYY-MM-DD as a local calendar date instead of UTC.
+  // This avoids date shifts for users in time zones such as IST.
+  const dateOnlyMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (dateOnlyMatch) {
+    date = new Date(
+      Number(dateOnlyMatch[1]),
+      Number(dateOnlyMatch[2]) - 1,
+      Number(dateOnlyMatch[3]),
+      0,
+      0,
+      0,
+      0
+    );
+  } else {
+    date = new Date(rawDate);
+  }
 
   if (Number.isNaN(date.getTime())) {
     return Number.POSITIVE_INFINITY;
@@ -65,11 +84,24 @@ function normalize(value) {
     .toLowerCase();
 }
 
-function isPublished(event) {
-  return normalize(event?.status || "published") === "published";
+function isPubliclyVisibleStatus(event) {
+  const status = normalize(event?.status || "published");
+
+  return status === "published" || status === "sold-out";
+}
+
+function isEventCompleted(event, currentTime = Date.now()) {
+  const eventTimestamp = getEventTimestamp(event);
+
+  if (!Number.isFinite(eventTimestamp)) {
+    return false;
+  }
+
+  return eventTimestamp < currentTime;
 }
 
 function Events() {
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [searchQuery, setSearchQuery] = useState(
@@ -128,21 +160,26 @@ function Events() {
   }, [searchParams]);
 
   const publicEvents = useMemo(
-    () => storedEvents.filter(isPublished),
-    [storedEvents]
+    () =>
+      storedEvents.filter(
+        (event) =>
+          isPubliclyVisibleStatus(event) &&
+          !isEventCompleted(event, currentTime)
+      ),
+    [storedEvents, currentTime]
   );
 
-  const locations = useMemo(() => {
-    return [
-      ...new Set(
-        publicEvents
-          .map((event) => String(event.city || "").trim())
-          .filter(Boolean)
-      ),
-    ].sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base" })
-    );
-  }, [publicEvents]);
+  // Keep the public lifecycle current if this page remains open
+  // while an event moves from upcoming/ongoing to completed.
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const selectedCategoryName = useMemo(() => {
     const selected = normalize(selectedCategory);
@@ -231,7 +268,7 @@ function Events() {
         }
 
         if (selectedDate === "upcoming") {
-          return timestamp >= Date.now();
+          return timestamp >= currentTime;
         }
 
         if (selectedDate === "week") {
@@ -282,6 +319,7 @@ function Events() {
     selectedLocation,
     selectedDate,
     sortBy,
+    currentTime,
   ]);
 
   const updateFilter = (key, value) => {
@@ -324,7 +362,7 @@ function Events() {
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
             Search by event, category, city, location, or date and find
-            published events available on EventON.
+            upcoming and ongoing events available on EventON.
           </p>
         </div>
       </section>
@@ -602,7 +640,7 @@ function Events() {
             </p>
 
             <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-              {hasActiveFilters ? "Matching events" : "All published events"}
+              {hasActiveFilters ? "Matching events" : "Upcoming & ongoing events"}
             </h2>
           </div>
 
@@ -643,7 +681,7 @@ function Events() {
             </h3>
 
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-              No published events match your current search or filters.
+              No upcoming or ongoing events match your current search or filters.
             </p>
 
             <button

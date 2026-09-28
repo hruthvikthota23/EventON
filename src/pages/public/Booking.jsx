@@ -21,11 +21,81 @@ import {
 
 import {
   getStoredEventById,
-  updateStoredEvent,
+  incrementEventSeats,
+  decrementEventSeats,
   EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
 import { saveBooking } from "../../utils/bookingStorage";
+
+function getEventTimestamp(event) {
+  if (!event?.date) {
+    return null;
+  }
+
+  const dateValue = String(event.date).trim();
+  const dateOnlyMatch = dateValue.match(
+    /^(\d{4})-(\d{2})-(\d{2})$/
+  );
+
+  let date;
+
+  if (dateOnlyMatch) {
+    date = new Date(
+      Number(dateOnlyMatch[1]),
+      Number(dateOnlyMatch[2]) - 1,
+      Number(dateOnlyMatch[3]),
+      23,
+      59,
+      0,
+      0
+    );
+  } else {
+    date = new Date(dateValue);
+  }
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const timeValue = String(event.time || "").trim();
+
+  if (timeValue) {
+    const match = timeValue.match(
+      /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i
+    );
+
+    if (match) {
+      let hours = Number(match[1]);
+      const minutes = Number(match[2] || 0);
+      const period = match[3]?.toUpperCase();
+
+      if (period === "PM" && hours < 12) {
+        hours += 12;
+      }
+
+      if (period === "AM" && hours === 12) {
+        hours = 0;
+      }
+
+      if (
+        hours >= 0 &&
+        hours <= 23 &&
+        minutes >= 0 &&
+        minutes <= 59
+      ) {
+        date.setHours(hours, minutes, 0, 0);
+      }
+    }
+  }
+
+  return date.getTime();
+}
+
+function isEventCompleted(event) {
+  const timestamp = getEventTimestamp(event);
+  return timestamp !== null && timestamp <= Date.now();
+}
 
 function Booking() {
   const { id } = useParams();
@@ -194,10 +264,13 @@ function Booking() {
     0
   );
 
+  const eventCompleted = isEventCompleted(event);
+
   const soldOut =
     !event ||
     availableSeats <= 0 ||
-    event.status === "sold-out";
+    event.status === "sold-out" ||
+    eventCompleted;
 
   // =========================================================
   // TOTAL PRICE
@@ -381,6 +454,32 @@ function Booking() {
       return;
     }
 
+    // Completed events must remain in storage for history,
+    // but they cannot receive new bookings.
+    if (isEventCompleted(latestEvent)) {
+      setEvent(latestEvent);
+      setErrors({
+        form:
+          "This event has already completed and is no longer accepting bookings.",
+      });
+      return;
+    }
+
+    // Respect the event's explicit sold-out state as well as its
+    // calculated capacity. This protects against stale UI state.
+    if (
+      String(latestEvent.status || "").trim().toLowerCase() ===
+      "sold-out"
+    ) {
+      setEvent(latestEvent);
+      setErrors({
+        form:
+          "This event is sold out and is no longer accepting bookings.",
+      });
+      setTicketCount(1);
+      return;
+    }
+
     // Recalculate availability
     // immediately before booking.
     const latestCapacity =
@@ -488,52 +587,37 @@ function Booking() {
       // UPDATE EVENT SEAT COUNT FIRST
       // =====================================================
       //
-      // We update the event before saving the booking so the
-      // availability is reserved first. If saving the booking
-      // fails, the event seat count is rolled back below.
+      // Seat counts are changed through eventStorage so booking
+      // code cannot bypass the central capacity safeguards.
+      // If booking persistence fails, the reserved seats are
+      // restored using the same storage API.
       // =====================================================
 
-      const newBookedSeats =
-        latestBookedSeats +
-        ticketCount;
+      const expectedBookedSeats =
+        latestBookedSeats + ticketCount;
 
-      const updatedEvent = {
-        ...latestEvent,
-
-        bookedSeats:
-          newBookedSeats,
-
-        // Keep the event status in sync.
-        status:
-          newBookedSeats >= latestCapacity
-            ? "sold-out"
-            : latestEvent.status === "sold-out"
-              ? "published"
-              : latestEvent.status,
-      };
-
-      const eventUpdateResult =
-        updateStoredEvent(
+      const updatedEvent =
+        incrementEventSeats(
           latestEvent.id,
-          {
-            bookedSeats:
-              updatedEvent.bookedSeats,
-            status:
-              updatedEvent.status,
-          }
+          ticketCount
         );
 
-      // updateStoredEvent returns the updated event list.
-      // If it fails to return a valid result, do not create
-      // a booking that is not reflected in event availability.
-      if (!eventUpdateResult) {
+      if (
+        !updatedEvent ||
+        Number(updatedEvent.bookedSeats) !==
+          expectedBookedSeats
+      ) {
+        setEvent(
+          getStoredEventById(latestEvent.id) ||
+            latestEvent
+        );
+
         setErrors({
           form:
             "Unable to reserve seats. Please try again.",
         });
 
         setIsSubmitting(false);
-
         return;
       }
 
@@ -547,17 +631,17 @@ function Booking() {
       if (!savedBooking) {
         // Roll the seats back because the booking could not
         // be persisted successfully.
-        updateStoredEvent(
-          latestEvent.id,
-          {
-            bookedSeats:
-              latestBookedSeats,
-            status:
-              latestEvent.status,
-          }
-        );
+        const rolledBackEvent =
+          decrementEventSeats(
+            latestEvent.id,
+            ticketCount
+          );
 
-        setEvent(latestEvent);
+        setEvent(
+          rolledBackEvent ||
+            getStoredEventById(latestEvent.id) ||
+            latestEvent
+        );
 
         setErrors({
           form:
@@ -573,6 +657,15 @@ function Booking() {
       // GO TO CONFIRMATION
       // =====================================================
 
+      const confirmationEvent = {
+        ...updatedEvent,
+        status:
+          Number(updatedEvent.bookedSeats) >=
+          Number(updatedEvent.capacity)
+            ? "sold-out"
+            : updatedEvent.status,
+      };
+
       navigate(
         "/booking-confirmation",
         {
@@ -582,7 +675,7 @@ function Booking() {
 
               // Pass the latest event
               // information to confirmation.
-              event: updatedEvent,
+              event: confirmationEvent,
             },
           },
         }
@@ -715,9 +808,17 @@ function Booking() {
 
                 <div className="min-w-0">
 
-                  <span className="inline-flex rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600">
-                    {event.category}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600">
+                      {event.category}
+                    </span>
+
+                    {eventCompleted && (
+                      <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                        Completed
+                      </span>
+                    )}
+                  </div>
 
                   <h1 className="mt-2 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                     {event.title}
@@ -815,7 +916,8 @@ function Booking() {
                       }
                       placeholder="Enter your full name"
                       autoComplete="name"
-                      className={`h-12 w-full rounded-xl border bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 ${
+                      disabled={soldOut || isLoading || isSubmitting}
+                      className={`h-12 w-full rounded-xl border bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
                         errors.name
                           ? "border-red-300 focus:border-red-400 focus:ring-red-50"
                           : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
@@ -855,7 +957,8 @@ function Booking() {
                     }
                     placeholder="you@example.com"
                     autoComplete="email"
-                    className={`h-12 w-full rounded-xl border bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 ${
+                    disabled={soldOut || isLoading || isSubmitting}
+                    className={`h-12 w-full rounded-xl border bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
                       errors.email
                         ? "border-red-300 focus:border-red-400 focus:ring-red-50"
                         : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
@@ -900,7 +1003,8 @@ function Booking() {
                     }
                     placeholder="10-digit mobile number"
                     autoComplete="tel"
-                    className={`h-12 w-full rounded-xl border bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 ${
+                    disabled={soldOut || isLoading || isSubmitting}
+                    className={`h-12 w-full rounded-xl border bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
                       errors.phone
                         ? "border-red-300 focus:border-red-400 focus:ring-red-50"
                         : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
@@ -1105,9 +1209,11 @@ function Booking() {
 
                   <p className="text-xs font-semibold text-slate-900">
 
-                    {soldOut
-                      ? "This event is sold out"
-                      : `${availableSeats} seats available`}
+                    {eventCompleted
+                      ? "This event has completed"
+                      : soldOut
+                        ? "This event is sold out"
+                        : `${availableSeats} seats available`}
 
                   </p>
 
@@ -1138,9 +1244,11 @@ function Booking() {
               >
                 {isSubmitting
                   ? "Confirming booking..."
-                  : soldOut
-                    ? "Sold Out"
-                    : "Continue to Payment"}
+                  : eventCompleted
+                    ? "Event Completed"
+                    : soldOut
+                      ? "Sold Out"
+                      : "Continue to Payment"}
               </button>
 
               <p className="mt-4 text-center text-xs leading-5 text-slate-400">

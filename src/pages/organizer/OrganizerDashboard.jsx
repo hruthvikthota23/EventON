@@ -3,7 +3,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
-  Clock3,
   IndianRupee,
   MapPin,
   Ticket,
@@ -60,19 +59,145 @@ function getEventDate(event) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function isUpcomingEvent(event) {
-  const eventDate = getEventDate(event);
-
-  if (!eventDate) {
-    return false;
+function parseEventDateTime(dateValue, timeValue) {
+  if (!dateValue) {
+    return null;
   }
 
-  const today = new Date();
+  const dateText = String(dateValue).trim();
+  const timeText = String(timeValue || "00:00").trim();
 
-  today.setHours(0, 0, 0, 0);
-  eventDate.setHours(0, 0, 0, 0);
+  let year;
+  let month;
+  let day;
 
-  return eventDate >= today;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    [year, month, day] = dateText.split("-").map(Number);
+  } else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
+    [day, month, year] = dateText.split(/[-/]/).map(Number);
+  } else {
+    const parsed = new Date(dateText);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    year = parsed.getFullYear();
+    month = parsed.getMonth() + 1;
+    day = parsed.getDate();
+  }
+
+  const timeMatch = timeText.match(
+    /^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i
+  );
+
+  if (!timeMatch) {
+    return null;
+  }
+
+  let hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const meridiem = timeMatch[3]?.toUpperCase();
+
+  if (meridiem === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (meridiem === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  const result = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0,
+    0
+  );
+
+  return Number.isNaN(result.getTime()) ? null : result;
+}
+
+function getEventStart(event) {
+  return parseEventDateTime(
+    event?.date,
+    event?.time || event?.startTime || "00:00"
+  );
+}
+
+function getEventEnd(event) {
+  const start = getEventStart(event);
+
+  if (!start) {
+    return null;
+  }
+
+  if (!event?.endTime) {
+    return start;
+  }
+
+  const end = parseEventDateTime(
+    event.date,
+    event.endTime
+  );
+
+  if (!end) {
+    return start;
+  }
+
+  if (end.getTime() < start.getTime()) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  return end;
+}
+
+function getEventLifecycleStatus(event, now = Date.now()) {
+  const storedStatus = String(event?.status || "published")
+    .trim()
+    .toLowerCase();
+
+  if (storedStatus === "draft") {
+    return "draft";
+  }
+
+  if (
+    storedStatus === "cancelled" ||
+    storedStatus === "canceled"
+  ) {
+    return "cancelled";
+  }
+
+  const start = getEventStart(event);
+  const end = getEventEnd(event);
+
+  if (start && end) {
+    if (now >= end.getTime()) {
+      return "completed";
+    }
+
+    if (now >= start.getTime()) {
+      return "ongoing";
+    }
+  }
+
+  if (storedStatus === "sold-out") {
+    return "sold-out";
+  }
+
+  return "published";
+}
+
+function isUpcomingEvent(event, now = Date.now()) {
+  const start = getEventStart(event);
+
+  return Boolean(
+    start &&
+      start.getTime() > now &&
+      getEventLifecycleStatus(event, now) === "published"
+  );
 }
 
 function getBookingEventId(booking) {
@@ -195,6 +320,7 @@ function OrganizerDashboard() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // =======================================================
   // LOAD USER
@@ -367,19 +493,51 @@ function OrganizerDashboard() {
   }, [loadDashboardData]);
 
   // =======================================================
+  // LIFECYCLE CLOCK
+  // =======================================================
+
+  useEffect(() => {
+    const updateClock = () => {
+      setCurrentTime(Date.now());
+    };
+
+    updateClock();
+
+    const intervalId = window.setInterval(
+      updateClock,
+      60 * 1000
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  // =======================================================
   // CALCULATED STATISTICS
   // =======================================================
 
   const statistics = useMemo(() => {
     const publishedEvents = events.filter(
       (event) =>
-        String(event?.status || "")
-          .trim()
-          .toLowerCase() === "published"
+        getEventLifecycleStatus(event, currentTime) ===
+        "published"
     );
 
     const upcomingEvents = events.filter(
-      isUpcomingEvent
+      (event) => isUpcomingEvent(event, currentTime)
+    );
+
+    const completedEvents = events.filter(
+      (event) =>
+        getEventLifecycleStatus(event, currentTime) ===
+        "completed"
+    );
+
+    const ongoingEvents = events.filter(
+      (event) =>
+        getEventLifecycleStatus(event, currentTime) ===
+        "ongoing"
     );
 
     const confirmedBookings =
@@ -388,16 +546,14 @@ function OrganizerDashboard() {
     const ticketsSold =
       confirmedBookings.reduce(
         (total, booking) =>
-          total +
-          getBookingTicketCount(booking),
+          total + getBookingTicketCount(booking),
         0
       );
 
     const revenue =
       confirmedBookings.reduce(
         (total, booking) =>
-          total +
-          getBookingRevenue(booking),
+          total + getBookingRevenue(booking),
         0
       );
 
@@ -405,11 +561,13 @@ function OrganizerDashboard() {
       totalEvents: events.length,
       publishedEvents: publishedEvents.length,
       upcomingEvents: upcomingEvents.length,
+      completedEvents: completedEvents.length,
+      ongoingEvents: ongoingEvents.length,
       totalBookings: confirmedBookings.length,
       ticketsSold,
       revenue,
     };
-  }, [events, bookings]);
+  }, [events, bookings, currentTime]);
 
   // =======================================================
   // UPCOMING EVENTS
@@ -417,7 +575,7 @@ function OrganizerDashboard() {
 
   const upcomingEvents = useMemo(() => {
     return [...events]
-      .filter(isUpcomingEvent)
+      .filter((event) => isUpcomingEvent(event, currentTime))
       .sort((a, b) => {
         const dateA = getEventDate(a)?.getTime() || 0;
         const dateB = getEventDate(b)?.getTime() || 0;
@@ -425,7 +583,7 @@ function OrganizerDashboard() {
         return dateA - dateB;
       })
       .slice(0, 5);
-  }, [events]);
+  }, [events, currentTime]);
 
   // =======================================================
   // RECENT BOOKINGS
@@ -504,6 +662,10 @@ function OrganizerDashboard() {
           ticketsSold,
           revenue,
           percentage,
+          lifecycleStatus: getEventLifecycleStatus(
+            event,
+            currentTime
+          ),
         };
       })
       .sort(
@@ -511,7 +673,7 @@ function OrganizerDashboard() {
           b.ticketsSold - a.ticketsSold
       )
       .slice(0, 5);
-  }, [events, bookings]);
+  }, [events, bookings, currentTime]);
 
   // =======================================================
   // NO ORGANIZER USER
@@ -593,14 +755,14 @@ function OrganizerDashboard() {
           <StatCard
             title="Total Events"
             value={statistics.totalEvents}
-            subtitle={`${statistics.upcomingEvents} upcoming`}
+            subtitle={`${statistics.upcomingEvents} upcoming • ${statistics.completedEvents} completed`}
             icon={CalendarDays}
           />
 
           <StatCard
             title="Published Events"
             value={statistics.publishedEvents}
-            subtitle="Currently published"
+            subtitle={`${statistics.ongoingEvents} ongoing`}
             icon={CheckCircle2}
           />
 
@@ -717,9 +879,10 @@ function OrganizerDashboard() {
                           </div>
 
                           <EventStatus
-                            status={
-                              event.status
-                            }
+                            status={getEventLifecycleStatus(
+                              event,
+                              currentTime
+                            )}
                           />
                         </div>
 
@@ -927,9 +1090,7 @@ function OrganizerDashboard() {
                         </h3>
 
                         <EventStatus
-                          status={
-                            event.status
-                          }
+                          status={event.lifecycleStatus}
                         />
                       </div>
 

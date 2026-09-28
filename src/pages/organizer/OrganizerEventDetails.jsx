@@ -97,11 +97,22 @@ function getStatusClasses(status) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
+  if (normalized === "ongoing") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (normalized === "sold-out") {
+    return "border-purple-200 bg-purple-50 text-purple-700";
+  }
+
   if (normalized === "draft") {
     return "border-slate-200 bg-slate-100 text-slate-700";
   }
 
-  if (normalized === "cancelled") {
+  if (
+    normalized === "cancelled" ||
+    normalized === "canceled"
+  ) {
     return "border-red-200 bg-red-50 text-red-700";
   }
 
@@ -110,6 +121,137 @@ function getStatusClasses(status) {
   }
 
   return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function parseEventDateTime(dateValue, timeValue) {
+  if (!dateValue) {
+    return null;
+  }
+
+  const dateText = String(dateValue).trim();
+  const timeText = String(timeValue || "00:00").trim();
+
+  let year;
+  let month;
+  let day;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    [year, month, day] = dateText.split("-").map(Number);
+  } else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
+    [day, month, year] = dateText.split(/[-/]/).map(Number);
+  } else {
+    const parsed = new Date(dateText);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    year = parsed.getFullYear();
+    month = parsed.getMonth() + 1;
+    day = parsed.getDate();
+  }
+
+  const timeMatch = timeText.match(
+    /^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i
+  );
+
+  if (!timeMatch) {
+    return null;
+  }
+
+  let hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const meridiem = timeMatch[3]?.toUpperCase();
+
+  if (meridiem === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (meridiem === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  const result = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0,
+    0
+  );
+
+  return Number.isNaN(result.getTime()) ? null : result;
+}
+
+function getEventStart(event) {
+  return parseEventDateTime(
+    event?.date,
+    event?.time || event?.startTime || "00:00"
+  );
+}
+
+function getEventEnd(event) {
+  const start = getEventStart(event);
+
+  if (!start) {
+    return null;
+  }
+
+  if (!event?.endTime) {
+    return start;
+  }
+
+  const end = parseEventDateTime(
+    event.date,
+    event.endTime
+  );
+
+  if (!end) {
+    return start;
+  }
+
+  if (end.getTime() < start.getTime()) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  return end;
+}
+
+function getEventLifecycleStatus(event, now = Date.now()) {
+  const storedStatus = String(event?.status || "published")
+    .trim()
+    .toLowerCase();
+
+  if (storedStatus === "draft") {
+    return "draft";
+  }
+
+  if (
+    storedStatus === "cancelled" ||
+    storedStatus === "canceled"
+  ) {
+    return "cancelled";
+  }
+
+  const start = getEventStart(event);
+  const end = getEventEnd(event);
+
+  if (start && end) {
+    if (now >= end.getTime()) {
+      return "completed";
+    }
+
+    if (now >= start.getTime()) {
+      return "ongoing";
+    }
+  }
+
+  if (storedStatus === "sold-out") {
+    return "sold-out";
+  }
+
+  return "published";
 }
 
 // =========================================================
@@ -154,6 +296,7 @@ function OrganizerEventDetails() {
   const [event, setEvent] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // =======================================================
   // LOAD DATA
@@ -266,6 +409,27 @@ function OrganizerEventDetails() {
   }, [loadData]);
 
   // =======================================================
+  // LIFECYCLE CLOCK
+  // =======================================================
+
+  useEffect(() => {
+    const updateClock = () => {
+      setCurrentTime(Date.now());
+    };
+
+    updateClock();
+
+    const intervalId = window.setInterval(
+      updateClock,
+      60 * 1000
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  // =======================================================
   // CALCULATIONS
   // =======================================================
 
@@ -307,14 +471,21 @@ function OrganizerEventDetails() {
           )
         : 0;
 
+    const lifecycleStatus =
+      getEventLifecycleStatus(
+        event,
+        currentTime
+      );
+
     return {
       bookings: confirmedBookings.length,
       ticketsSold,
       revenue,
       availableSeats,
       occupancy,
+      lifecycleStatus,
     };
-  }, [confirmedBookings, event]);
+  }, [confirmedBookings, event, currentTime]);
 
   // =======================================================
   // NOT LOGGED IN
@@ -454,17 +625,13 @@ function OrganizerEventDetails() {
 
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                    event.status
+                    statistics.lifecycleStatus
                   )}`}
                 >
-                  {String(
-                    event.status || "Unknown"
-                  )
+                  {statistics.lifecycleStatus
                     .charAt(0)
                     .toUpperCase() +
-                    String(
-                      event.status || "Unknown"
-                    ).slice(1)}
+                    statistics.lifecycleStatus.slice(1)}
                 </span>
               </div>
 
@@ -556,22 +723,24 @@ function OrganizerEventDetails() {
                 </div>
               </div>
 
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  to={`/organizer/events/${event.id}/edit`}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
-                >
-                  <Edit3 size={17} />
-                  Edit Event
-                </Link>
+              {statistics.lifecycleStatus !== "completed" && (
+                <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                  <Link
+                    to={`/organizer/events/${event.id}/edit`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+                  >
+                    <Edit3 size={17} />
+                    Edit Event
+                  </Link>
 
-                <Link
-                  to={`/events/${event.id}`}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  View Public Page
-                </Link>
-              </div>
+                  <Link
+                    to={`/events/${event.id}`}
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    View Public Page
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>

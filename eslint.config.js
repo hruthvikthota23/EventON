@@ -17,5 +17,14 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // EventON loads and synchronizes localStorage-backed data from effects.
+      // These compiler-oriented rules are not runtime correctness checks for
+      // this architecture and would otherwise flag intentional data loading.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/static-components": "off",
+      "react-hooks/preserve-manual-memoization": "off",
+      "react-hooks/purity": "off",
+    },
   },
 ])

@@ -2,13 +2,11 @@ import { useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
-  Check,
   Clock3,
   Image as ImageIcon,
   IndianRupee,
   MapPin,
   Save,
-  Ticket,
   Users,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -395,6 +393,52 @@ function CreateEvent() {
     }
 
     navigate("/organizer/events");
+  };
+
+  // =======================================================
+  // TEMPORARY LIFECYCLE TEST TOOL
+  // DEV ONLY - REMOVE AFTER TESTING
+  // =======================================================
+
+  const createLifecycleTestEvent = () => {
+    if (!user?.id) {
+      return;
+    }
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const year = yesterday.getFullYear();
+    const month = String(yesterday.getMonth() + 1).padStart(2, "0");
+    const day = String(yesterday.getDate()).padStart(2, "0");
+
+    const eventData = {
+      id: `EVT-LIFECYCLE-${Date.now()}`,
+      organizerId: user.id,
+      organizer: user.name || "Event Organizer",
+      title: "Lifecycle Test Event",
+      slug: `lifecycle-test-${Date.now()}`,
+      category: "Technology",
+      categorySlug: "technology",
+      description: "Temporary event used to verify EventON completed-event lifecycle behavior.",
+      date: `${year}-${month}-${day}`,
+      time: "10:00",
+      endTime: "12:00",
+      location: "Hyderabad",
+      city: "Hyderabad",
+      price: 0,
+      capacity: 10,
+      bookedSeats: 0,
+      image: "",
+      featured: false,
+      status: "published",
+    };
+
+    const savedEvent = createStoredEvent(eventData);
+
+    if (savedEvent) {
+      navigate("/organizer/events");
+    }
   };
 
   // =======================================================
@@ -1068,6 +1112,27 @@ function CreateEvent() {
                 </span>
               </label>
             </div>
+          </div>
+
+          {/* =================================================
+              TEMPORARY LIFECYCLE TEST
+              DEV ONLY - REMOVE AFTER TESTING
+          ================================================= */}
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+              Development test only
+            </p>
+            <p className="mt-1 text-sm leading-6 text-amber-800">
+              Creates a temporary event dated yesterday so we can verify that completed events are hidden publicly but retained for organizers and admins.
+            </p>
+            <button
+              type="button"
+              onClick={createLifecycleTestEvent}
+              className="mt-4 inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+            >
+              Create Lifecycle Test Event
+            </button>
           </div>
 
           {/* =================================================
