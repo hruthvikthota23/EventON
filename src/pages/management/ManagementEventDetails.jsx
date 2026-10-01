@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-
-import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   ArrowLeft,
@@ -13,6 +16,13 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
 
@@ -27,134 +37,251 @@ import {
   BOOKINGS_UPDATED_EVENT,
 } from "../../utils/bookingStorage";
 
+import BookingStatus from "../../components/bookings/BookingStatus";
+
 /* =========================================================
    EVENT LIFECYCLE HELPERS
 ========================================================= */
 
-const parseEventDateTime = (dateValue, timeValue = "00:00") => {
+const parseEventDateTime = (
+  dateValue,
+  timeValue = "00:00"
+) => {
   if (!dateValue) {
     return null;
   }
 
-  const rawDate = String(dateValue).trim();
+  const rawDate =
+    String(dateValue).trim();
 
   let year;
   let month;
   let day;
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-    [year, month, day] = rawDate.split("-").map(Number);
-  } else if (/^\d{2}-\d{2}-\d{4}$/.test(rawDate)) {
-    [day, month, year] = rawDate.split("-").map(Number);
-  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
-    [day, month, year] = rawDate.split("/").map(Number);
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      rawDate
+    )
+  ) {
+    [year, month, day] = rawDate
+      .split("-")
+      .map(Number);
+  } else if (
+    /^\d{2}-\d{2}-\d{4}$/.test(
+      rawDate
+    )
+  ) {
+    [day, month, year] = rawDate
+      .split("-")
+      .map(Number);
+  } else if (
+    /^\d{2}\/\d{2}\/\d{4}$/.test(
+      rawDate
+    )
+  ) {
+    [day, month, year] = rawDate
+      .split("/")
+      .map(Number);
   } else {
-    const parsed = new Date(rawDate);
+    const parsed =
+      new Date(rawDate);
 
-    if (Number.isNaN(parsed.getTime())) {
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
       return null;
     }
 
-    const [hours = 0, minutes = 0] = String(timeValue || "00:00")
-      .split(":")
-      .map(Number);
+    const timeMatch =
+      String(timeValue || "00:00")
+        .trim()
+        .match(
+          /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+        );
 
-    parsed.setHours(
-      Number.isFinite(hours) ? hours : 0,
-      Number.isFinite(minutes) ? minutes : 0,
-      0,
-      0
-    );
+    if (timeMatch) {
+      let hours =
+        Number(timeMatch[1]);
+
+      const minutes =
+        Number(timeMatch[2]);
+
+      const meridiem =
+        timeMatch[4]?.toUpperCase();
+
+      if (
+        meridiem === "PM" &&
+        hours < 12
+      ) {
+        hours += 12;
+      }
+
+      if (
+        meridiem === "AM" &&
+        hours === 12
+      ) {
+        hours = 0;
+      }
+
+      parsed.setHours(
+        Number.isFinite(hours)
+          ? hours
+          : 0,
+        Number.isFinite(minutes)
+          ? minutes
+          : 0,
+        0,
+        0
+      );
+    }
 
     return parsed;
   }
 
-  const [hours = 0, minutes = 0] = String(timeValue || "00:00")
-    .split(":")
-    .map(Number);
+  const timeMatch =
+    String(timeValue || "00:00")
+      .trim()
+      .match(
+        /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+      );
+
+  let hours = 0;
+  let minutes = 0;
+
+  if (timeMatch) {
+    hours =
+      Number(timeMatch[1]);
+
+    minutes =
+      Number(timeMatch[2]);
+
+    const meridiem =
+      timeMatch[4]?.toUpperCase();
+
+    if (
+      meridiem === "PM" &&
+      hours < 12
+    ) {
+      hours += 12;
+    }
+
+    if (
+      meridiem === "AM" &&
+      hours === 12
+    ) {
+      hours = 0;
+    }
+  }
 
   const result = new Date(
     year,
     month - 1,
     day,
-    Number.isFinite(hours) ? hours : 0,
-    Number.isFinite(minutes) ? minutes : 0,
+    Number.isFinite(hours)
+      ? hours
+      : 0,
+    Number.isFinite(minutes)
+      ? minutes
+      : 0,
     0,
     0
   );
 
-  return Number.isNaN(result.getTime()) ? null : result;
+  return Number.isNaN(
+    result.getTime()
+  )
+    ? null
+    : result;
 };
 
-const getEventLifecycleStatus = (event, now = new Date()) => {
+/* =========================================================
+   EVENT LIFECYCLE
+
+   No Draft status.
+   Lifecycle:
+   Upcoming
+   Ongoing
+   Completed
+   Cancelled
+
+   Sold Out is handled separately.
+========================================================= */
+
+const getEventLifecycleStatus = (
+  event,
+  now = new Date()
+) => {
   if (!event) {
     return "published";
   }
 
-  const storedStatus = String(event.status || "published")
+  const storedStatus = String(
+    event.status || "published"
+  )
     .trim()
     .toLowerCase();
 
-  /*
-   * These states must always remain explicit.
-   */
   if (
-    storedStatus === "draft" ||
     storedStatus === "cancelled" ||
     storedStatus === "canceled"
   ) {
-    return storedStatus;
+    return "cancelled";
   }
 
-  const start = parseEventDateTime(
-    event.date,
-    event.time || "00:00"
-  );
+  const start =
+    parseEventDateTime(
+      event.date,
+      event.time || "00:00"
+    );
 
   if (!start) {
-    return storedStatus;
+    return "published";
   }
 
   const end = event.endTime
-    ? parseEventDateTime(event.date, event.endTime)
+    ? parseEventDateTime(
+        event.date,
+        event.endTime
+      )
     : null;
 
-  /*
-   * If event has an end time:
-   *
-   * now >= end       => Completed
-   * start <= now < end => Ongoing
-   */
-  if (end && end.getTime() > start.getTime()) {
-    if (now.getTime() >= end.getTime()) {
+  if (
+    end &&
+    end.getTime() >
+      start.getTime()
+  ) {
+    if (
+      now.getTime() >=
+      end.getTime()
+    ) {
       return "completed";
     }
 
-    if (now.getTime() >= start.getTime()) {
+    if (
+      now.getTime() >=
+      start.getTime()
+    ) {
       return "ongoing";
     }
-  } else if (now.getTime() >= start.getTime()) {
+  } else if (
+    now.getTime() >=
+    start.getTime()
+  ) {
     return "completed";
   }
 
-  /*
-   * Sold-out remains sold-out until the event
-   * actually starts.
-   */
-  if (storedStatus === "sold-out") {
-    return "sold-out";
-  }
-
-  return storedStatus === "published"
-    ? "published"
-    : storedStatus;
+  return "published";
 };
 
 /* =========================================================
    BOOKING HELPERS
 ========================================================= */
 
-const getBookingQuantity = (booking) => {
+const getBookingQuantity = (
+  booking
+) => {
   const quantity = Number(
     booking?.quantity ??
       booking?.seats ??
@@ -164,44 +291,84 @@ const getBookingQuantity = (booking) => {
       1
   );
 
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
     return 1;
   }
 
   return quantity;
 };
 
-const getBookingStatus = (booking) => {
-  const status = String(booking?.status || "confirmed")
+const getBookingStatus = (
+  booking,
+  event
+) => {
+  const storedStatus = String(
+    booking?.status || ""
+  )
     .trim()
     .toLowerCase();
 
   if (
-    status === "cancelled" ||
-    status === "canceled"
+    storedStatus === "cancelled" ||
+    storedStatus === "canceled"
   ) {
     return "cancelled";
   }
 
-  if (status === "pending") {
-    return "pending";
+  if (!event) {
+    return "upcoming";
   }
 
+  const start =
+    parseEventDateTime(
+      event.date,
+      event.time || "00:00"
+    );
+
+  const end = event.endTime
+    ? parseEventDateTime(
+        event.date,
+        event.endTime
+      )
+    : null;
+
+  if (!start) {
+    return "upcoming";
+  }
+
+  const now = new Date();
+
   if (
-    status === "completed" ||
-    status === "attended"
+    end &&
+    now.getTime() >=
+      end.getTime()
   ) {
     return "completed";
   }
 
-  return "confirmed";
+  if (
+    now.getTime() >=
+    start.getTime()
+  ) {
+    return "ongoing";
+  }
+
+  return "upcoming";
 };
 
-const isActiveBooking = (booking) => {
-  return getBookingStatus(booking) !== "cancelled";
-};
+const isActiveBooking = (
+  booking
+) =>
+  getBookingStatus(
+    booking
+  ) !== "cancelled";
 
-const getBookingTimestamp = (booking) => {
+const getBookingTimestamp = (
+  booking
+) => {
   const rawDate =
     booking?.createdAt ??
     booking?.bookingDate ??
@@ -214,9 +381,12 @@ const getBookingTimestamp = (booking) => {
     return 0;
   }
 
-  const timestamp = new Date(rawDate).getTime();
+  const timestamp =
+    new Date(rawDate).getTime();
 
-  return Number.isFinite(timestamp)
+  return Number.isFinite(
+    timestamp
+  )
     ? timestamp
     : 0;
 };
@@ -234,7 +404,9 @@ const getBookingAmount = (
   );
 
   if (
-    Number.isFinite(storedAmount) &&
+    Number.isFinite(
+      storedAmount
+    ) &&
     storedAmount > 0
   ) {
     return storedAmount;
@@ -250,22 +422,38 @@ const getBookingAmount = (
    ORGANIZER
 ========================================================= */
 
-const getOrganizerDisplayName = (event) => {
-  const organizerId = event?.organizerId;
+const getOrganizerDisplayName = (
+  event
+) => {
+  const organizerId =
+    event?.organizerId;
 
   if (organizerId) {
     try {
-      const accounts = JSON.parse(
-        localStorage.getItem("eventon_accounts") || "[]"
-      );
-
-      if (Array.isArray(accounts)) {
-        const organizer = accounts.find(
-          (account) =>
-            String(account?.id) === String(organizerId) &&
-            String(account?.role || "").toLowerCase() ===
-              "organizer"
+      const accounts =
+        JSON.parse(
+          localStorage.getItem(
+            "eventon_accounts"
+          ) || "[]"
         );
+
+      if (
+        Array.isArray(accounts)
+      ) {
+        const organizer =
+          accounts.find(
+            (account) =>
+              String(
+                account?.id
+              ) ===
+                String(
+                  organizerId
+                ) &&
+              String(
+                account?.role || ""
+              ).toLowerCase() ===
+                "organizer"
+          );
 
         if (organizer) {
           return (
@@ -284,7 +472,10 @@ const getOrganizerDisplayName = (event) => {
     }
   }
 
-  return event?.organizer || "EventON Organizer";
+  return (
+    event?.organizer ||
+    "EventON Organizer"
+  );
 };
 
 /* =========================================================
@@ -294,100 +485,148 @@ const getOrganizerDisplayName = (event) => {
 function ManagementEventDetails() {
   const { id } = useParams();
 
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const location = useLocation();
+  const location =
+    useLocation();
 
-  const { user } = useAuth();
+  const { user } =
+    useAuth();
 
   const isAdmin =
-    String(user?.role || "").toLowerCase() === "admin" ||
-    location.pathname.startsWith("/admin/");
+    String(
+      user?.role || ""
+    ).toLowerCase() ===
+      "admin" ||
+    location.pathname.startsWith(
+      "/admin/"
+    );
 
   const isOrganizer =
-    String(user?.role || "").toLowerCase() === "organizer" ||
-    location.pathname.startsWith("/organizer/");
+    String(
+      user?.role || ""
+    ).toLowerCase() ===
+      "organizer" ||
+    location.pathname.startsWith(
+      "/organizer/"
+    );
 
   const backPath = isAdmin
     ? "/admin/events"
     : "/organizer/events";
 
-  const [event, setEvent] = useState(null);
+  const [event, setEvent] =
+    useState(null);
 
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] =
+    useState([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [lifecycleNow, setLifecycleNow] =
-    useState(() => new Date());
+  const [
+    lifecycleNow,
+    setLifecycleNow,
+  ] = useState(
+    () => new Date()
+  );
 
-  const [showCancelModal, setShowCancelModal] =
-    useState(false);
+  const [
+    showCancelModal,
+    setShowCancelModal,
+  ] = useState(false);
 
-  const [cancelLoading, setCancelLoading] =
-    useState(false);
+  const [
+    cancelLoading,
+    setCancelLoading,
+  ] = useState(false);
 
   /* =======================================================
      LOAD DATA
+
+     FIX:
+     useCallback prevents the function from being recreated
+     every render and fixes the exhaustive-deps warnings.
   ======================================================= */
 
-  const loadData = () => {
-    try {
-      const storedEvents = getStoredEvents();
+  const loadData = useCallback(
+    () => {
+      try {
+        const storedEvents =
+          getStoredEvents();
 
-      const storedBookings = getStoredBookings();
+        const storedBookings =
+          getStoredBookings();
 
-      const foundEvent = storedEvents.find(
-        (item) =>
-          String(item.id) === String(id)
-      );
+        const foundEvent =
+          storedEvents.find(
+            (item) =>
+              String(item?.id) ===
+              String(id)
+          );
 
-      /*
-       * Organizer security:
-       * organizer can only access their own events.
-       */
-      if (
-        foundEvent &&
-        isOrganizer &&
-        !isAdmin &&
-        String(foundEvent.organizerId) !==
-          String(user?.id)
-      ) {
+        /*
+         * Organizer security:
+         * organizer can only access own events.
+         */
+        if (
+          foundEvent &&
+          isOrganizer &&
+          !isAdmin &&
+          String(
+            foundEvent.organizerId
+          ) !==
+            String(user?.id)
+        ) {
+          setEvent(null);
+          setBookings([]);
+          setLoading(false);
+          return;
+        }
+
+        setEvent(
+          foundEvent || null
+        );
+
+        if (foundEvent) {
+          const eventBookings =
+            storedBookings.filter(
+              (booking) =>
+                String(
+                  booking?.eventId
+                ) ===
+                String(
+                  foundEvent.id
+                )
+            );
+
+          setBookings(
+            eventBookings
+          );
+        } else {
+          setBookings([]);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error(
+          "Unable to load event details:",
+          error
+        );
+
         setEvent(null);
         setBookings([]);
         setLoading(false);
-        return;
       }
-
-      setEvent(foundEvent || null);
-
-      if (foundEvent) {
-        const eventBookings =
-          storedBookings.filter(
-            (booking) =>
-              String(
-                booking?.eventId
-              ) ===
-              String(foundEvent.id)
-          );
-
-        setBookings(eventBookings);
-      } else {
-        setBookings([]);
-      }
-
-      setLoading(false);
-    } catch (error) {
-      console.error(
-        "Unable to load event details:",
-        error
-      );
-
-      setEvent(null);
-      setBookings([]);
-      setLoading(false);
-    }
-  };
+    },
+    [
+      id,
+      user?.id,
+      isAdmin,
+      isOrganizer,
+    ]
+  );
 
   /* =======================================================
      INITIAL LOAD
@@ -395,7 +634,7 @@ function ManagementEventDetails() {
 
   useEffect(() => {
     loadData();
-  }, [id, user?.id, isAdmin, isOrganizer]);
+  }, [loadData]);
 
   /* =======================================================
      LIVE UPDATES
@@ -406,10 +645,14 @@ function ManagementEventDetails() {
       loadData();
     };
 
-    const handleStorage = (storageEvent) => {
+    const handleStorage = (
+      storageEvent
+    ) => {
       if (
-        storageEvent.key === "eventon_events" ||
-        storageEvent.key === "eventon_bookings"
+        storageEvent.key ===
+          "eventon_events" ||
+        storageEvent.key ===
+          "eventon_bookings"
       ) {
         loadData();
       }
@@ -446,19 +689,27 @@ function ManagementEventDetails() {
         handleStorage
       );
     };
-  }, [id, user?.id, isAdmin, isOrganizer]);
+  }, [loadData]);
 
   /* =======================================================
      LIFECYCLE CLOCK
   ======================================================= */
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setLifecycleNow(new Date());
-    }, 60 * 1000);
+    const intervalId =
+      window.setInterval(
+        () => {
+          setLifecycleNow(
+            new Date()
+          );
+        },
+        60 * 1000
+      );
 
     return () => {
-      window.clearInterval(intervalId);
+      window.clearInterval(
+        intervalId
+      );
     };
   }, []);
 
@@ -466,102 +717,116 @@ function ManagementEventDetails() {
      ACTIVE BOOKINGS
   ======================================================= */
 
-  const activeBookings = useMemo(() => {
-    return bookings.filter(isActiveBooking);
-  }, [bookings]);
+  const activeBookings =
+    useMemo(
+      () =>
+        bookings.filter(
+          isActiveBooking
+        ),
+      [bookings]
+    );
 
   /* =======================================================
      ACTUAL TICKETS SOLD
   ======================================================= */
 
-  const actualTicketsSold = useMemo(() => {
-    return activeBookings.reduce(
-      (total, booking) =>
-        total + getBookingQuantity(booking),
-      0
+  const actualTicketsSold =
+    useMemo(
+      () =>
+        activeBookings.reduce(
+          (
+            total,
+            booking
+          ) =>
+            total +
+            getBookingQuantity(
+              booking
+            ),
+          0
+        ),
+      [activeBookings]
     );
-  }, [activeBookings]);
 
   /* =======================================================
      EVENT STATUS
+
+     Display:
+     Upcoming
+     Ongoing
+     Completed
+     Cancelled
+
+     Sold Out is an availability state.
   ======================================================= */
 
-  const eventStatus = useMemo(() => {
-    if (!event) {
-      return "published";
-    }
+  const eventStatus =
+    useMemo(() => {
+      if (!event) {
+        return "published";
+      }
 
-    const lifecycleStatus =
-      getEventLifecycleStatus(
-        event,
-        lifecycleNow
-      );
+      const lifecycleStatus =
+        getEventLifecycleStatus(
+          event,
+          lifecycleNow
+        );
 
-    /*
-     * These always take priority.
-     */
-    if (
-      lifecycleStatus === "completed" ||
-      lifecycleStatus === "ongoing" ||
-      lifecycleStatus === "cancelled" ||
-      lifecycleStatus === "canceled" ||
-      lifecycleStatus === "draft"
-    ) {
+      if (
+        lifecycleStatus ===
+          "completed" ||
+        lifecycleStatus ===
+          "ongoing" ||
+        lifecycleStatus ===
+          "cancelled"
+      ) {
+        return lifecycleStatus;
+      }
+
+      const capacity =
+        Number(
+          event.capacity
+        ) || 0;
+
+      if (
+        lifecycleStatus ===
+          "published" &&
+        capacity > 0 &&
+        actualTicketsSold >=
+          capacity
+      ) {
+        return "sold-out";
+      }
+
       return lifecycleStatus;
-    }
-
-    const capacity =
-      Number(event.capacity) || 0;
-
-    /*
-     * Sold-out is calculated from real active
-     * bookings.
-     */
-    if (
-      lifecycleStatus === "published" &&
-      capacity > 0 &&
-      actualTicketsSold >= capacity
-    ) {
-      return "sold-out";
-    }
-
-    return lifecycleStatus;
-  }, [
-    event,
-    actualTicketsSold,
-    lifecycleNow,
-  ]);
+    }, [
+      event,
+      actualTicketsSold,
+      lifecycleNow,
+    ]);
 
   /* =======================================================
      STATUS LABEL
   ======================================================= */
 
-  const statusLabel = useMemo(() => {
-    if (eventStatus === "completed") {
-      return "Completed";
-    }
+  const statusLabel =
+    useMemo(() => {
+      switch (eventStatus) {
+        case "completed":
+          return "Completed";
 
-    if (eventStatus === "ongoing") {
-      return "Ongoing";
-    }
+        case "ongoing":
+          return "Ongoing";
 
-    if (eventStatus === "sold-out") {
-      return "Sold Out";
-    }
+        case "sold-out":
+          return "Sold Out";
 
-    if (eventStatus === "draft") {
-      return "Draft";
-    }
+        case "cancelled":
+          return "Cancelled";
 
-    if (
-      eventStatus === "cancelled" ||
-      eventStatus === "canceled"
-    ) {
-      return "Cancelled";
-    }
-
-    return "Upcoming";
-  }, [eventStatus]);
+        default:
+          return "Upcoming";
+      }
+    }, [eventStatus]);
 
   /* =======================================================
      STATUS ICON
@@ -569,16 +834,15 @@ function ManagementEventDetails() {
 
   const StatusIcon =
     eventStatus === "sold-out" ||
-    eventStatus === "cancelled" ||
-    eventStatus === "canceled"
+    eventStatus === "cancelled"
       ? XCircle
-      : eventStatus === "draft"
-      ? Clock3
-      : eventStatus === "ongoing"
-      ? Clock3
-      : eventStatus === "completed"
-      ? CheckCircle2
-      : CheckCircle2;
+      : eventStatus ===
+        "ongoing"
+        ? Clock3
+        : eventStatus ===
+          "completed"
+          ? CheckCircle2
+          : Clock3;
 
   /* =======================================================
      STATUS STYLE
@@ -588,86 +852,102 @@ function ManagementEventDetails() {
     eventStatus === "completed"
       ? "bg-blue-50 text-blue-600"
       : eventStatus === "ongoing"
-      ? "bg-cyan-50 text-cyan-600"
-      : eventStatus === "sold-out"
-      ? "bg-red-50 text-red-600"
-      : eventStatus === "draft"
-      ? "bg-amber-50 text-amber-600"
-      : eventStatus === "cancelled" ||
-        eventStatus === "canceled"
-      ? "bg-slate-100 text-slate-600"
-      : "bg-emerald-50 text-emerald-600";
+        ? "bg-cyan-50 text-cyan-600"
+        : eventStatus ===
+            "sold-out"
+          ? "bg-red-50 text-red-600"
+          : eventStatus ===
+              "cancelled"
+            ? "bg-slate-100 text-slate-600"
+            : "bg-emerald-50 text-emerald-600";
 
   /* =======================================================
      EVENT METRICS
   ======================================================= */
 
-  const metrics = useMemo(() => {
-    if (!event) {
+  const metrics =
+    useMemo(() => {
+      if (!event) {
+        return {
+          capacity: 0,
+          booked: 0,
+          available: 0,
+          percentage: 0,
+          revenue: 0,
+        };
+      }
+
+      const capacity =
+        Number(
+          event.capacity
+        ) || 0;
+
+      const booked =
+        actualTicketsSold;
+
+      const available =
+        Math.max(
+          capacity - booked,
+          0
+        );
+
+      const percentage =
+        capacity > 0
+          ? Math.min(
+              (booked /
+                capacity) *
+                100,
+              100
+            )
+          : 0;
+
+      const revenue =
+        activeBookings.reduce(
+          (
+            total,
+            booking
+          ) =>
+            total +
+            getBookingAmount(
+              booking,
+              event.price
+            ),
+          0
+        );
+
       return {
-        capacity: 0,
-        booked: 0,
-        available: 0,
-        percentage: 0,
-        revenue: 0,
+        capacity,
+        booked,
+        available,
+        percentage,
+        revenue,
       };
-    }
-
-    const capacity =
-      Number(event.capacity) || 0;
-
-    const booked = actualTicketsSold;
-
-    const available = Math.max(
-      capacity - booked,
-      0
-    );
-
-    const percentage =
-      capacity > 0
-        ? Math.min(
-            (booked / capacity) * 100,
-            100
-          )
-        : 0;
-
-    const revenue =
-      activeBookings.reduce(
-        (total, booking) =>
-          total +
-          getBookingAmount(
-            booking,
-            event.price
-          ),
-        0
-      );
-
-    return {
-      capacity,
-      booked,
-      available,
-      percentage,
-      revenue,
-    };
-  }, [
-    event,
-    activeBookings,
-    actualTicketsSold,
-  ]);
+    }, [
+      event,
+      activeBookings,
+      actualTicketsSold,
+    ]);
 
   /* =======================================================
      RECENT BOOKINGS
   ======================================================= */
 
-  const recentBookings = useMemo(() => {
-    return [...bookings]
-      .sort(
-        (a, b) =>
-          getBookingTimestamp(b) -
-          getBookingTimestamp(a)
-      )
-      .slice(0, 5);
-  }, [bookings]);
+  const recentBookings =
+    useMemo(
+      () =>
+        [...bookings]
+          .sort(
+            (a, b) =>
+              getBookingTimestamp(
+                b
+              ) -
+              getBookingTimestamp(
+                a
+              )
+          )
+          .slice(0, 5),
+      [bookings]
+    );
 
   /* =======================================================
      CANCEL EVENT
@@ -676,138 +956,182 @@ function ManagementEventDetails() {
   const canCancelEvent =
     eventStatus === "published";
 
-  const handleCancelEvent = () => {
-    /*
-     * Safety check:
-     * cancellation is allowed ONLY for upcoming
-     * events.
-     */
-    if (!canCancelEvent) {
-      return;
-    }
-
-    setShowCancelModal(true);
-  };
-
-  const confirmCancelEvent = () => {
-    if (!event || !canCancelEvent) {
-      return;
-    }
-
-    setCancelLoading(true);
-
-    try {
-      /*
-       * Get the latest event again.
-       *
-       * This prevents cancelling an event that
-       * changed while this page was open.
-       */
-      const latestEvents = getStoredEvents();
-
-      const latestEvent = latestEvents.find(
-        (item) =>
-          String(item.id) === String(event.id)
-      );
-
-      if (!latestEvent) {
-        setShowCancelModal(false);
-        setCancelLoading(false);
+  const handleCancelEvent =
+    () => {
+      if (!canCancelEvent) {
         return;
       }
 
-      /*
-       * Recalculate status using the latest data.
-       */
-      const latestLifecycleStatus =
-        getEventLifecycleStatus(
-          latestEvent,
-          new Date()
-        );
+      setShowCancelModal(
+        true
+      );
+    };
 
-      const latestCapacity =
-        Number(latestEvent.capacity) || 0;
+  const confirmCancelEvent =
+    () => {
+      if (
+        !event ||
+        !canCancelEvent
+      ) {
+        return;
+      }
 
-      const latestBookings =
-        getStoredBookings().filter(
-          (booking) =>
-            String(
-              booking?.eventId
-            ) === String(latestEvent.id)
-        );
+      setCancelLoading(true);
 
-      const latestActiveTickets =
-        latestBookings
-          .filter(isActiveBooking)
-          .reduce(
-            (total, booking) =>
-              total +
-              getBookingQuantity(booking),
-            0
+      try {
+        /*
+         * Get latest event.
+         */
+        const latestEvents =
+          getStoredEvents();
+
+        const latestEvent =
+          latestEvents.find(
+            (item) =>
+              String(item?.id) ===
+              String(event.id)
           );
 
-      const latestStatus =
-        latestLifecycleStatus === "published" &&
-        latestCapacity > 0 &&
-        latestActiveTickets >= latestCapacity
-          ? "sold-out"
-          : latestLifecycleStatus;
+        if (!latestEvent) {
+          setShowCancelModal(
+            false
+          );
+          setCancelLoading(false);
+          return;
+        }
 
-      /*
-       * Do not allow cancellation if the event
-       * is no longer upcoming.
-       */
-      if (latestStatus !== "published") {
-        setEvent(latestEvent);
-        setShowCancelModal(false);
-        setCancelLoading(false);
-        return;
-      }
+        /*
+         * Recalculate lifecycle status.
+         */
+        const latestLifecycleStatus =
+          getEventLifecycleStatus(
+            latestEvent,
+            new Date()
+          );
 
-      /*
-       * IMPORTANT:
-       *
-       * updateStoredEvent() changes only the event
-       * status. It preserves bookedSeats.
-       */
-      const updatedEvents =
-        updateStoredEvent(
-          latestEvent.id,
-          {
-            status: "cancelled",
+        const latestCapacity =
+          Number(
+            latestEvent.capacity
+          ) || 0;
+
+        const latestBookings =
+          getStoredBookings().filter(
+            (booking) =>
+              String(
+                booking?.eventId
+              ) ===
+              String(
+                latestEvent.id
+              )
+          );
+
+        const latestActiveTickets =
+          latestBookings
+            .filter(
+              isActiveBooking
+            )
+            .reduce(
+              (
+                total,
+                booking
+              ) =>
+                total +
+                getBookingQuantity(
+                  booking
+                ),
+              0
+            );
+
+        const latestStatus =
+          latestLifecycleStatus ===
+            "published" &&
+          latestCapacity > 0 &&
+          latestActiveTickets >=
+            latestCapacity
+            ? "sold-out"
+            : latestLifecycleStatus;
+
+        /*
+         * Cancellation is allowed only
+         * while event is upcoming.
+         */
+        if (
+          latestStatus !==
+          "published"
+        ) {
+          setEvent(
+            latestEvent
+          );
+
+          setShowCancelModal(
+            false
+          );
+
+          setCancelLoading(false);
+          return;
+        }
+
+        /*
+         * updateStoredEvent preserves
+         * bookedSeats and other event data.
+         */
+        const updatedEvents =
+          updateStoredEvent(
+            latestEvent.id,
+            {
+              status:
+                "cancelled",
+            }
+          );
+
+        if (
+          !Array.isArray(
+            updatedEvents
+          )
+        ) {
+          throw new Error(
+            "Unable to update event status."
+          );
+        }
+
+        const updatedEvent =
+          updatedEvents.find(
+            (item) =>
+              String(item?.id) ===
+              String(
+                latestEvent.id
+              )
+          );
+
+        setEvent(
+          updatedEvent || {
+            ...latestEvent,
+            status:
+              "cancelled",
           }
         );
 
-      if (!Array.isArray(updatedEvents)) {
-        throw new Error(
-          "Unable to update event status."
+        setShowCancelModal(
+          false
         );
+
+        /*
+         * Notify all EventON pages.
+         */
+        window.dispatchEvent(
+          new Event(
+            EVENTS_UPDATED_EVENT
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Unable to cancel event:",
+          error
+        );
+      } finally {
+        setCancelLoading(false);
       }
-
-      const updatedEvent =
-        updatedEvents.find(
-          (item) =>
-            String(item.id) ===
-            String(latestEvent.id)
-        );
-
-      setEvent(
-        updatedEvent || {
-          ...latestEvent,
-          status: "cancelled",
-        }
-      );
-
-      setShowCancelModal(false);
-    } catch (error) {
-      console.error(
-        "Unable to cancel event:",
-        error
-      );
-    } finally {
-      setCancelLoading(false);
-    }
-  };
+    };
 
   /* =======================================================
      NOT LOGGED IN
@@ -827,7 +1151,8 @@ function ManagementEventDetails() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Please log in to access this event.
+            Please log in to access
+            this event.
           </p>
 
           <Link
@@ -866,7 +1191,9 @@ function ManagementEventDetails() {
       <section className="flex min-h-[70vh] items-center justify-center bg-slate-50 px-5">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-            <CalendarDays size={28} />
+            <CalendarDays
+              size={28}
+            />
           </div>
 
           <h1 className="mt-5 text-xl font-bold text-slate-900">
@@ -874,16 +1201,21 @@ function ManagementEventDetails() {
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            The event does not exist or you do not
-            have permission to manage it.
+            The event does not exist
+            or you do not have
+            permission to manage it.
           </p>
 
           <button
             type="button"
-            onClick={() => navigate(backPath)}
+            onClick={() =>
+              navigate(backPath)
+            }
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
           >
-            <ArrowLeft size={17} />
+            <ArrowLeft
+              size={17}
+            />
             Back to Events
           </button>
         </div>
@@ -904,16 +1236,18 @@ function ManagementEventDetails() {
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-6 lg:px-8">
-
           <button
             type="button"
-            onClick={() => navigate(backPath)}
+            onClick={() =>
+              navigate(backPath)
+            }
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-orange-600"
           >
-            <ArrowLeft size={17} />
+            <ArrowLeft
+              size={17}
+            />
             Back to Events
           </button>
-
         </div>
       </section>
 
@@ -928,13 +1262,11 @@ function ManagementEventDetails() {
         ================================================= */}
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
           <div className="grid lg:grid-cols-[420px_minmax(0,1fr)]">
 
             {/* IMAGE */}
 
             <div className="h-64 bg-slate-100 sm:h-80 lg:h-full lg:min-h-[360px]">
-
               {event.image ? (
                 <img
                   src={event.image}
@@ -946,10 +1278,11 @@ function ManagementEventDetails() {
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-slate-400">
-                  <CalendarDays size={48} />
+                  <CalendarDays
+                    size={48}
+                  />
                 </div>
               )}
-
             </div>
 
             {/* INFORMATION */}
@@ -957,7 +1290,6 @@ function ManagementEventDetails() {
             <div className="flex flex-col p-6 sm:p-8">
 
               <div className="flex flex-wrap items-center gap-2">
-
                 <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-600">
                   {event.category ||
                     "General Event"}
@@ -966,10 +1298,11 @@ function ManagementEventDetails() {
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${statusStyle}`}
                 >
-                  <StatusIcon size={13} />
+                  <StatusIcon
+                    size={13}
+                  />
                   {statusLabel}
                 </span>
-
               </div>
 
               <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
@@ -985,7 +1318,6 @@ function ManagementEventDetails() {
               {/* EVENT META */}
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-
                 <EventMeta
                   icon={CalendarDays}
                   label="Date"
@@ -1023,7 +1355,6 @@ function ManagementEventDetails() {
                     event
                   )}
                 />
-
               </div>
 
               {/* =================================================
@@ -1031,45 +1362,46 @@ function ManagementEventDetails() {
               ================================================= */}
 
               <div className="mt-8 border-t border-slate-100 pt-6">
-
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
                   <div>
                     <p className="text-sm font-semibold text-slate-900">
                       Event Management
                     </p>
 
                     <p className="mt-1 text-xs text-slate-500">
-                      You can cancel an event only while
-                      it is upcoming.
+                      You can cancel an
+                      event only while it
+                      is upcoming.
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    disabled={!canCancelEvent}
-                    onClick={handleCancelEvent}
+                    disabled={
+                      !canCancelEvent
+                    }
+                    onClick={
+                      handleCancelEvent
+                    }
                     className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition ${
                       canCancelEvent
                         ? "bg-red-500 text-white hover:bg-red-600"
                         : "cursor-not-allowed bg-slate-100 text-slate-400"
                     }`}
                   >
-                    <XCircle size={17} />
+                    <XCircle
+                      size={17}
+                    />
 
-                    {eventStatus === "cancelled" ||
-                    eventStatus === "canceled"
+                    {eventStatus ===
+                    "cancelled"
                       ? "Event Cancelled"
                       : "Cancel Event"}
                   </button>
-
                 </div>
-
               </div>
-
             </div>
           </div>
-
         </section>
 
         {/* =================================================
@@ -1077,7 +1409,6 @@ function ManagementEventDetails() {
         ================================================= */}
 
         <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
           <MetricCard
             title="Tickets Sold"
             value={metrics.booked}
@@ -1097,7 +1428,9 @@ function ManagementEventDetails() {
             title="Ticket Price"
             value={`₹${Number(
               event.price || 0
-            ).toLocaleString("en-IN")}`}
+            ).toLocaleString(
+              "en-IN"
+            )}`}
             icon={IndianRupee}
             iconClass="bg-orange-50 text-orange-600"
           />
@@ -1110,7 +1443,6 @@ function ManagementEventDetails() {
             icon={IndianRupee}
             iconClass="bg-violet-50 text-violet-600"
           />
-
         </section>
 
         {/* =================================================
@@ -1122,23 +1454,19 @@ function ManagementEventDetails() {
           {/* BOOKING OVERVIEW */}
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-
             <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
-
               <h2 className="text-sm font-semibold text-slate-900">
                 Booking Overview
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Current ticket sales and seat availability
+                Current ticket sales and
+                seat availability
               </p>
-
             </div>
 
             <div className="p-5 sm:p-6">
-
               <div className="flex items-end justify-between gap-4">
-
                 <div>
                   <p className="text-3xl font-bold tracking-tight text-slate-900">
                     {Math.round(
@@ -1153,7 +1481,6 @@ function ManagementEventDetails() {
                 </div>
 
                 <div className="text-right">
-
                   <p className="text-sm font-semibold text-slate-900">
                     {metrics.booked.toLocaleString(
                       "en-IN"
@@ -1167,50 +1494,47 @@ function ManagementEventDetails() {
                   <p className="mt-1 text-xs text-slate-500">
                     tickets sold
                   </p>
-
                 </div>
-
               </div>
 
               <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
-
                 <div
                   className="h-full rounded-full bg-orange-500 transition-all duration-300"
                   style={{
                     width: `${metrics.percentage}%`,
                   }}
                 />
-
               </div>
 
               <div className="mt-5 grid grid-cols-3 gap-3">
-
                 <BookingOverviewItem
                   label="Sold"
-                  value={metrics.booked}
+                  value={
+                    metrics.booked
+                  }
                 />
 
                 <BookingOverviewItem
                   label="Available"
-                  value={metrics.available}
+                  value={
+                    metrics.available
+                  }
                 />
 
                 <BookingOverviewItem
                   label="Capacity"
-                  value={metrics.capacity}
+                  value={
+                    metrics.capacity
+                  }
                 />
-
               </div>
-
             </div>
           </div>
 
           {/* EVENT INFORMATION */}
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-
             <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
-
               <h2 className="text-sm font-semibold text-slate-900">
                 Event Information
               </h2>
@@ -1218,11 +1542,9 @@ function ManagementEventDetails() {
               <p className="mt-1 text-xs text-slate-500">
                 Important event details
               </p>
-
             </div>
 
             <div className="divide-y divide-slate-100">
-
               <InfoRow
                 label="Category"
                 value={
@@ -1277,11 +1599,8 @@ function ManagementEventDetails() {
                   "en-IN"
                 )} bookings`}
               />
-
             </div>
-
           </div>
-
         </section>
 
         {/* =================================================
@@ -1289,19 +1608,16 @@ function ManagementEventDetails() {
         ================================================= */}
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
           <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-
             <div>
-
               <h2 className="text-sm font-semibold text-slate-900">
                 Recent Bookings
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Latest bookings for this event
+                Latest bookings for this
+                event
               </p>
-
             </div>
 
             <div className="text-xs font-medium text-slate-500">
@@ -1310,13 +1626,11 @@ function ManagementEventDetails() {
               )}{" "}
               active bookings
             </div>
-
           </div>
 
-          {recentBookings.length === 0 ? (
-
+          {recentBookings.length ===
+          0 ? (
             <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
                 <Ticket size={22} />
               </div>
@@ -1326,35 +1640,31 @@ function ManagementEventDetails() {
               </h3>
 
               <p className="mt-1 text-xs text-slate-500">
-                Bookings for this event will appear here.
+                Bookings for this event
+                will appear here.
               </p>
-
             </div>
-
           ) : (
-
             <div className="divide-y divide-slate-100">
-
               {recentBookings.map(
                 (booking) => {
-
                   const status =
                     getBookingStatus(
-                      booking
+                      booking,
+                      event
                     );
 
-                  const isCancelled =
-                    status === "cancelled";
-
                   const attendeeName =
-                    booking?.attendee?.name ||
+                    booking?.attendee
+                      ?.name ||
                     booking?.userName ||
                     booking?.name ||
                     booking?.attendeeName ||
                     "Guest User";
 
                   const attendeeEmail =
-                    booking?.attendee?.email ||
+                    booking?.attendee
+                      ?.email ||
                     booking?.userEmail ||
                     booking?.email ||
                     "No email";
@@ -1378,13 +1688,11 @@ function ManagementEventDetails() {
                       }
                       className="px-5 py-4 transition hover:bg-slate-50 sm:px-6"
                     >
-
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
 
                         {/* USER */}
 
                         <div className="flex min-w-0 flex-1 items-center gap-3">
-
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
                             {attendeeName
                               .charAt(0)
@@ -1392,23 +1700,23 @@ function ManagementEventDetails() {
                           </div>
 
                           <div className="min-w-0">
-
                             <p className="truncate text-sm font-semibold text-slate-900">
-                              {attendeeName}
+                              {
+                                attendeeName
+                              }
                             </p>
 
                             <p className="mt-1 truncate text-xs text-slate-500">
-                              {attendeeEmail}
+                              {
+                                attendeeEmail
+                              }
                             </p>
-
                           </div>
-
                         </div>
 
                         {/* BOOKING ID */}
 
                         <div className="sm:w-36">
-
                           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
                             Booking
                           </p>
@@ -1418,13 +1726,11 @@ function ManagementEventDetails() {
                               bookingId
                             ).toUpperCase()}
                           </p>
-
                         </div>
 
                         {/* TICKETS */}
 
                         <div className="sm:w-20">
-
                           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
                             Tickets
                           </p>
@@ -1432,53 +1738,24 @@ function ManagementEventDetails() {
                           <p className="mt-1 text-xs font-semibold text-slate-700">
                             {quantity}
                           </p>
-
                         </div>
 
                         {/* STATUS */}
 
                         <div className="sm:w-28 sm:text-right">
-
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                              isCancelled
-                                ? "bg-red-50 text-red-600"
-                                : status === "pending"
-                                ? "bg-amber-50 text-amber-600"
-                                : status === "completed"
-                                ? "bg-blue-50 text-blue-600"
-                                : "bg-emerald-50 text-emerald-600"
-                            }`}
-                          >
-
-                            {isCancelled ? (
-                              <XCircle size={12} />
-                            ) : (
-                              <CheckCircle2 size={12} />
-                            )}
-
-                            {isCancelled
-                              ? "Cancelled"
-                              : status === "pending"
-                              ? "Pending"
-                              : status === "completed"
-                              ? "Completed"
-                              : "Confirmed"}
-
-                          </span>
-
+                          <BookingStatus
+                            status={
+                              status
+                            }
+                          />
                         </div>
-
                       </div>
-
                     </div>
                   );
                 }
               )}
-
             </div>
           )}
-
         </section>
 
         {/* =================================================
@@ -1487,7 +1764,6 @@ function ManagementEventDetails() {
 
         {bookings.length > 5 && (
           <div className="mt-4 flex justify-end">
-
             <Link
               to={
                 isAdmin
@@ -1503,48 +1779,48 @@ function ManagementEventDetails() {
                 className="rotate-180"
               />
             </Link>
-
           </div>
         )}
-
       </main>
 
       {/* =================================================
-          CANCEL EVENT CONFIRMATION MODAL
+          CANCEL EVENT MODAL
       ================================================= */}
 
       {showCancelModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-5"
-          onMouseDown={(event) => {
+          onMouseDown={(
+            modalEvent
+          ) => {
             if (
-              event.target === event.currentTarget &&
+              modalEvent.target ===
+                modalEvent.currentTarget &&
               !cancelLoading
             ) {
-              setShowCancelModal(false);
+              setShowCancelModal(
+                false
+              );
             }
           }}
         >
-
           <div
             className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="cancel-event-title"
           >
-
-            {/* MODAL HEADER */}
+            {/* HEADER */}
 
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
-
               <div className="flex items-start gap-3">
-
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
-                  <XCircle size={23} />
+                  <XCircle
+                    size={23}
+                  />
                 </div>
 
                 <div>
-
                   <h2
                     id="cancel-event-title"
                     className="text-base font-bold text-slate-900"
@@ -1553,61 +1829,68 @@ function ManagementEventDetails() {
                   </h2>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    This action will mark the event as cancelled.
+                    This action will mark
+                    the event as cancelled.
                   </p>
-
                 </div>
-
               </div>
 
               <button
                 type="button"
-                disabled={cancelLoading}
+                disabled={
+                  cancelLoading
+                }
                 onClick={() =>
-                  setShowCancelModal(false)
+                  setShowCancelModal(
+                    false
+                  )
                 }
                 className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Close"
               >
-                <XCircle size={19} />
+                <XCircle
+                  size={19}
+                />
               </button>
-
             </div>
 
-            {/* MODAL CONTENT */}
+            {/* CONTENT */}
 
             <div className="px-6 py-5">
-
               <div className="rounded-xl border border-red-100 bg-red-50 p-4">
-
                 <p className="text-sm font-semibold text-red-800">
                   {event.title}
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-red-700">
-                  Once cancelled, this event will be shown
-                  as Cancelled across EventON.
+                  Once cancelled, this
+                  event will be shown as
+                  Cancelled across
+                  EventON.
                 </p>
-
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-600">
-                Are you sure you want to cancel this event?
-                The event data and existing booking records
-                will remain stored.
+                Are you sure you want to
+                cancel this event? The
+                event data and existing
+                booking records will
+                remain stored.
               </p>
-
             </div>
 
-            {/* MODAL ACTIONS */}
+            {/* ACTIONS */}
 
             <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
-
               <button
                 type="button"
-                disabled={cancelLoading}
+                disabled={
+                  cancelLoading
+                }
                 onClick={() =>
-                  setShowCancelModal(false)
+                  setShowCancelModal(
+                    false
+                  )
                 }
                 className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1616,24 +1899,26 @@ function ManagementEventDetails() {
 
               <button
                 type="button"
-                disabled={cancelLoading}
-                onClick={confirmCancelEvent}
+                disabled={
+                  cancelLoading
+                }
+                onClick={
+                  confirmCancelEvent
+                }
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <XCircle size={16} />
+                <XCircle
+                  size={16}
+                />
 
                 {cancelLoading
                   ? "Cancelling..."
                   : "Yes, Cancel Event"}
               </button>
-
             </div>
-
           </div>
-
         </div>
       )}
-
     </div>
   );
 }
@@ -1649,13 +1934,11 @@ function EventMeta({
 }) {
   return (
     <div className="flex items-start gap-3">
-
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
         <Icon size={17} />
       </div>
 
       <div className="min-w-0">
-
         <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
           {label}
         </p>
@@ -1663,9 +1946,7 @@ function EventMeta({
         <p className="mt-1 truncate text-sm font-semibold text-slate-700">
           {value}
         </p>
-
       </div>
-
     </div>
   );
 }
@@ -1683,11 +1964,8 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
       <div className="flex items-start justify-between gap-4">
-
         <div>
-
           <p className="text-sm font-medium text-slate-500">
             {title}
           </p>
@@ -1701,7 +1979,6 @@ function MetricCard({
               {suffix}
             </p>
           )}
-
         </div>
 
         <div
@@ -1709,9 +1986,7 @@ function MetricCard({
         >
           <Icon size={21} />
         </div>
-
       </div>
-
     </div>
   );
 }
@@ -1726,17 +2001,17 @@ function BookingOverviewItem({
 }) {
   return (
     <div className="rounded-xl bg-slate-50 p-3">
-
       <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
         {label}
       </p>
 
       <p className="mt-1 text-sm font-bold text-slate-900">
-        {Number(value || 0).toLocaleString(
+        {Number(
+          value || 0
+        ).toLocaleString(
           "en-IN"
         )}
       </p>
-
     </div>
   );
 }
@@ -1751,7 +2026,6 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 px-5 py-3.5 sm:px-6">
-
       <span className="text-xs text-slate-500">
         {label}
       </span>
@@ -1759,7 +2033,6 @@ function InfoRow({
       <span className="truncate text-right text-xs font-semibold text-slate-700">
         {value}
       </span>
-
     </div>
   );
 }

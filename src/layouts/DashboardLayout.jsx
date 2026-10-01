@@ -32,7 +32,6 @@ function DashboardLayout() {
     .toLowerCase();
 
   const isAdmin = role === "admin";
-  const isOrganizer = role === "organizer";
 
   // =========================================================
   // ROLE DETAILS

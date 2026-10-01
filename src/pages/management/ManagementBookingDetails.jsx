@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -246,11 +247,19 @@ const parseEventDateTime = (
   let minutes = 0;
 
   if (timeValue) {
+    /*
+     * Supports:
+     * 10:00
+     * 10:00 AM
+     * 10:00 PM
+     * 10:30:00
+     * 10:30:00 PM
+     */
     const timeMatch =
       String(timeValue)
         .trim()
         .match(
-          /^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i
+          /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
         );
 
     if (timeMatch) {
@@ -261,7 +270,7 @@ const parseEventDateTime = (
         Number(timeMatch[2]);
 
       const meridiem =
-        timeMatch[3]?.toUpperCase();
+        timeMatch[4]?.toUpperCase();
 
       if (
         meridiem === "PM" &&
@@ -284,7 +293,9 @@ const parseEventDateTime = (
     month,
     day,
     hours,
-    minutes
+    minutes,
+    0,
+    0
   );
 };
 
@@ -309,6 +320,9 @@ const getEventStart = (event) => {
 
 /* =========================================================
    EVENT END
+
+   EventON uses one event date.
+   There is NO endDate.
 ========================================================= */
 
 const getEventEnd = (event) => {
@@ -317,7 +331,6 @@ const getEventEnd = (event) => {
   }
 
   const date =
-    event?.endDate ||
     event?.date ||
     event?.eventDate ||
     event?.startDate;
@@ -399,10 +412,7 @@ const getBookingStatus = (
 
   const now = new Date();
 
-  if (
-    end &&
-    now > end
-  ) {
+  if (end && now >= end) {
     return "completed";
   }
 
@@ -593,8 +603,7 @@ function ManagementBookingDetails() {
       .toLowerCase();
 
   const isAdmin =
-    normalizedRole ===
-    "admin";
+    normalizedRole === "admin";
 
   const isOrganizer =
     normalizedRole ===
@@ -623,9 +632,11 @@ function ManagementBookingDetails() {
 
   /* =======================================================
      LOAD BOOKING
+
+     useCallback fixes the React Hook dependency warning.
   ======================================================= */
 
-  const loadBooking = () => {
+  const loadBooking = useCallback(() => {
     if (!bookingId) {
       setBooking(null);
       setEvent(null);
@@ -642,10 +653,10 @@ function ManagementBookingDetails() {
         isAdmin
           ? getStoredEvents()
           : user?.id
-          ? getStoredEventsByOrganizer(
-              user.id
-            )
-          : [];
+            ? getStoredEventsByOrganizer(
+                user.id
+              )
+            : [];
 
       const foundBooking =
         allBookings.find(
@@ -673,16 +684,14 @@ function ManagementBookingDetails() {
         allEvents.find(
           (item) =>
             String(item?.id) ===
-            String(
-              bookingEventId
-            )
+            String(bookingEventId)
         ) ||
         foundBooking?.event ||
         null;
 
       /*
        * Organizer can only see
-       * their own event booking.
+       * their own event bookings.
        */
 
       if (
@@ -754,7 +763,12 @@ function ManagementBookingDetails() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    bookingId,
+    isAdmin,
+    isOrganizer,
+    user?.id,
+  ]);
 
   /* =======================================================
      LIVE DATA UPDATES
@@ -810,12 +824,7 @@ function ManagementBookingDetails() {
         handleUpdate
       );
     };
-  }, [
-    bookingId,
-    user?.id,
-    isAdmin,
-    isOrganizer,
-  ]);
+  }, [loadBooking]);
 
   /* =======================================================
      DERIVED DATA
@@ -889,7 +898,6 @@ function ManagementBookingDetails() {
       }
 
       setActionMessage("");
-
       setShowCancelModal(true);
     };
 
@@ -943,7 +951,6 @@ function ManagementBookingDetails() {
           );
 
           setShowCancelModal(false);
-
           return;
         }
 
@@ -951,10 +958,30 @@ function ManagementBookingDetails() {
            RE-CHECK CURRENT STATUS
         =============================================== */
 
+        const currentEventId =
+          currentBooking?.eventId ??
+          currentBooking?.event?.id;
+
+        const currentEvent =
+          currentEventId
+            ? getStoredEventById(
+                currentEventId
+              )
+            : null;
+
+        if (!currentEvent) {
+          setActionMessage(
+            "The event linked to this booking could not be found."
+          );
+
+          setShowCancelModal(false);
+          return;
+        }
+
         const currentStatus =
           getBookingStatus(
             currentBooking,
-            event
+            currentEvent
           );
 
         if (
@@ -965,12 +992,15 @@ function ManagementBookingDetails() {
             currentBooking
           );
 
+          setEvent(
+            currentEvent
+          );
+
           setActionMessage(
             "This booking can no longer be cancelled."
           );
 
           setShowCancelModal(false);
-
           return;
         }
 
@@ -979,8 +1009,7 @@ function ManagementBookingDetails() {
         =============================================== */
 
         const eventId =
-          currentBooking?.eventId ??
-          currentBooking?.event?.id;
+          currentEventId;
 
         if (!eventId) {
           setActionMessage(
@@ -988,26 +1017,6 @@ function ManagementBookingDetails() {
           );
 
           setShowCancelModal(false);
-
-          return;
-        }
-
-        /* ===============================================
-           CURRENT EVENT
-        =============================================== */
-
-        const currentEvent =
-          getStoredEventById(
-            eventId
-          );
-
-        if (!currentEvent) {
-          setActionMessage(
-            "The event linked to this booking could not be found."
-          );
-
-          setShowCancelModal(false);
-
           return;
         }
 
@@ -1023,12 +1032,16 @@ function ManagementBookingDetails() {
                 currentBooking?.seats ??
                 currentBooking?.tickets ??
                 currentBooking?.ticketCount ??
+                currentBooking?.numberOfTickets ??
                 1
             )
           );
 
         /* ===============================================
            RESTORE EVENT SEATS
+
+           EventON's decrementEventSeats()
+           updates bookedSeats after cancellation.
         =============================================== */
 
         const updatedEvent =
@@ -1043,30 +1056,7 @@ function ManagementBookingDetails() {
           );
 
           setShowCancelModal(false);
-
           return;
-        }
-
-        /* ===============================================
-           RESTORE SOLD-OUT EVENT
-        =============================================== */
-
-        if (
-          currentEvent.status ===
-            "sold-out" &&
-          Number(
-            updatedEvent.bookedSeats
-          ) <
-            Number(
-              updatedEvent.capacity
-            )
-        ) {
-          updateStoredEvent(
-            eventId,
-            {
-              status: "published",
-            }
-          );
         }
 
         /* ===============================================
@@ -1090,22 +1080,25 @@ function ManagementBookingDetails() {
         if (
           !cancellationResult?.success
         ) {
-          const rollbackEvent =
-            getStoredEventById(
-              eventId
-            );
+          incrementEventSeats(
+            eventId,
+            cancelledQuantity
+          );
 
-          if (rollbackEvent) {
-            incrementEventSeats(
-              eventId,
-              cancelledQuantity
-            );
-
+          /*
+           * If the event was sold out before
+           * cancellation, restore that state.
+           */
+          if (
+            String(
+              currentEvent.status || ""
+            ).toLowerCase() ===
+            "sold-out"
+          ) {
             updateStoredEvent(
               eventId,
               {
-                status:
-                  currentEvent.status,
+                status: "sold-out",
               }
             );
           }
@@ -1116,8 +1109,38 @@ function ManagementBookingDetails() {
           );
 
           setShowCancelModal(false);
-
           return;
+        }
+
+        /* ===============================================
+           RESTORE PUBLISHED STATUS
+           IF SEATS ARE AVAILABLE AGAIN
+        =============================================== */
+
+        const remainingSeats =
+          Math.max(
+            (Number(
+              updatedEvent.capacity
+            ) || 0) -
+              (Number(
+                updatedEvent.bookedSeats
+              ) || 0),
+            0
+          );
+
+        if (
+          String(
+            updatedEvent.status || ""
+          ).toLowerCase() ===
+            "sold-out" &&
+          remainingSeats > 0
+        ) {
+          updateStoredEvent(
+            eventId,
+            {
+              status: "published",
+            }
+          );
         }
 
         /* ===============================================
@@ -1247,7 +1270,6 @@ function ManagementBookingDetails() {
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
           >
             <ArrowLeft size={17} />
-
             Back to Bookings
           </button>
         </div>
@@ -1274,7 +1296,6 @@ function ManagementBookingDetails() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-orange-600"
         >
           <ArrowLeft size={17} />
-
           Back to Bookings
         </Link>
 
@@ -1311,7 +1332,6 @@ function ManagementBookingDetails() {
             )}`}
           >
             <StatusIcon size={16} />
-
             {getStatusLabel(status)}
           </span>
         </div>
@@ -1346,7 +1366,6 @@ function ManagementBookingDetails() {
             </div>
 
             <div className="p-5 sm:p-6">
-
               {/* PROFILE */}
 
               <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
@@ -1428,7 +1447,6 @@ function ManagementBookingDetails() {
             </div>
 
             <div className="p-5 sm:p-6">
-
               {/* EVENT IMAGE */}
 
               <div className="h-48 w-full overflow-hidden rounded-2xl bg-slate-100 sm:h-56">
@@ -1564,7 +1582,6 @@ function ManagementBookingDetails() {
 
           {/* =================================================
               BOOKING ACTIONS
-
               BOTH ADMIN + ORGANIZER
           ================================================= */}
 
@@ -1600,7 +1617,6 @@ function ManagementBookingDetails() {
                   }`}
                 >
                   <XCircle size={16} />
-
                   Cancel Booking
                 </button>
               </div>
@@ -1620,18 +1636,6 @@ function ManagementBookingDetails() {
               )}
             </div>
           )}
-
-          {/* CANCELLED MESSAGE */}
-
-          {status ===
-            "cancelled" &&
-            actionMessage && (
-              <div className="border-t border-slate-100 px-5 py-5 sm:px-6">
-                <p className="text-sm font-medium text-emerald-600">
-                  {actionMessage}
-                </p>
-              </div>
-            )}
         </section>
       </div>
 
@@ -1642,10 +1646,10 @@ function ManagementBookingDetails() {
       {showCancelModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm"
-          onMouseDown={(event) => {
+          onMouseDown={(modalEvent) => {
             if (
-              event.target ===
-              event.currentTarget
+              modalEvent.target ===
+              modalEvent.currentTarget
             ) {
               handleCloseCancelModal();
             }
@@ -1707,9 +1711,7 @@ function ManagementBookingDetails() {
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                   <span>
                     Booking #
-                    {
-                      bookingIdValue
-                    }
+                    {bookingIdValue}
                   </span>
 
                   <span>

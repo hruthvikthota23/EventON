@@ -36,6 +36,7 @@ function parseEventDateTime(dateValue, timeValue) {
   /*
    * YYYY-MM-DD
    */
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
     [year, month, day] = dateText
       .split("-")
@@ -46,7 +47,10 @@ function parseEventDateTime(dateValue, timeValue) {
    * DD-MM-YYYY
    * DD/MM/YYYY
    */
-  else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
+
+  else if (
+    /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)
+  ) {
     [day, month, year] = dateText
       .split(/[-/]/)
       .map(Number);
@@ -55,6 +59,7 @@ function parseEventDateTime(dateValue, timeValue) {
   /*
    * Any other valid date string
    */
+
   else {
     const parsed = new Date(dateText);
 
@@ -75,6 +80,7 @@ function parseEventDateTime(dateValue, timeValue) {
    * 5:30 PM
    * 05:30 PM
    */
+
   const timeMatch = timeText.match(
     /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
   );
@@ -92,6 +98,7 @@ function parseEventDateTime(dateValue, timeValue) {
   /*
    * Convert 12-hour time to 24-hour time
    */
+
   if (meridiem === "PM" && hour !== 12) {
     hour += 12;
   }
@@ -103,6 +110,7 @@ function parseEventDateTime(dateValue, timeValue) {
   /*
    * Validate time
    */
+
   if (
     hour < 0 ||
     hour > 23 ||
@@ -115,11 +123,9 @@ function parseEventDateTime(dateValue, timeValue) {
   }
 
   /*
-   * IMPORTANT:
    * Create the date using local browser time.
-   * This prevents timezone shifting for
-   * YYYY-MM-DD event dates.
    */
+
   const result = new Date(
     year,
     month - 1,
@@ -164,9 +170,10 @@ function getEventEnd(event) {
     event.finishTime;
 
   /*
-   * If there is no end time, we cannot determine
-   * the exact completion time.
+   * No end time means exact completion
+   * cannot be determined.
    */
+
   if (!endTime) {
     return null;
   }
@@ -200,6 +207,7 @@ function getEventStatus(
   /*
    * Stored cancellation always takes priority.
    */
+
   if (
     storedStatus === "cancelled" ||
     storedStatus === "canceled"
@@ -208,8 +216,9 @@ function getEventStatus(
   }
 
   /*
-   * Draft event
+   * Keep compatibility with old draft events.
    */
+
   if (storedStatus === "draft") {
     return "draft";
   }
@@ -219,70 +228,47 @@ function getEventStatus(
 
   /*
    * If start time is unavailable,
-   * do not incorrectly mark the event completed.
+   * do not incorrectly mark completed.
    */
+
   if (!start) {
     return "upcoming";
   }
 
   /*
-   * BEFORE EVENT START
-   *
-   * Example:
-   * Current = 17:14
-   * Start   = 17:30
-   *
-   * Result = Upcoming
+   * Before event start
    */
+
   if (currentTime < start.getTime()) {
     return "upcoming";
   }
 
   /*
-   * EVENT HAS STARTED
+   * Event has started.
    *
-   * If an end time exists:
-   *
-   * 17:30 <= current < 18:30
+   * Start <= current < End
    * => Ongoing
    */
+
   if (end) {
     if (currentTime < end.getTime()) {
       return "ongoing";
     }
 
     /*
-     * Current time has reached/passed end time.
-     *
-     * 18:30+
-     * => Completed
+     * Current time has reached/passed
+     * the end time.
      */
+
     return "completed";
   }
 
   /*
-   * No end time was supplied.
-   *
-   * Once the event starts, keep it ongoing
-   * instead of incorrectly marking it completed.
+   * If there is no end time,
+   * keep the event ongoing once started.
    */
+
   return "ongoing";
-}
-
-/* =========================================================
-   COMPLETED CHECK
-========================================================= */
-
-function isEventCompleted(
-  event,
-  currentTime = Date.now()
-) {
-  return (
-    getEventStatus(
-      event,
-      currentTime
-    ) === "completed"
-  );
 }
 
 /* =========================================================
@@ -318,8 +304,9 @@ function EventDetails() {
     loadEvent();
 
     /*
-     * Refresh when EventON updates an event
+     * Refresh when EventON updates an event.
      */
+
     window.addEventListener(
       EVENTS_UPDATED_EVENT,
       loadEvent
@@ -327,8 +314,9 @@ function EventDetails() {
 
     /*
      * Refresh when localStorage changes
-     * from another browser tab
+     * from another browser tab.
      */
+
     window.addEventListener(
       "storage",
       loadEvent
@@ -423,6 +411,9 @@ function EventDetails() {
   const eventUpcoming =
     eventStatus === "upcoming";
 
+  const eventDraft =
+    eventStatus === "draft";
+
   const capacity =
     Number(event.capacity) || 0;
 
@@ -440,13 +431,11 @@ function EventDetails() {
   );
 
   /*
-   * Sold out should only apply to an event
-   * that is still active.
+   * Sold out applies only to an active upcoming event.
    */
+
   const soldOut =
-    !eventCompleted &&
-    !eventCancelled &&
-    !eventOngoing &&
+    eventUpcoming &&
     (
       availableSeats <= 0 ||
       String(event.status || "")
@@ -455,26 +444,35 @@ function EventDetails() {
     );
 
   /*
-   * Completed/cancelled/sold-out events
-   * cannot be booked.
+   * These events cannot be booked.
    */
+
   const bookingClosed =
     eventCompleted ||
     eventCancelled ||
+    eventDraft ||
     soldOut;
 
   /* =======================================================
      DATE
   ======================================================= */
 
-  const formattedDate = new Date(
+  const parsedEventDate = new Date(
     event.date
-  ).toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  );
+
+  const formattedDate =
+    Number.isNaN(parsedEventDate.getTime())
+      ? event.date
+      : parsedEventDate.toLocaleDateString(
+          "en-IN",
+          {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          }
+        );
 
   /* =======================================================
      UI
@@ -485,7 +483,7 @@ function EventDetails() {
 
       {/* =====================================================
           BACK NAVIGATION
-      ====================================================== */}
+      ===================================================== */}
 
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-7xl px-5 py-4 sm:px-8 lg:px-10">
@@ -501,7 +499,7 @@ function EventDetails() {
 
       {/* =====================================================
           EVENT HERO
-      ====================================================== */}
+      ===================================================== */}
 
       <section className="bg-white">
         <div className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 sm:py-14 lg:px-10 lg:py-16">
@@ -509,7 +507,7 @@ function EventDetails() {
 
             {/* =================================================
                 EVENT IMAGE
-            ================================================== */}
+            ================================================= */}
 
             <div className="relative overflow-hidden rounded-2xl bg-slate-100">
 
@@ -518,6 +516,11 @@ function EventDetails() {
                   src={event.image}
                   alt={event.title}
                   className="aspect-[16/10] h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(error) => {
+                    error.currentTarget.style.display =
+                      "none";
+                  }}
                 />
               ) : (
                 <div className="flex aspect-[16/10] items-center justify-center bg-slate-100">
@@ -532,7 +535,7 @@ function EventDetails() {
 
               <div className="absolute left-4 top-4">
                 <span className="inline-flex rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm backdrop-blur">
-                  {event.category}
+                  {event.category || "General"}
                 </span>
               </div>
 
@@ -550,26 +553,29 @@ function EventDetails() {
                     Cancelled
                   </span>
                 </div>
-              ) : (
-                soldOut && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
-                    <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900">
-                      Sold Out
-                    </span>
-                  </div>
-                )
-              )}
-
+              ) : eventDraft ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
+                  <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-700">
+                    Draft
+                  </span>
+                </div>
+              ) : soldOut ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
+                  <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900">
+                    Sold Out
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {/* =================================================
                 EVENT SUMMARY
-            ================================================== */}
+            ================================================= */}
 
             <div>
 
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-orange-500">
-                {event.category}
+                {event.category || "General"}
               </p>
 
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
@@ -582,7 +588,7 @@ function EventDetails() {
 
               {/* =================================================
                   EVENT INFORMATION
-              ================================================== */}
+              ================================================= */}
 
               <div className="mt-7 space-y-4">
 
@@ -649,12 +655,11 @@ function EventDetails() {
                     )}
                   </div>
                 </div>
-
               </div>
 
               {/* =================================================
                   ORGANIZER
-              ================================================== */}
+              ================================================= */}
 
               <div className="mt-7 border-t border-slate-200 pt-6">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -666,16 +671,14 @@ function EventDetails() {
                     "EventON Organizer"}
                 </p>
               </div>
-
             </div>
-
           </div>
         </div>
       </section>
 
       {/* =====================================================
           EVENT DETAILS + BOOKING
-      ====================================================== */}
+      ===================================================== */}
 
       <section className="border-t border-slate-200 bg-slate-50">
         <div className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14 lg:px-10">
@@ -683,7 +686,7 @@ function EventDetails() {
 
             {/* =================================================
                 ABOUT EVENT
-            ================================================== */}
+            ================================================= */}
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
 
@@ -718,7 +721,6 @@ function EventDetails() {
                         {capacity} attendees
                       </p>
                     </div>
-
                   </div>
                 </div>
 
@@ -734,6 +736,8 @@ function EventDetails() {
                           ? "text-red-500"
                           : eventCompleted
                           ? "text-slate-500"
+                          : eventCancelled
+                          ? "text-red-500"
                           : "text-green-500"
                       }
                     />
@@ -746,6 +750,8 @@ function EventDetails() {
                       <p className="mt-1 text-sm font-semibold text-slate-900">
                         {eventCancelled
                           ? "Event cancelled"
+                          : eventDraft
+                          ? "Event is not published"
                           : eventCompleted
                           ? "Event completed"
                           : soldOut
@@ -755,16 +761,14 @@ function EventDetails() {
                           : `${availableSeats} seats left`}
                       </p>
                     </div>
-
                   </div>
                 </div>
-
               </div>
             </div>
 
             {/* =================================================
                 BOOKING CARD
-            ================================================== */}
+            ================================================= */}
 
             <aside className="lg:sticky lg:top-24">
 
@@ -810,6 +814,11 @@ function EventDetails() {
                     </span>
                   )}
 
+                  {eventDraft && (
+                    <span className="text-xs font-semibold text-slate-500">
+                      Draft
+                    </span>
+                  )}
                 </div>
 
                 <div className="my-6 border-t border-slate-200" />
@@ -831,6 +840,14 @@ function EventDetails() {
                     className="flex h-12 w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 text-sm font-semibold text-slate-500"
                   >
                     Event Cancelled
+                  </button>
+                ) : eventDraft ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex h-12 w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 text-sm font-semibold text-slate-500"
+                  >
+                    Event Not Available
                   </button>
                 ) : soldOut ? (
                   <button
@@ -854,21 +871,19 @@ function EventDetails() {
                     ? "This event has already ended."
                     : eventCancelled
                     ? "This event has been cancelled."
+                    : eventDraft
+                    ? "This event is not currently available."
                     : soldOut
                     ? "Tickets for this event are sold out."
                     : eventOngoing
                     ? "This event is currently ongoing."
                     : "Secure your spot before tickets run out."}
                 </p>
-
               </div>
-
             </aside>
-
           </div>
         </div>
       </section>
-
     </main>
   );
 }

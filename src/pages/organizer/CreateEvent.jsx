@@ -35,9 +35,9 @@ function getTomorrowString() {
    INITIAL FORM
 
    Default values:
-   Date     -> Tomorrow
-   Start    -> 10:00
-   End      -> 11:00
+   Date  -> Tomorrow
+   Start -> 10:00
+   End   -> 11:00
 ========================================================= */
 
 const initialForm = {
@@ -57,7 +57,6 @@ const initialForm = {
 
   image: "",
 
-  status: "published",
   featured: false,
 };
 
@@ -193,13 +192,10 @@ function isValidUrl(value) {
 
 function CreateEvent() {
   const { user } = useAuth();
-
   const navigate = useNavigate();
 
   const [form, setForm] = useState(initialForm);
-
   const [errors, setErrors] = useState({});
-
   const [isSaving, setIsSaving] = useState(false);
 
   /* =======================================================
@@ -231,7 +227,6 @@ function CreateEvent() {
 
     setForm((current) => ({
       ...current,
-
       [name]:
         type === "checkbox"
           ? checked
@@ -252,27 +247,21 @@ function CreateEvent() {
   const validateForm = () => {
     const nextErrors = {};
 
-    /* -------------------------------------------------------
-       TITLE
-    ------------------------------------------------------- */
+    /* TITLE */
 
     if (!form.title.trim()) {
       nextErrors.title =
         "Event title is required.";
     }
 
-    /* -------------------------------------------------------
-       CATEGORY
-    ------------------------------------------------------- */
+    /* CATEGORY */
 
     if (!form.category) {
       nextErrors.category =
         "Event category is required.";
     }
 
-    /* -------------------------------------------------------
-       DESCRIPTION
-    ------------------------------------------------------- */
+    /* DESCRIPTION */
 
     if (!form.description.trim()) {
       nextErrors.description =
@@ -284,36 +273,28 @@ function CreateEvent() {
         "Description must be 150 words or less.";
     }
 
-    /* -------------------------------------------------------
-       START DATE
-    ------------------------------------------------------- */
+    /* START DATE */
 
     if (!form.date) {
       nextErrors.date =
         "Event date is required.";
     }
 
-    /* -------------------------------------------------------
-       START TIME
-    ------------------------------------------------------- */
+    /* START TIME */
 
     if (!form.time) {
       nextErrors.time =
         "Start time is required.";
     }
 
-    /* -------------------------------------------------------
-       END TIME
-    ------------------------------------------------------- */
+    /* END TIME */
 
     if (!form.endTime) {
       nextErrors.endTime =
         "End time is required.";
     }
 
-    /* -------------------------------------------------------
-       EVENT MUST BE IN FUTURE
-    ------------------------------------------------------- */
+    /* EVENT MUST BE IN FUTURE */
 
     if (form.date && form.time) {
       const dateTimeError =
@@ -337,9 +318,7 @@ function CreateEvent() {
       }
     }
 
-    /* -------------------------------------------------------
-       END TIME MUST BE AFTER START TIME
-    ------------------------------------------------------- */
+    /* END TIME MUST BE AFTER START TIME */
 
     if (form.time && form.endTime) {
       const endError =
@@ -354,27 +333,21 @@ function CreateEvent() {
       }
     }
 
-    /* -------------------------------------------------------
-       LOCATION
-    ------------------------------------------------------- */
+    /* LOCATION */
 
     if (!form.location.trim()) {
       nextErrors.location =
         "Event location is required.";
     }
 
-    /* -------------------------------------------------------
-       CITY
-    ------------------------------------------------------- */
+    /* CITY */
 
     if (!form.city.trim()) {
       nextErrors.city =
         "City is required.";
     }
 
-    /* -------------------------------------------------------
-       CAPACITY
-    ------------------------------------------------------- */
+    /* CAPACITY */
 
     if (!form.capacity) {
       nextErrors.capacity =
@@ -386,9 +359,7 @@ function CreateEvent() {
         "Capacity must be greater than 0.";
     }
 
-    /* -------------------------------------------------------
-       PRICE
-    ------------------------------------------------------- */
+    /* PRICE */
 
     if (form.price === "") {
       nextErrors.price =
@@ -400,9 +371,7 @@ function CreateEvent() {
         "Price cannot be negative.";
     }
 
-    /* -------------------------------------------------------
-       IMAGE URL
-    ------------------------------------------------------- */
+    /* IMAGE URL */
 
     if (!form.image.trim()) {
       nextErrors.image =
@@ -412,15 +381,6 @@ function CreateEvent() {
     ) {
       nextErrors.image =
         "Please enter a valid HTTP or HTTPS URL.";
-    }
-
-    /* -------------------------------------------------------
-       STATUS
-    ------------------------------------------------------- */
-
-    if (!form.status) {
-      nextErrors.status =
-        "Event status is required.";
     }
 
     setErrors(nextErrors);
@@ -441,9 +401,7 @@ function CreateEvent() {
       return;
     }
 
-    /* -------------------------------------------------------
-       FINAL START DATE CHECK
-    ------------------------------------------------------- */
+    /* FINAL START DATE CHECK */
 
     const finalDateError =
       isValidFutureEventDate(
@@ -454,7 +412,6 @@ function CreateEvent() {
     if (finalDateError) {
       setErrors((current) => ({
         ...current,
-
         ...(finalDateError.includes(
           "start time"
         )
@@ -469,9 +426,7 @@ function CreateEvent() {
       return;
     }
 
-    /* -------------------------------------------------------
-       FINAL END TIME CHECK
-    ------------------------------------------------------- */
+    /* FINAL END TIME CHECK */
 
     const finalEndError =
       isValidEventEnd(
@@ -488,9 +443,7 @@ function CreateEvent() {
       return;
     }
 
-    /* -------------------------------------------------------
-       FINAL DESCRIPTION CHECK
-    ------------------------------------------------------- */
+    /* FINAL DESCRIPTION CHECK */
 
     if (
       countWords(form.description) >
@@ -498,7 +451,6 @@ function CreateEvent() {
     ) {
       setErrors((current) => ({
         ...current,
-
         description:
           "Description must be 150 words or less.",
       }));
@@ -506,14 +458,11 @@ function CreateEvent() {
       return;
     }
 
-    /* -------------------------------------------------------
-       FINAL IMAGE URL CHECK
-    ------------------------------------------------------- */
+    /* FINAL IMAGE URL CHECK */
 
     if (!isValidUrl(form.image)) {
       setErrors((current) => ({
         ...current,
-
         image:
           "Please enter a valid HTTP or HTTPS URL.",
       }));
@@ -521,9 +470,7 @@ function CreateEvent() {
       return;
     }
 
-    /* -------------------------------------------------------
-       AUTH CHECK
-    ------------------------------------------------------- */
+    /* AUTH CHECK */
 
     if (!user?.id) {
       setErrors({
@@ -534,9 +481,7 @@ function CreateEvent() {
       return;
     }
 
-    /* -------------------------------------------------------
-       SAVE
-    ------------------------------------------------------- */
+    /* SAVE */
 
     setIsSaving(true);
 
@@ -612,8 +557,13 @@ function CreateEvent() {
       featured:
         Boolean(form.featured),
 
-      status:
-        form.status,
+      /*
+       * Status is no longer a form field.
+       * Every newly created event starts
+       * as published.
+       */
+
+      status: "published",
     };
 
     const savedEvent =
@@ -672,9 +622,7 @@ function CreateEvent() {
     <section className="min-h-full bg-slate-50">
       <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-10">
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        {/* HEADER */}
 
         <div className="mb-8">
           <div>
@@ -692,9 +640,7 @@ function CreateEvent() {
           </div>
         </div>
 
-        {/* =================================================
-            FORM
-        ================================================= */}
+        {/* FORM */}
 
         <form
           onSubmit={handleSubmit}
@@ -893,8 +839,6 @@ function CreateEvent() {
                 Set the event date, start time and end time.
               </p>
             </div>
-
-            {/* SINGLE ROW */}
 
             <div className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-3 sm:p-6">
 
@@ -1306,65 +1250,21 @@ function CreateEvent() {
           </div>
 
           {/* =================================================
-              PUBLISHING
+              FEATURED
           ================================================= */}
 
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
               <h2 className="font-bold text-slate-900">
-                Publishing
+                Event Options
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Choose how your event should appear.
+                Configure how your event is highlighted.
               </p>
             </div>
 
-            <div className="space-y-5 p-5 sm:p-6">
-
-              {/* Status */}
-
-              <div>
-                <label
-                  htmlFor="status"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
-                >
-                  Event status{" "}
-                  <span className="text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <select
-                  id="status"
-                  name="status"
-                  value={form.status}
-                  onChange={handleChange}
-                  required
-                  className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:max-w-sm ${
-                    errors.status
-                      ? "border-red-300"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <option value="published">
-                    Published
-                  </option>
-
-                  <option value="draft">
-                    Draft
-                  </option>
-                </select>
-
-                {errors.status && (
-                  <p className="mt-1.5 text-xs text-red-600">
-                    {errors.status}
-                  </p>
-                )}
-              </div>
-
-              {/* Featured */}
-
+            <div className="p-5 sm:p-6">
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:bg-slate-50">
                 <input
                   type="checkbox"
@@ -1388,9 +1288,7 @@ function CreateEvent() {
             </div>
           </div>
 
-          {/* =================================================
-              ERROR
-          ================================================= */}
+          {/* ERROR */}
 
           {errors.form && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -1398,12 +1296,9 @@ function CreateEvent() {
             </div>
           )}
 
-          {/* =================================================
-              ACTIONS
-          ================================================= */}
+          {/* ACTIONS */}
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-
             <Link
               to="/organizer/events"
               className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"

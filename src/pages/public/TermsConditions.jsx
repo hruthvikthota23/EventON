@@ -5,7 +5,6 @@ import {
   FileText,
   Gavel,
   Mail,
-  ShieldCheck,
   Sparkles,
   UserRound,
 } from "lucide-react";

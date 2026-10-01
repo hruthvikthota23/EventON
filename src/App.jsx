@@ -49,7 +49,7 @@ import EditProfile from "./pages/authenticated/EditProfile";
 
 import ManagementBookings from "./pages/management/ManagementBookings";
 import ManagementBookingDetails from "./pages/management/ManagementBookingDetails";
-import ManagementEvents from "./pages/management/ManagnementEvents";
+import ManagementEvents from "./pages/management/ManagementEvents";
 import ManagementEventDetails from "./pages/management/ManagementEventDetails";
 
 

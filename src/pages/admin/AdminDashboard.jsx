@@ -4,16 +4,13 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   CalendarDays,
-  CheckCircle2,
   Clock3,
   IndianRupee,
   MapPin,
-  PlayCircle,
   Ticket,
   TrendingUp,
   UserRoundCog,
   Users,
-  XCircle,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
@@ -27,6 +24,8 @@ import {
   getStoredBookings,
   BOOKINGS_UPDATED_EVENT,
 } from "../../utils/bookingStorage";
+
+import BookingStatus from "../../components/bookings/BookingStatus";
 
 const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
 
@@ -44,11 +43,18 @@ function parseEventDateTime(dateValue, timeValue) {
   let month;
   let day;
 
+  // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
     [year, month, day] = dateText.split("-").map(Number);
-  } else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
+  }
+
+  // DD-MM-YYYY / DD/MM/YYYY
+  else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
     [day, month, year] = dateText.split(/[-/]/).map(Number);
-  } else {
+  }
+
+  // Other valid date formats
+  else {
     const parsed = new Date(dateText);
 
     if (Number.isNaN(parsed.getTime())) {
@@ -60,22 +66,53 @@ function parseEventDateTime(dateValue, timeValue) {
     day = parsed.getDate();
   }
 
+  /*
+    Supported:
+    10:00
+    10:00 AM
+    10:00 PM
+    10:00:00
+    10:00:00 PM
+  */
+
   const match = timeText.match(
-    /^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i
+    /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
   );
 
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
 
   let hour = Number(match[1]);
   const minute = Number(match[2]);
-  const meridiem = match[3]?.toUpperCase();
+  const second = Number(match[3] || 0);
+  const meridiem = match[4]?.toUpperCase();
 
-  if (meridiem === "PM" && hour !== 12) {
-    hour += 12;
+  // 12-hour format
+  if (meridiem) {
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+
+    if (meridiem === "PM" && hour !== 12) {
+      hour += 12;
+    }
+
+    if (meridiem === "AM" && hour === 12) {
+      hour = 0;
+    }
   }
 
-  if (meridiem === "AM" && hour === 12) {
-    hour = 0;
+  // 24-hour format validation
+  if (
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59
+  ) {
+    return null;
   }
 
   const result = new Date(
@@ -84,79 +121,57 @@ function parseEventDateTime(dateValue, timeValue) {
     day,
     hour,
     minute,
-    0,
+    second,
     0
   );
 
   return Number.isNaN(result.getTime()) ? null : result;
 }
 
-/* =========================================================
-   EVENT LIFECYCLE STATUS
-========================================================= */
-
-function getEventLifecycleStatus(event, bookedTickets = 0) {
-  const storedStatus = String(
-    event?.status || "published"
-  )
-    .trim()
-    .toLowerCase();
-
-  if (storedStatus === "draft") {
-    return "Draft";
-  }
-
-  if (
-    storedStatus === "cancelled" ||
-    storedStatus === "canceled"
-  ) {
-    return "Cancelled";
-  }
-
-  const start = parseEventDateTime(
+function getEventStart(event) {
+  return parseEventDateTime(
     event?.date,
     event?.time || event?.startTime
   );
+}
 
-  if (start) {
-    const end = event?.endTime
-      ? parseEventDateTime(event.date, event.endTime)
-      : start;
-
-    const now = Date.now();
-
-    if (end && now >= end.getTime()) {
-      return "Completed";
-    }
-
-    if (now >= start.getTime()) {
-      return "Ongoing";
-    }
+function getEventEnd(event) {
+  if (!event?.date) {
+    return null;
   }
 
-  const capacity = Number(event?.capacity) || 0;
+  const endTime = event?.endTime || event?.finishTime;
 
-  if (
-    storedStatus === "sold-out" ||
-    (capacity > 0 && bookedTickets >= capacity)
-  ) {
-    return "Sold out";
+  if (!endTime) {
+    return null;
   }
 
-  return "Published";
+  const start = getEventStart(event);
+  const end = parseEventDateTime(event.date, endTime);
+
+  if (!end) {
+    return null;
+  }
+
+  // Handle events crossing midnight.
+  // Example: 11:00 PM -> 01:00 AM
+  if (start && end.getTime() < start.getTime()) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  return end;
 }
 
 /* =========================================================
-   FOUR STATUS SYSTEM
+   EVENT STATUS
 ========================================================= */
 
-function getUnifiedStatus(event) {
-  const storedStatus = String(
-    event?.status || "published"
-  )
+function getEventStatus(event) {
+  const storedStatus = String(event?.status || "published")
     .trim()
     .toLowerCase();
 
+  // Cancelled events always remain cancelled.
   if (
     storedStatus === "cancelled" ||
     storedStatus === "canceled"
@@ -164,25 +179,21 @@ function getUnifiedStatus(event) {
     return "cancelled";
   }
 
-  const start = parseEventDateTime(
-    event?.date,
-    event?.time || event?.startTime
-  );
+  const start = getEventStart(event);
 
   if (!start) {
     return "upcoming";
   }
 
-  const end = event?.endTime
-    ? parseEventDateTime(event.date, event.endTime)
-    : start;
-
+  const end = getEventEnd(event);
   const now = Date.now();
 
+  // Event has finished.
   if (end && now >= end.getTime()) {
     return "completed";
   }
 
+  // Event has started but has not finished.
   if (now >= start.getTime()) {
     return "ongoing";
   }
@@ -191,58 +202,91 @@ function getUnifiedStatus(event) {
 }
 
 /* =========================================================
-   BOOKING STATUS
+   BOOKING HELPERS
 ========================================================= */
 
-function BookingStatus({ status }) {
-  const normalizedStatus = String(status || "")
+function isCancelledBooking(booking) {
+  const status = String(booking?.status || "confirmed")
     .trim()
     .toLowerCase();
 
-  const statusConfig = {
-    upcoming: {
-      label: "Upcoming",
-      icon: Clock3,
-      className:
-        "border-amber-200 bg-amber-50 text-amber-700",
-    },
-
-    ongoing: {
-      label: "Ongoing",
-      icon: PlayCircle,
-      className:
-        "border-blue-200 bg-blue-50 text-blue-700",
-    },
-
-    completed: {
-      label: "Completed",
-      icon: CheckCircle2,
-      className:
-        "border-emerald-200 bg-emerald-50 text-emerald-700",
-    },
-
-    cancelled: {
-      label: "Cancelled",
-      icon: XCircle,
-      className:
-        "border-red-200 bg-red-50 text-red-700",
-    },
-  };
-
-  const config =
-    statusConfig[normalizedStatus] ||
-    statusConfig.upcoming;
-
-  const Icon = config.icon;
-
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold ${config.className}`}
-    >
-      <Icon size={12} strokeWidth={2.5} />
-      {config.label}
-    </span>
+    status === "cancelled" ||
+    status === "canceled"
   );
+}
+
+function getBookingCreatedTime(booking) {
+  const value =
+    booking?.createdAt ??
+    booking?.bookedAt ??
+    booking?.bookingDate ??
+    booking?.createdDate ??
+    booking?.dateCreated ??
+    null;
+
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+/* =========================================================
+   FORMATTERS
+========================================================= */
+
+function formatCurrency(value) {
+  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+function formatEventDate(value) {
+  if (!value) {
+    return "—";
+  }
+
+  const text = String(value).trim();
+
+  let date;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const [year, month, day] = text.split("-").map(Number);
+
+    date = new Date(year, month - 1, day);
+  } else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(text)) {
+    const [day, month, year] = text.split(/[-/]/).map(Number);
+
+    date = new Date(year, month - 1, day);
+  } else {
+    date = new Date(text);
+  }
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatEventTime(event) {
+  const start = event?.time || event?.startTime;
+  const end = event?.endTime || event?.finishTime;
+
+  if (!start) {
+    return "";
+  }
+
+  if (!end) {
+    return start;
+  }
+
+  return `${start} - ${end}`;
 }
 
 /* =========================================================
@@ -385,30 +429,14 @@ function AdminDashboard() {
   }, [events]);
 
   /* =======================================================
-     BOOKING HELPERS
+     ACTIVE BOOKINGS
   ======================================================= */
-
-  const isCancelledBooking = useCallback(
-    (booking) => {
-      const status = String(
-        booking?.status || "confirmed"
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        status === "cancelled" ||
-        status === "canceled"
-      );
-    },
-    []
-  );
 
   const activeBookings = useMemo(() => {
     return bookings.filter(
       (booking) => !isCancelledBooking(booking)
     );
-  }, [bookings, isCancelledBooking]);
+  }, [bookings]);
 
   /* =======================================================
      RESOLVE BOOKING USER
@@ -429,12 +457,10 @@ function AdminDashboard() {
               account.name ||
               attendee.name ||
               "Attendee",
-
             email:
               account.email ||
               attendee.email ||
               "No email",
-
             id: account.id,
           };
         }
@@ -451,12 +477,10 @@ function AdminDashboard() {
               account.name ||
               attendee.name ||
               "Attendee",
-
             email:
               account.email ||
               attendee.email ||
               "No email",
-
             id: account.id,
           };
         }
@@ -482,12 +506,10 @@ function AdminDashboard() {
               account.name ||
               attendee.name ||
               "Attendee",
-
             email:
               account.email ||
               attendee.email ||
               "No email",
-
             id: account.id,
           };
         }
@@ -543,7 +565,7 @@ function AdminDashboard() {
       return activeBookings.reduce(
         (total, booking) => {
           if (
-            String(booking.eventId) !==
+            String(booking?.eventId) !==
             String(eventId)
           ) {
             return total;
@@ -551,7 +573,7 @@ function AdminDashboard() {
 
           return (
             total +
-            (Number(booking.ticketCount) || 0)
+            (Number(booking?.ticketCount) || 0)
           );
         },
         0
@@ -561,20 +583,20 @@ function AdminDashboard() {
   );
 
   /* =======================================================
-     ATTENDEE STATISTICS
+     USER STATISTICS
   ======================================================= */
 
   const userStatistics = useMemo(() => {
     const attendees = accounts.filter(
       (account) =>
-        String(account.role)
+        String(account.role || "")
           .trim()
           .toLowerCase() === "attendee"
     );
 
     const organizers = accounts.filter(
       (account) =>
-        String(account.role)
+        String(account.role || "")
           .trim()
           .toLowerCase() === "organizer"
     );
@@ -591,57 +613,48 @@ function AdminDashboard() {
 
   const eventStatistics = useMemo(() => {
     const statuses = events.map((event) =>
-      getEventLifecycleStatus(
-        event,
-        getActualBookedTickets(event.id)
-      )
+      getEventStatus(event)
     );
 
     return {
       total: events.length,
 
-      published: statuses.filter(
-        (status) => status === "Published"
+      upcoming: statuses.filter(
+        (status) => status === "upcoming"
       ).length,
 
       ongoing: statuses.filter(
-        (status) => status === "Ongoing"
+        (status) => status === "ongoing"
       ).length,
 
       completed: statuses.filter(
-        (status) => status === "Completed"
-      ).length,
-
-      soldOut: statuses.filter(
-        (status) => status === "Sold out"
+        (status) => status === "completed"
       ).length,
 
       cancelled: statuses.filter(
-        (status) => status === "Cancelled"
+        (status) => status === "cancelled"
       ).length,
     };
-  }, [events, getActualBookedTickets]);
+  }, [events]);
 
   /* =======================================================
      BOOKING STATISTICS
   ======================================================= */
 
   const bookingStatistics = useMemo(() => {
-    const ticketsSold =
-      activeBookings.reduce(
-        (total, booking) =>
-          total +
-          (Number(booking.ticketCount) || 0),
-        0
-      );
+    const ticketsSold = activeBookings.reduce(
+      (total, booking) =>
+        total +
+        (Number(booking?.ticketCount) || 0),
+      0
+    );
 
-    const revenue =
-      activeBookings.reduce(
-        (total, booking) =>
-          total +
-          (Number(booking.totalPrice) || 0),
-        0
-      );
+    const revenue = activeBookings.reduce(
+      (total, booking) =>
+        total +
+        (Number(booking?.totalPrice) || 0),
+      0
+    );
 
     return {
       total: activeBookings.length,
@@ -676,12 +689,8 @@ function AdminDashboard() {
     return [...activeBookings]
       .sort(
         (a, b) =>
-          new Date(
-            b.createdAt || 0
-          ).getTime() -
-          new Date(
-            a.createdAt || 0
-          ).getTime()
+          getBookingCreatedTime(b) -
+          getBookingCreatedTime(a)
       )
       .slice(0, 5);
   }, [activeBookings]);
@@ -693,48 +702,60 @@ function AdminDashboard() {
   const recentEvents = useMemo(() => {
     return [...events]
       .sort((a, b) => {
-        if (a.createdAt && b.createdAt) {
-          return (
-            new Date(b.createdAt).getTime() -
-            new Date(a.createdAt).getTime()
-          );
+        const aCreated = a?.createdAt
+          ? new Date(a.createdAt).getTime()
+          : 0;
+
+        const bCreated = b?.createdAt
+          ? new Date(b.createdAt).getTime()
+          : 0;
+
+        if (
+          Number.isFinite(aCreated) &&
+          Number.isFinite(bCreated) &&
+          (aCreated || bCreated)
+        ) {
+          return bCreated - aCreated;
         }
 
-        return (
-          new Date(a.date || 0).getTime() -
-          new Date(b.date || 0).getTime()
-        );
+        const aStart =
+          getEventStart(a)?.getTime() || 0;
+
+        const bStart =
+          getEventStart(b)?.getTime() || 0;
+
+        return bStart - aStart;
       })
       .slice(0, 5);
   }, [events]);
 
   /* =======================================================
-     TOP 3 EVENT PERFORMANCE
+     TOP 3 HIGHEST PERFORMING EVENTS
   ======================================================= */
 
-  const eventPerformance = useMemo(() => {
-    return [...events]
+  const topPerformingEvents = useMemo(() => {
+    return events
       .map((event) => {
         const ticketsSold =
           getActualBookedTickets(event.id);
 
+        const capacity =
+          Number(event?.capacity) || 0;
+
         const revenue = activeBookings
           .filter(
             (booking) =>
-              String(booking.eventId) ===
+              String(booking?.eventId) ===
               String(event.id)
           )
           .reduce(
             (total, booking) =>
               total +
-              (Number(booking.totalPrice) || 0),
+              (Number(booking?.totalPrice) || 0),
             0
           );
 
-        const capacity =
-          Number(event.capacity) || 0;
-
-        const percentage =
+        const bookingPercentage =
           capacity > 0
             ? Math.min(
                 (ticketsSold / capacity) * 100,
@@ -745,15 +766,29 @@ function AdminDashboard() {
         return {
           ...event,
           ticketsSold,
-          revenue,
           capacity,
-          percentage,
+          revenue,
+          bookingPercentage,
+          status: getEventStatus(event),
         };
       })
-      .sort(
-        (a, b) =>
-          b.ticketsSold - a.ticketsSold
+      .filter(
+        (event) => event.ticketsSold > 0
       )
+      .sort((a, b) => {
+        if (b.ticketsSold !== a.ticketsSold) {
+          return b.ticketsSold - a.ticketsSold;
+        }
+
+        if (b.revenue !== a.revenue) {
+          return b.revenue - a.revenue;
+        }
+
+        return (
+          b.bookingPercentage -
+          a.bookingPercentage
+        );
+      })
       .slice(0, 3);
   }, [
     events,
@@ -762,38 +797,11 @@ function AdminDashboard() {
   ]);
 
   /* =======================================================
-     FORMATTERS
-  ======================================================= */
-
-  const formatCurrency = (value) => {
-    return `₹${Number(value || 0).toLocaleString(
-      "en-IN"
-    )}`;
-  };
-
-  const formatDate = (value) => {
-    if (!value) return "—";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "—";
-    }
-
-    return date.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  /* =======================================================
      RENDER
   ======================================================= */
 
   return (
     <div className="min-h-full bg-slate-50">
-
       <main className="mx-auto w-full max-w-7xl px-5 pb-10 pt-6 sm:px-8 lg:px-10">
 
         {/* =================================================
@@ -801,13 +809,9 @@ function AdminDashboard() {
         ================================================= */}
 
         <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
-
           <div className="flex flex-col justify-between gap-6 p-6 sm:p-7 lg:flex-row lg:items-center">
 
-            {/* WELCOME TEXT */}
-
             <div>
-
               <div className="inline-flex items-center rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-600">
                 Admin Dashboard
               </div>
@@ -822,13 +826,9 @@ function AdminDashboard() {
                 monitor events, users, bookings,
                 and overall activity.
               </p>
-
             </div>
 
-            {/* ACTIONS */}
-
             <div className="flex flex-wrap items-center gap-3">
-
               <Link
                 to="/admin/events"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
@@ -844,11 +844,8 @@ function AdminDashboard() {
                 <Ticket size={18} />
                 Bookings
               </Link>
-
             </div>
-
           </div>
-
         </section>
 
         {/* =================================================
@@ -857,17 +854,13 @@ function AdminDashboard() {
 
         <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
-          {/* ATTENDEES */}
-
           <StatCard
             title="Attendees"
             value={userStatistics.attendees}
-            subtitle="Active attendees"
+            subtitle="Registered attendees"
             icon={Users}
             iconClass="bg-blue-50 text-blue-600"
           />
-
-          {/* ORGANIZERS */}
 
           <StatCard
             title="Organizers"
@@ -877,17 +870,13 @@ function AdminDashboard() {
             iconClass="bg-violet-50 text-violet-600"
           />
 
-          {/* EVENTS */}
-
           <StatCard
             title="Total Events"
             value={eventStatistics.total}
-            subtitle={`${eventStatistics.published} published • ${eventStatistics.completed} completed`}
+            subtitle={`Upcoming ${eventStatistics.upcoming} • Completed ${eventStatistics.completed}`}
             icon={CalendarDays}
             iconClass="bg-orange-50 text-orange-600"
           />
-
-          {/* REVENUE */}
 
           <StatCard
             title="Total Revenue"
@@ -899,7 +888,6 @@ function AdminDashboard() {
             iconClass="bg-emerald-50 text-emerald-600"
             isCurrency
           />
-
         </section>
 
         {/* =================================================
@@ -915,7 +903,6 @@ function AdminDashboard() {
             <div className="flex items-start justify-between gap-4">
 
               <div>
-
                 <p className="text-sm font-semibold text-slate-500">
                   Platform Revenue
                 </p>
@@ -934,16 +921,12 @@ function AdminDashboard() {
                     bookings
                   </span>
                 </div>
-
               </div>
 
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                 <IndianRupee size={22} />
               </div>
-
             </div>
-
-            {/* REVENUE DETAILS */}
 
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
 
@@ -963,11 +946,9 @@ function AdminDashboard() {
                   revenuePerBooking
                 )}
               />
-
             </div>
 
             <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
-
               <div className="flex items-start gap-3">
 
                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-orange-500">
@@ -975,7 +956,6 @@ function AdminDashboard() {
                 </div>
 
                 <div>
-
                   <p className="text-xs font-bold text-orange-700">
                     Platform Activity
                   </p>
@@ -986,13 +966,9 @@ function AdminDashboard() {
                     Cancelled bookings are excluded from
                     this platform figure.
                   </p>
-
                 </div>
-
               </div>
-
             </div>
-
           </section>
 
           {/* EVENT OVERVIEW */}
@@ -1002,7 +978,6 @@ function AdminDashboard() {
             <div className="flex items-start justify-between">
 
               <div>
-
                 <p className="text-sm font-semibold text-slate-900">
                   Event Overview
                 </p>
@@ -1010,20 +985,18 @@ function AdminDashboard() {
                 <p className="mt-1 text-xs text-slate-500">
                   Current platform status
                 </p>
-
               </div>
 
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
                 <CalendarDays size={19} />
               </div>
-
             </div>
 
             <div className="mt-6 space-y-5">
 
               <ProgressRow
-                label="Published"
-                value={eventStatistics.published}
+                label="Upcoming"
+                value={eventStatistics.upcoming}
                 total={eventStatistics.total}
               />
 
@@ -1040,15 +1013,12 @@ function AdminDashboard() {
               />
 
               <ProgressRow
-                label="Sold Out"
-                value={eventStatistics.soldOut}
+                label="Cancelled"
+                value={eventStatistics.cancelled}
                 total={eventStatistics.total}
               />
-
             </div>
-
           </section>
-
         </section>
 
         {/* =================================================
@@ -1069,19 +1039,15 @@ function AdminDashboard() {
             />
 
             {recentBookings.length === 0 ? (
-
               <EmptyState
                 icon={Ticket}
                 title="No bookings yet"
                 description="Booking activity will appear here."
               />
-
             ) : (
-
               <div className="divide-y divide-slate-100">
 
                 {recentBookings.map((booking) => {
-
                   const attendee =
                     getBookingUser(booking);
 
@@ -1092,24 +1058,16 @@ function AdminDashboard() {
                     booking.bookingId ||
                     booking.id;
 
-                  const bookingStatus = event
-                    ? getUnifiedStatus(event)
+                  const eventStatus = event
+                    ? getEventStatus(event)
                     : "upcoming";
-
-                  const finalStatus =
-                    isCancelledBooking(booking)
-                      ? "cancelled"
-                      : bookingStatus;
 
                   return (
                     <Link
-                      key={bookingId}
+                      key={String(bookingId)}
                       to={`/admin/bookings/${bookingId}`}
                       className="group flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50"
                     >
-
-                      {/* ORANGE AVATAR */}
-
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
                         {String(
                           attendee.name || "A"
@@ -1121,16 +1079,18 @@ function AdminDashboard() {
                       <div className="min-w-0 flex-1">
 
                         <div className="flex flex-wrap items-center gap-2">
-
                           <p className="truncate text-sm font-semibold text-slate-900">
                             {attendee.name}
                           </p>
 
                           <BookingStatus
-                            status={finalStatus}
+                            status={eventStatus}
                           />
-
                         </div>
+
+                        <p className="mt-1 truncate text-xs text-slate-500">
+                          {attendee.email}
+                        </p>
 
                         <p className="mt-1 truncate text-xs text-slate-500">
                           {event?.title ||
@@ -1140,21 +1100,17 @@ function AdminDashboard() {
                         <p className="mt-1 text-xs text-slate-400">
                           Booking #{bookingId}
                         </p>
-
                       </div>
 
                       <ArrowRight
                         size={15}
                         className="shrink-0 text-slate-300 transition group-hover:text-orange-500"
                       />
-
                     </Link>
                   );
                 })}
-
               </div>
             )}
-
           </section>
 
           {/* RECENT EVENTS */}
@@ -1169,19 +1125,15 @@ function AdminDashboard() {
             />
 
             {recentEvents.length === 0 ? (
-
               <EmptyState
                 icon={CalendarDays}
                 title="No events yet"
                 description="Created events will appear here."
               />
-
             ) : (
-
               <div className="divide-y divide-slate-100">
 
                 {recentEvents.map((event) => {
-
                   const actualBookedTickets =
                     getActualBookedTickets(
                       event.id
@@ -1191,23 +1143,19 @@ function AdminDashboard() {
                     Number(event.capacity) || 0;
 
                   const status =
-                    getUnifiedStatus(event);
+                    getEventStatus(event);
 
                   return (
                     <Link
-                      key={event.id}
+                      key={String(event.id)}
                       to={`/admin/events/${event.id}`}
                       className="group block px-5 py-4 transition hover:bg-slate-50"
                     >
-
                       <div className="flex items-center gap-4">
-
-                        {/* EVENT IMAGE */}
 
                         <div className="h-14 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
 
                           {event.image ? (
-
                             <img
                               src={event.image}
                               alt={
@@ -1216,20 +1164,14 @@ function AdminDashboard() {
                               }
                               className="h-full w-full object-cover"
                             />
-
                           ) : (
-
                             <div className="flex h-full w-full items-center justify-center text-slate-400">
                               <CalendarDays
                                 size={21}
                               />
                             </div>
-
                           )}
-
                         </div>
-
-                        {/* EVENT DETAILS */}
 
                         <div className="min-w-0 flex-1">
 
@@ -1243,15 +1185,24 @@ function AdminDashboard() {
                             <BookingStatus
                               status={status}
                             />
-
                           </div>
 
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
 
                             <span className="flex items-center gap-1">
                               <Clock3 size={12} />
-                              {formatDate(event.date)}
+                              {formatEventDate(
+                                event.date
+                              )}
                             </span>
+
+                            {formatEventTime(event) && (
+                              <span>
+                                {formatEventTime(
+                                  event
+                                )}
+                              </span>
+                            )}
 
                             {event.city && (
                               <span className="flex items-center gap-1">
@@ -1259,230 +1210,216 @@ function AdminDashboard() {
                                 {event.city}
                               </span>
                             )}
-
                           </div>
 
                           <p className="mt-1.5 text-xs text-slate-400">
                             {actualBookedTickets} /{" "}
                             {capacity} booked
                           </p>
-
                         </div>
 
                         <ArrowRight
                           size={17}
                           className="shrink-0 text-slate-300 transition group-hover:text-orange-500"
                         />
-
                       </div>
-
                     </Link>
                   );
                 })}
-
               </div>
             )}
-
           </section>
-
         </section>
 
         {/* =================================================
-            TOP 3 EVENT PERFORMANCE
+            TOP 3 HIGHEST PERFORMING EVENTS
         ================================================= */}
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-5">
+          {/* HEADER */}
 
-            <div>
+          <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-5">
 
+            <div className="min-w-0">
               <h2 className="text-base font-semibold text-slate-900">
-                Top 3 Event Performance
+                Top 3 Highest Performing Events
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Best performing events by tickets sold
+                Events with the highest active ticket sales
               </p>
-
             </div>
 
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
-              <TrendingUp size={18} />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+              <TrendingUp size={19} />
             </div>
-
           </div>
 
-          {eventPerformance.length === 0 ? (
+          {/* CONTENT */}
 
+          {topPerformingEvents.length === 0 ? (
             <EmptyState
-              icon={CalendarDays}
-              title="No event performance data"
-              description="Event booking activity will appear here."
+              icon={TrendingUp}
+              title="No performance data yet"
+              description="Events with active bookings will appear here."
             />
-
           ) : (
-
             <div className="divide-y divide-slate-100">
 
-              {eventPerformance.map(
-                (event, index) => {
+              {topPerformingEvents.map(
+                (event, index) => (
+                  <Link
+                    key={String(event.id)}
+                    to={`/admin/events/${event.id}`}
+                    className="group block px-5 py-5 transition hover:bg-slate-50"
+                  >
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
 
-                  const status =
-                    getUnifiedStatus(event);
+                      {/* EVENT INFORMATION */}
 
-                  return (
-                    <Link
-                      key={event.id}
-                      to={`/admin/events/${event.id}`}
-                      className="group block px-5 py-5 transition hover:bg-slate-50"
-                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-4">
 
-                      <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+                        {/* RANK */}
 
-                        {/* EVENT INFO */}
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-sm font-bold text-orange-600">
+                          #{index + 1}
+                        </div>
 
-                        <div className="flex min-w-0 flex-1 items-center gap-4">
+                        {/* IMAGE */}
 
-                          {/* RANK */}
+                        <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
 
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-sm font-bold text-orange-600">
-                            #{index + 1}
-                          </div>
-
-                          {/* IMAGE */}
-
-                          <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-
-                            {event.image ? (
-
-                              <img
-                                src={event.image}
-                                alt={
-                                  event.title ||
-                                  "Event"
-                                }
-                                className="h-full w-full object-cover"
+                          {event.image ? (
+                            <img
+                              src={event.image}
+                              alt={
+                                event.title ||
+                                "Event"
+                              }
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-slate-400">
+                              <CalendarDays
+                                size={22}
                               />
-
-                            ) : (
-
-                              <div className="flex h-full w-full items-center justify-center text-slate-400">
-                                <CalendarDays
-                                  size={22}
-                                />
-                              </div>
-
-                            )}
-
-                          </div>
-
-                          {/* DETAILS */}
-
-                          <div className="min-w-0">
-
-                            <div className="flex flex-wrap items-center gap-2">
-
-                              <p className="truncate text-sm font-semibold text-slate-900">
-                                {event.title ||
-                                  "Untitled Event"}
-                              </p>
-
-                              <BookingStatus
-                                status={status}
-                              />
-
                             </div>
+                          )}
+                        </div>
 
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                        {/* DETAILS */}
 
-                              <span className="flex items-center gap-1">
-                                <Clock3 size={12} />
-                                {formatDate(
-                                  event.date
+                        <div className="min-w-0">
+
+                          <div className="flex flex-wrap items-center gap-2">
+
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {event.title ||
+                                "Untitled Event"}
+                            </p>
+
+                            <BookingStatus
+                              status={event.status}
+                            />
+                          </div>
+
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+
+                            <span className="flex items-center gap-1">
+                              <Clock3 size={12} />
+
+                              {formatEventDate(
+                                event.date
+                              )}
+                            </span>
+
+                            {formatEventTime(event) && (
+                              <span>
+                                {formatEventTime(
+                                  event
                                 )}
                               </span>
+                            )}
 
-                              {event.city && (
-                                <span className="flex items-center gap-1">
-                                  <MapPin size={12} />
-                                  {event.city}
-                                </span>
-                              )}
-
-                            </div>
-
+                            {event.city && (
+                              <span className="flex items-center gap-1">
+                                <MapPin size={12} />
+                                {event.city}
+                              </span>
+                            )}
                           </div>
-
                         </div>
-
-                        {/* TICKETS */}
-
-                        <div className="w-full lg:w-72">
-
-                          <div className="mb-2 flex items-center justify-between">
-
-                            <span className="text-xs text-slate-500">
-                              Tickets sold
-                            </span>
-
-                            <span className="text-sm font-semibold text-slate-900">
-                              {event.ticketsSold} /{" "}
-                              {event.capacity}
-                            </span>
-
-                          </div>
-
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
-                            <div
-                              className="h-full rounded-full bg-orange-500 transition-all duration-500"
-                              style={{
-                                width: `${event.percentage}%`,
-                              }}
-                            />
-
-                          </div>
-
-                        </div>
-
-                        {/* REVENUE */}
-
-                        <div className="flex shrink-0 items-center justify-between gap-5 lg:w-40 lg:justify-end">
-
-                          <div>
-
-                            <p className="text-xs text-slate-400">
-                              Revenue
-                            </p>
-
-                            <p className="mt-1 text-sm font-semibold text-slate-900">
-                              {formatCurrency(
-                                event.revenue
-                              )}
-                            </p>
-
-                          </div>
-
-                          <ArrowRight
-                            size={17}
-                            className="text-slate-300 transition group-hover:text-orange-500"
-                          />
-
-                        </div>
-
                       </div>
 
-                    </Link>
-                  );
-                }
-              )}
+                      {/* TICKET PERFORMANCE */}
 
+                      <div className="w-full lg:w-72">
+
+                        <div className="mb-2 flex items-center justify-between">
+
+                          <span className="text-xs text-slate-500">
+                            Tickets sold
+                          </span>
+
+                          <span className="text-sm font-semibold text-slate-900">
+                            {event.ticketsSold} /{" "}
+                            {event.capacity}
+                          </span>
+                        </div>
+
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                            style={{
+                              width: `${event.bookingPercentage}%`,
+                            }}
+                          />
+                        </div>
+
+                        <div className="mt-1.5 flex justify-between">
+
+                          <span className="text-[11px] text-slate-400">
+                            {event.bookingPercentage.toFixed(
+                              0
+                            )}
+                            % booked
+                          </span>
+
+                          <span className="text-[11px] font-medium text-slate-500">
+                            {event.ticketsSold} tickets
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* REVENUE */}
+
+                      <div className="flex shrink-0 items-center justify-between gap-5 lg:w-40 lg:justify-end">
+
+                        <div>
+                          <p className="text-xs text-slate-400">
+                            Revenue
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-slate-900">
+                            {formatCurrency(
+                              event.revenue
+                            )}
+                          </p>
+                        </div>
+
+                        <ArrowRight
+                          size={17}
+                          className="text-slate-300 transition group-hover:text-orange-500"
+                        />
+                      </div>
+                    </div>
+                  </Link>
+                )
+              )}
             </div>
           )}
-
         </section>
-
       </main>
     </div>
   );
@@ -1510,7 +1447,6 @@ function SectionHeader({
         <p className="mt-1 truncate text-xs text-slate-500">
           {description}
         </p>
-
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
@@ -1531,9 +1467,7 @@ function SectionHeader({
 
           <ArrowRight size={16} />
         </Link>
-
       </div>
-
     </div>
   );
 }
@@ -1574,7 +1508,6 @@ function StatCard({
                   "en-IN"
                 )}
           </p>
-
         </div>
 
         <div
@@ -1582,13 +1515,11 @@ function StatCard({
         >
           <Icon size={21} />
         </div>
-
       </div>
 
       <p className="mt-3 truncate text-xs text-slate-500">
         {subtitle}
       </p>
-
     </div>
   );
 }
@@ -1613,7 +1544,6 @@ function RevenueMiniCard({
           ? value.toLocaleString("en-IN")
           : value}
       </p>
-
     </div>
   );
 }
@@ -1644,7 +1574,6 @@ function ProgressRow({
         <span className="font-semibold text-slate-900">
           {value}
         </span>
-
       </div>
 
       <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -1655,9 +1584,7 @@ function ProgressRow({
             width: `${percentage}%`,
           }}
         />
-
       </div>
-
     </div>
   );
 }
@@ -1685,7 +1612,6 @@ function EmptyState({
       <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
         {description}
       </p>
-
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -34,13 +35,16 @@ import {
 } from "../../utils/bookingStorage";
 
 /* =========================================================
-   HELPERS
+   CONSTANTS
 ========================================================= */
 
-/**
- * Convert all supported booking quantity fields
- * into one reliable ticket count.
- */
+const EVENTS_STORAGE_KEY = "eventon_events";
+const BOOKINGS_STORAGE_KEY = "eventon_bookings";
+
+/* =========================================================
+   BOOKING HELPERS
+========================================================= */
+
 function getBookingQuantity(booking) {
   const quantity = Number(
     booking?.quantity ??
@@ -57,9 +61,6 @@ function getBookingQuantity(booking) {
   return quantity;
 }
 
-/**
- * Normalize booking status.
- */
 function getBookingStatus(booking) {
   const status = String(
     booking?.status || "confirmed"
@@ -81,51 +82,178 @@ function getBookingStatus(booking) {
     return "completed";
   }
 
-  if (status === "pending") {
-    return "pending";
-  }
-
   return "confirmed";
 }
 
-/**
- * Cancelled bookings do not occupy seats.
- */
 function isActiveBooking(booking) {
   return getBookingStatus(booking) !== "cancelled";
 }
 
+/* =========================================================
+   DATE + TIME HELPERS
+========================================================= */
+
 /**
- * Parse event date + time.
+ * Converts event date + time into a local Date object.
+ *
+ * Supported date formats:
+ * - YYYY-MM-DD
+ * - DD-MM-YYYY
+ * - DD/MM/YYYY
+ * - browser-compatible date strings
+ *
+ * Supported time formats:
+ * - 10:00
+ * - 10:00 AM
+ * - 10:00 PM
+ * - 10:00:00
+ * - 10:00:00 PM
  */
-function parseEventDateTime(
-  dateValue,
-  timeValue,
-  endOfDay = false
-) {
+function parseEventDateTime(dateValue, timeValue) {
   if (!dateValue) {
     return null;
   }
 
   const dateString = String(dateValue).trim();
-  const timeString = String(timeValue || "").trim();
 
-  const value = timeString
-    ? `${dateString}T${timeString}`
-    : `${dateString}T${
-        endOfDay ? "23:59:59" : "00:00:00"
-      }`;
+  let year;
+  let month;
+  let day;
 
-  const parsed = new Date(value);
+  /* -------------------------------------------------------
+     YYYY-MM-DD
+  ------------------------------------------------------- */
 
-  return Number.isNaN(parsed.getTime())
-    ? null
-    : parsed;
+  const isoDateMatch = dateString.match(
+    /^(\d{4})-(\d{2})-(\d{2})$/
+  );
+
+  if (isoDateMatch) {
+    year = Number(isoDateMatch[1]);
+    month = Number(isoDateMatch[2]) - 1;
+    day = Number(isoDateMatch[3]);
+  } else {
+    /* -----------------------------------------------------
+       DD-MM-YYYY / DD/MM/YYYY
+    ----------------------------------------------------- */
+
+    const indianDateMatch = dateString.match(
+      /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/
+    );
+
+    if (indianDateMatch) {
+      day = Number(indianDateMatch[1]);
+      month = Number(indianDateMatch[2]) - 1;
+      year = Number(indianDateMatch[3]);
+    } else {
+      /* ---------------------------------------------------
+         Fallback
+      --------------------------------------------------- */
+
+      const parsedDate = new Date(dateString);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return null;
+      }
+
+      year = parsedDate.getFullYear();
+      month = parsedDate.getMonth();
+      day = parsedDate.getDate();
+    }
+  }
+
+  let hours = 0;
+  let minutes = 0;
+  let seconds = 0;
+
+  /* -------------------------------------------------------
+     TIME
+  ------------------------------------------------------- */
+
+  if (timeValue) {
+    const timeString = String(timeValue)
+      .trim()
+      .toUpperCase();
+
+    /*
+     * IMPORTANT:
+     *
+     * Correct:
+     * \s*
+     *
+     * NOT:
+     * \s\*
+     */
+
+    const timeMatch = timeString.match(
+      /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+    );
+
+    if (!timeMatch) {
+      return null;
+    }
+
+    hours = Number(timeMatch[1]);
+    minutes = Number(timeMatch[2]);
+    seconds = Number(timeMatch[3] || 0);
+
+    const meridiem = timeMatch[4]?.toUpperCase();
+
+    /* -----------------------------------------------------
+       12-HOUR FORMAT
+    ----------------------------------------------------- */
+
+    if (meridiem) {
+      if (hours < 1 || hours > 12) {
+        return null;
+      }
+
+      if (meridiem === "PM" && hours < 12) {
+        hours += 12;
+      }
+
+      if (meridiem === "AM" && hours === 12) {
+        hours = 0;
+      }
+    }
+
+    /* -----------------------------------------------------
+       24-HOUR FORMAT VALIDATION
+    ----------------------------------------------------- */
+
+    if (
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59 ||
+      seconds < 0 ||
+      seconds > 59
+    ) {
+      return null;
+    }
+  }
+
+  const result = new Date(
+    year,
+    month,
+    day,
+    hours,
+    minutes,
+    seconds,
+    0
+  );
+
+  if (Number.isNaN(result.getTime())) {
+    return null;
+  }
+
+  return result;
 }
 
-/**
- * Determine event lifecycle.
- */
+/* =========================================================
+   EVENT STATUS
+========================================================= */
+
 function getEventLifecycleStatus(
   event,
   nowValue = Date.now()
@@ -136,9 +264,9 @@ function getEventLifecycleStatus(
     .trim()
     .toLowerCase();
 
-  if (storedStatus === "draft") {
-    return "draft";
-  }
+  /* -------------------------------------------------------
+     CANCELLED ALWAYS WINS
+  ------------------------------------------------------- */
 
   if (
     storedStatus === "cancelled" ||
@@ -151,32 +279,63 @@ function getEventLifecycleStatus(
 
   const start = parseEventDateTime(
     event?.date,
-    event?.time
+    event?.time || event?.startTime
   );
 
   const end = parseEventDateTime(
     event?.date,
-    event?.endTime,
-    true
+    event?.endTime || event?.finishTime
   );
+
+  /* -------------------------------------------------------
+     INVALID START
+  ------------------------------------------------------- */
+
+  if (!start) {
+    return "published";
+  }
+
+  /* -------------------------------------------------------
+     END TIME
+     
+     If end time is earlier than start time, the event
+     crosses midnight.
+     
+     Example:
+     11:00 PM -> 01:00 AM
+     
+     The end belongs to the next day.
+  ------------------------------------------------------- */
+
+  if (end && end.getTime() < start.getTime()) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  /* -------------------------------------------------------
+     COMPLETED
+  ------------------------------------------------------- */
 
   if (end && now >= end) {
     return "completed";
   }
 
-  if (start && now >= start) {
+  /* -------------------------------------------------------
+     ONGOING
+  ------------------------------------------------------- */
+
+  if (now >= start) {
     return "ongoing";
   }
+
+  /* -------------------------------------------------------
+     UPCOMING
+     
+     Internally "published" is used for upcoming events.
+  ------------------------------------------------------- */
 
   return "published";
 }
 
-/**
- * Final display status.
- *
- * Sold Out has priority over Published,
- * but not over Ongoing or Completed.
- */
 function getEventStatus(
   event,
   actualBookedSeats,
@@ -188,14 +347,24 @@ function getEventStatus(
       nowValue
     );
 
+  /* -------------------------------------------------------
+     LIFECYCLE STATUS TAKES PRIORITY
+  ------------------------------------------------------- */
+
   if (
-    lifecycleStatus === "draft" ||
     lifecycleStatus === "cancelled" ||
     lifecycleStatus === "ongoing" ||
     lifecycleStatus === "completed"
   ) {
     return lifecycleStatus;
   }
+
+  /* -------------------------------------------------------
+     SOLD OUT
+     
+     Sold out is an availability state, not a lifecycle
+     state.
+  ------------------------------------------------------- */
 
   const capacity = Number(
     event?.capacity || 0
@@ -211,9 +380,10 @@ function getEventStatus(
   return "published";
 }
 
-/**
- * Format date.
- */
+/* =========================================================
+   FORMATTERS
+========================================================= */
+
 function formatDate(dateValue) {
   if (!dateValue) {
     return "Date unavailable";
@@ -225,16 +395,16 @@ function formatDate(dateValue) {
     return String(dateValue);
   }
 
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return date.toLocaleDateString(
+    "en-IN",
+    {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }
+  );
 }
 
-/**
- * Currency.
- */
 function formatCurrency(value) {
   const amount = Number(value || 0);
 
@@ -243,11 +413,13 @@ function formatCurrency(value) {
     : "Free";
 }
 
-/**
- * Organizer name.
- */
+/* =========================================================
+   ORGANIZER
+========================================================= */
+
 function getOrganizerDisplayName(event) {
-  const organizerId = event?.organizerId;
+  const organizerId =
+    event?.organizerId;
 
   if (organizerId) {
     try {
@@ -258,14 +430,18 @@ function getOrganizerDisplayName(event) {
       );
 
       if (Array.isArray(accounts)) {
-        const organizer = accounts.find(
-          (account) =>
-            String(account?.id) ===
-              String(organizerId) &&
-            String(account?.role || "")
-              .trim()
-              .toLowerCase() === "organizer"
-        );
+        const organizer =
+          accounts.find(
+            (account) =>
+              String(account?.id) ===
+                String(organizerId) &&
+              String(
+                account?.role || ""
+              )
+                .trim()
+                .toLowerCase() ===
+                "organizer"
+          );
 
         if (organizer) {
           return (
@@ -301,7 +477,6 @@ function getStatusLabel(status) {
     completed: "Completed",
     cancelled: "Cancelled",
     "sold-out": "Sold Out",
-    draft: "Draft",
   };
 
   return (
@@ -327,9 +502,6 @@ function getStatusClasses(status) {
     case "sold-out":
       return "border-orange-200 bg-orange-50 text-orange-700";
 
-    case "draft":
-      return "border-slate-200 bg-slate-100 text-slate-600";
-
     default:
       return "border-slate-200 bg-slate-50 text-slate-600";
   }
@@ -352,9 +524,6 @@ function getStatusIcon(status) {
     case "sold-out":
       return Ticket;
 
-    case "draft":
-      return Clock3;
-
     default:
       return CheckCircle2;
   }
@@ -366,8 +535,6 @@ function getStatusIcon(status) {
 
 function ManagementEvents() {
   const { user } = useAuth();
-
-  const navigate = useNavigate();
 
   const normalizedRole = String(
     user?.role || ""
@@ -408,11 +575,14 @@ function ManagementEvents() {
      LOAD DATA
   ======================================================= */
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     try {
       let storedEvents = [];
 
-      if (isOrganizer && user?.id) {
+      if (
+        isOrganizer &&
+        user?.id
+      ) {
         storedEvents =
           getStoredEventsByOrganizer(
             user.id
@@ -432,7 +602,9 @@ function ManagementEvents() {
       );
 
       setBookings(
-        Array.isArray(storedBookings)
+        Array.isArray(
+          storedBookings
+        )
           ? storedBookings
           : []
       );
@@ -445,7 +617,15 @@ function ManagementEvents() {
       setEvents([]);
       setBookings([]);
     }
-  };
+  }, [
+    isAdmin,
+    isOrganizer,
+    user?.id,
+  ]);
+
+  /* =======================================================
+     INITIAL LOAD
+  ======================================================= */
 
   useEffect(() => {
     if (!user) {
@@ -456,8 +636,8 @@ function ManagementEvents() {
 
     loadData();
   }, [
-    user?.id,
-    normalizedRole,
+    user,
+    loadData,
   ]);
 
   /* =======================================================
@@ -469,10 +649,14 @@ function ManagementEvents() {
       loadData();
     };
 
-    const handleStorage = (event) => {
+    const handleStorage = (
+      event
+    ) => {
       if (
-        event.key === "eventon_events" ||
-        event.key === "eventon_bookings"
+        event.key ===
+          EVENTS_STORAGE_KEY ||
+        event.key ===
+          BOOKINGS_STORAGE_KEY
       ) {
         loadData();
       }
@@ -509,13 +693,12 @@ function ManagementEvents() {
         handleStorage
       );
     };
-  }, [
-    user?.id,
-    normalizedRole,
-  ]);
+  }, [loadData]);
 
   /* =======================================================
      REFRESH TIME
+     
+     Recalculates event status every minute.
   ======================================================= */
 
   useEffect(() => {
@@ -570,143 +753,161 @@ function ManagementEvents() {
   }, []);
 
   /* =======================================================
-     ACTUAL BOOKINGS BY EVENT
+     BOOKINGS BY EVENT
   ======================================================= */
 
-  const bookingsByEvent = useMemo(() => {
-    const map = new Map();
+  const bookingsByEvent =
+    useMemo(() => {
+      const map = new Map();
 
-    bookings.forEach((booking) => {
-      if (!isActiveBooking(booking)) {
-        return;
-      }
+      bookings.forEach(
+        (booking) => {
+          if (
+            !isActiveBooking(
+              booking
+            )
+          ) {
+            return;
+          }
 
-      const eventId =
-        booking?.eventId ??
-        booking?.event?.id;
+          const eventId =
+            booking?.eventId ??
+            booking?.event?.id;
 
-      if (
-        eventId === undefined ||
-        eventId === null ||
-        eventId === ""
-      ) {
-        return;
-      }
+          if (
+            eventId === undefined ||
+            eventId === null ||
+            eventId === ""
+          ) {
+            return;
+          }
 
-      const key = String(eventId);
+          const key =
+            String(eventId);
 
-      const current =
-        map.get(key) || 0;
+          const current =
+            map.get(key) || 0;
 
-      const quantity =
-        getBookingQuantity(
-          booking
-        );
-
-      map.set(
-        key,
-        current + quantity
+          map.set(
+            key,
+            current +
+              getBookingQuantity(
+                booking
+              )
+          );
+        }
       );
-    });
 
-    return map;
-  }, [bookings]);
+      return map;
+    }, [bookings]);
 
   /* =======================================================
-     BOOKED TICKETS
+     ACTUAL BOOKED SEATS
   ======================================================= */
 
-  const getActualBookedSeats = (
-    event
-  ) => {
-    if (!event?.id) {
-      return 0;
-    }
+  const getActualBookedSeats =
+    useCallback(
+      (event) => {
+        if (!event?.id) {
+          return 0;
+        }
 
-    return (
-      bookingsByEvent.get(
-        String(event.id)
-      ) || 0
+        return (
+          bookingsByEvent.get(
+            String(event.id)
+          ) || 0
+        );
+      },
+      [bookingsByEvent]
     );
-  };
 
   /* =======================================================
      CATEGORIES
   ======================================================= */
 
-  const categories = useMemo(() => {
-    const values = events
-      .map((event) =>
-        String(
-          event?.category || ""
-        ).trim()
-      )
-      .filter(Boolean);
+  const categories =
+    useMemo(() => {
+      const values = events
+        .map((event) =>
+          String(
+            event?.category || ""
+          ).trim()
+        )
+        .filter(Boolean);
 
-    return [
-      ...new Set(values),
-    ].sort((a, b) =>
-      a.localeCompare(b)
-    );
-  }, [events]);
+      return [
+        ...new Set(values),
+      ].sort((a, b) =>
+        a.localeCompare(b)
+      );
+    }, [events]);
 
   /* =======================================================
      STATISTICS
   ======================================================= */
 
-  const statistics = useMemo(() => {
-    const statuses = events.map(
-      (event) => ({
-        event,
-        status: getEventStatus(
+  const statistics =
+    useMemo(() => {
+      const statuses = events.map(
+        (event) => ({
           event,
-          getActualBookedSeats(event),
-          currentTime
-        ),
-      })
-    );
+          status:
+            getEventStatus(
+              event,
+              getActualBookedSeats(
+                event
+              ),
+              currentTime
+            ),
+        })
+      );
 
-    return {
-      total: events.length,
+      return {
+        total: events.length,
 
-      upcoming: statuses.filter(
-        ({ status }) =>
-          status === "published"
-      ).length,
+        upcoming:
+          statuses.filter(
+            ({ status }) =>
+              status ===
+              "published"
+          ).length,
 
-      ongoing: statuses.filter(
-        ({ status }) =>
-          status === "ongoing"
-      ).length,
+        ongoing:
+          statuses.filter(
+            ({ status }) =>
+              status ===
+              "ongoing"
+          ).length,
 
-      completed: statuses.filter(
-        ({ status }) =>
-          status === "completed"
-      ).length,
+        completed:
+          statuses.filter(
+            ({ status }) =>
+              status ===
+              "completed"
+          ).length,
 
-      cancelled: statuses.filter(
-        ({ status }) =>
-          status === "cancelled"
-      ).length,
+        cancelled:
+          statuses.filter(
+            ({ status }) =>
+              status ===
+              "cancelled"
+          ).length,
 
-      soldOut: statuses.filter(
-        ({ status }) =>
-          status === "sold-out"
-      ).length,
-
-      draft: statuses.filter(
-        ({ status }) =>
-          status === "draft"
-      ).length,
-    };
-  }, [
-    events,
-    bookingsByEvent,
-    currentTime,
-  ]);
+        soldOut:
+          statuses.filter(
+            ({ status }) =>
+              status ===
+              "sold-out"
+          ).length,
+      };
+    }, [
+      events,
+      getActualBookedSeats,
+      currentTime,
+    ]);
 
   /* =======================================================
-     FILTER OPTIONS
+     STATUS FILTER OPTIONS
   ======================================================= */
 
   const statusOptions = [
@@ -734,18 +935,17 @@ function ManagementEvents() {
       value: "sold-out",
       label: "Sold Out",
     },
-    {
-      value: "draft",
-      label: "Draft",
-    },
   ];
+
+  /* =======================================================
+     CATEGORY FILTER OPTIONS
+  ======================================================= */
 
   const categoryOptions = [
     {
       value: "all",
       label: "All categories",
     },
-
     ...categories.map(
       (category) => ({
         value: category,
@@ -758,83 +958,88 @@ function ManagementEvents() {
      FILTERED EVENTS
   ======================================================= */
 
-  const filteredEvents = useMemo(() => {
-    const query =
-      searchQuery
-        .trim()
-        .toLowerCase();
-
-    return events.filter(
-      (event) => {
-        const title = String(
-          event?.title || ""
-        ).toLowerCase();
-
-        const location = String(
-          event?.location || ""
-        ).toLowerCase();
-
-        const city = String(
-          event?.city || ""
-        ).toLowerCase();
-
-        const category = String(
-          event?.category || ""
-        )
+  const filteredEvents =
+    useMemo(() => {
+      const query =
+        searchQuery
           .trim()
           .toLowerCase();
 
-        const organizer =
-          getOrganizerDisplayName(
-            event
-          ).toLowerCase();
+      return events.filter(
+        (event) => {
+          const title =
+            String(
+              event?.title || ""
+            ).toLowerCase();
 
-        const actualBookedSeats =
-          getActualBookedSeats(
-            event
-          );
+          const location =
+            String(
+              event?.location || ""
+            ).toLowerCase();
 
-        const status =
-          getEventStatus(
-            event,
-            actualBookedSeats,
-            currentTime
-          );
+          const city =
+            String(
+              event?.city || ""
+            ).toLowerCase();
 
-        const matchesSearch =
-          !query ||
-          title.includes(query) ||
-          location.includes(query) ||
-          city.includes(query) ||
-          category.includes(query) ||
-          organizer.includes(query);
-
-        const matchesStatus =
-          statusFilter === "all" ||
-          status === statusFilter;
-
-        const matchesCategory =
-          categoryFilter === "all" ||
-          category ===
-            categoryFilter
+          const category =
+            String(
+              event?.category || ""
+            )
               .trim()
               .toLowerCase();
 
-        return (
-          matchesSearch &&
-          matchesStatus &&
-          matchesCategory
-        );
-      }
-    );
-  }, [
-    events,
-    bookingsByEvent,
-    searchQuery,
-    statusFilter,
-    categoryFilter,
-    currentTime,
-  ]);
+          const organizer =
+            getOrganizerDisplayName(
+              event
+            ).toLowerCase();
+
+          const actualBookedSeats =
+            getActualBookedSeats(
+              event
+            );
+
+          const status =
+            getEventStatus(
+              event,
+              actualBookedSeats,
+              currentTime
+            );
+
+          const matchesSearch =
+            !query ||
+            title.includes(query) ||
+            location.includes(query) ||
+            city.includes(query) ||
+            category.includes(query) ||
+            organizer.includes(query);
+
+          const matchesStatus =
+            statusFilter === "all" ||
+            status === statusFilter;
+
+          const matchesCategory =
+            categoryFilter === "all" ||
+            category ===
+              categoryFilter
+                .trim()
+                .toLowerCase();
+
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesCategory
+          );
+        }
+      );
+    }, [
+      events,
+      getActualBookedSeats,
+      searchQuery,
+      statusFilter,
+      categoryFilter,
+      currentTime,
+    ]);
 
   /* =======================================================
      CLEAR FILTERS
@@ -846,10 +1051,6 @@ function ManagementEvents() {
     setCategoryFilter("all");
     setOpenDropdown(null);
   };
-
-  /* =======================================================
-     SELECTED LABELS
-  ======================================================= */
 
   const selectedStatusLabel =
     statusOptions.find(
@@ -885,7 +1086,8 @@ function ManagementEvents() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Please log in to manage events.
+            Please log in to manage
+            events.
           </p>
         </div>
       </div>
@@ -899,9 +1101,9 @@ function ManagementEvents() {
   return (
     <div className="min-h-full bg-slate-50">
 
-      {/* =================================================
+      {/* ===================================================
           PAGE HEADER
-      ================================================= */}
+      =================================================== */}
 
       <section className="bg-slate-50">
         <div className="mx-auto w-full max-w-7xl px-5 py-7 sm:px-6 lg:px-8">
@@ -913,7 +1115,6 @@ function ManagementEvents() {
           </p>
 
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 Events
@@ -925,25 +1126,14 @@ function ManagementEvents() {
                   : "Create, manage, and track all events created by you."}
               </p>
             </div>
-
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <CalendarDays size={17} />
-
-              <span>
-                {statistics.total.toLocaleString(
-                  "en-IN"
-                )}{" "}
-                total events
-              </span>
-            </div>
-
           </div>
+
         </div>
       </section>
 
-      {/* =================================================
-          MAIN CONTENT
-      ================================================= */}
+      {/* ===================================================
+          MAIN
+      =================================================== */}
 
       <main className="mx-auto w-full max-w-7xl px-5 pb-8 sm:px-6 lg:px-8">
 
@@ -954,58 +1144,65 @@ function ManagementEvents() {
         <section className="space-y-4">
 
           {/* ROW 1 */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
             <EventStatCard
               title="Total Events"
-              value={statistics.total}
+              value={
+                statistics.total
+              }
               icon={CalendarDays}
               iconClass="bg-blue-50 text-blue-600"
             />
 
             <EventStatCard
               title="Sold Out"
-              value={statistics.soldOut}
+              value={
+                statistics.soldOut
+              }
               icon={Ticket}
               iconClass="bg-orange-50 text-orange-600"
-            />
-
-            <EventStatCard
-              title="Draft"
-              value={statistics.draft}
-              icon={Clock3}
-              iconClass="bg-slate-100 text-slate-600"
             />
 
           </div>
 
           {/* ROW 2 */}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
             <EventStatCard
               title="Upcoming"
-              value={statistics.upcoming}
+              value={
+                statistics.upcoming
+              }
               icon={CheckCircle2}
               iconClass="bg-emerald-50 text-emerald-600"
             />
 
             <EventStatCard
               title="Ongoing"
-              value={statistics.ongoing}
+              value={
+                statistics.ongoing
+              }
               icon={Clock3}
               iconClass="bg-blue-50 text-blue-600"
             />
 
             <EventStatCard
               title="Completed"
-              value={statistics.completed}
+              value={
+                statistics.completed
+              }
               icon={CalendarDays}
               iconClass="bg-slate-100 text-slate-600"
             />
 
             <EventStatCard
               title="Cancelled"
-              value={statistics.cancelled}
+              value={
+                statistics.cancelled
+              }
               icon={XCircle}
               iconClass="bg-red-50 text-red-600"
             />
@@ -1020,12 +1217,15 @@ function ManagementEvents() {
 
         <section className="mt-6 overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-          {/* SEARCH + FILTER */}
+          {/* =================================================
+              SEARCH + FILTER
+          ================================================= */}
 
           <div
             ref={filterRef}
             className="relative z-20 border-b border-slate-200 p-3 sm:p-4"
           >
+
             <div className="flex flex-col gap-2 lg:flex-row">
 
               {/* SEARCH */}
@@ -1096,7 +1296,6 @@ function ManagementEvents() {
                   setStatusFilter(
                     value
                   );
-
                   setOpenDropdown(
                     null
                   );
@@ -1132,7 +1331,6 @@ function ManagementEvents() {
                   setCategoryFilter(
                     value
                   );
-
                   setOpenDropdown(
                     null
                   );
@@ -1142,9 +1340,12 @@ function ManagementEvents() {
               />
 
             </div>
+
           </div>
 
-          {/* DIRECTORY HEADER */}
+          {/* =================================================
+              DIRECTORY HEADER
+          ================================================= */}
 
           <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
 
@@ -1167,7 +1368,8 @@ function ManagementEvents() {
             </div>
 
             {(searchQuery ||
-              statusFilter !== "all" ||
+              statusFilter !==
+                "all" ||
               categoryFilter !==
                 "all") && (
               <button
@@ -1184,7 +1386,9 @@ function ManagementEvents() {
 
           </div>
 
-          {/* EVENT CARDS */}
+          {/* =================================================
+              EVENT CARDS
+          ================================================= */}
 
           {filteredEvents.length ===
           0 ? (
@@ -1213,17 +1417,16 @@ function ManagementEvents() {
                   <ManagementEventCard
                     key={event.id}
                     event={event}
-                    bookedSeats={getActualBookedSeats(
-                      event
-                    )}
+                    bookedSeats={
+                      getActualBookedSeats(
+                        event
+                      )
+                    }
                     currentTime={
                       currentTime
                     }
                     isAdmin={
                       isAdmin
-                    }
-                    isOrganizer={
-                      isOrganizer
                     }
                   />
                 )
@@ -1235,7 +1438,6 @@ function ManagementEvents() {
         </section>
 
       </main>
-
     </div>
   );
 }
@@ -1249,18 +1451,19 @@ function ManagementEventCard({
   bookedSeats,
   currentTime,
   isAdmin,
-  isOrganizer,
 }) {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
   const capacity = Number(
     event?.capacity || 0
   );
 
-  const safeBookedSeats = Math.max(
-    0,
-    Number(bookedSeats || 0)
-  );
+  const safeBookedSeats =
+    Math.max(
+      0,
+      Number(bookedSeats || 0)
+    );
 
   const availableSeats =
     Math.max(
@@ -1292,30 +1495,37 @@ function ManagementEventCard({
   const isSoldOut =
     status === "sold-out";
 
-  const eventDetailsPath = isAdmin
-    ? `/admin/events/${event.id}`
-    : `/organizer/events/${event.id}`;
+  const eventDetailsPath =
+    isAdmin
+      ? `/admin/events/${event.id}`
+      : `/organizer/events/${event.id}`;
+
+  const openEvent = () => {
+    navigate(
+      eventDetailsPath
+    );
+  };
 
   return (
     <article
       role="link"
       tabIndex={0}
       aria-label={`Open ${
-        event?.title || "event"
+        event?.title ||
+        "event"
       }`}
-      onClick={() =>
-        navigate(eventDetailsPath)
-      }
-      onKeyDown={(clickEvent) => {
+      onClick={openEvent}
+      onKeyDown={(
+        keyboardEvent
+      ) => {
         if (
-          clickEvent.key ===
+          keyboardEvent.key ===
             "Enter" ||
-          clickEvent.key === " "
+          keyboardEvent.key ===
+            " "
         ) {
-          clickEvent.preventDefault();
-          navigate(
-            eventDetailsPath
-          );
+          keyboardEvent.preventDefault();
+          openEvent();
         }
       }}
       className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
@@ -1400,6 +1610,8 @@ function ManagementEventCard({
 
         <div className="mt-5 space-y-2.5">
 
+          {/* DATE + TIME */}
+
           <div className="flex items-center gap-2 text-sm text-slate-600">
 
             <CalendarDays
@@ -1432,6 +1644,8 @@ function ManagementEventCard({
 
           </div>
 
+          {/* LOCATION */}
+
           <div className="flex items-start gap-2 text-sm text-slate-600">
 
             <MapPin
@@ -1450,6 +1664,8 @@ function ManagementEventCard({
             </span>
 
           </div>
+
+          {/* ORGANIZER */}
 
           {isAdmin && (
             <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -1513,11 +1729,7 @@ function ManagementEventCard({
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
 
             <div
-              className={`h-full rounded-full transition-all ${
-                isSoldOut
-                  ? "bg-orange-500"
-                  : "bg-orange-500"
-              }`}
+              className="h-full rounded-full bg-orange-500 transition-all"
               style={{
                 width: `${occupancy}%`,
               }}
@@ -1558,26 +1770,31 @@ function ManagementEventCard({
 
           <span
             className={`text-xs font-medium ${
-              status === "published"
+              status ===
+              "published"
                 ? "text-emerald-600"
-                : status === "ongoing"
-                ? "text-blue-600"
-                : status === "sold-out"
-                ? "text-orange-600"
-                : "text-slate-500"
+                : status ===
+                    "ongoing"
+                  ? "text-blue-600"
+                  : status ===
+                      "sold-out"
+                    ? "text-orange-600"
+                    : "text-slate-500"
             }`}
           >
-            {status === "published"
+            {status ===
+            "published"
               ? "Upcoming event"
-              : status === "ongoing"
-              ? "Event is ongoing"
-              : status === "completed"
-              ? "Completed event"
-              : status === "cancelled"
-              ? "Cancelled event"
-              : status === "sold-out"
-              ? "All tickets sold"
-              : "Draft event"}
+              : status ===
+                  "ongoing"
+                ? "Event is ongoing"
+                : status ===
+                    "completed"
+                  ? "Completed event"
+                  : status ===
+                      "cancelled"
+                    ? "Cancelled event"
+                    : "All tickets sold"}
           </span>
 
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-500 transition group-hover:text-orange-600">
@@ -1593,7 +1810,7 @@ function ManagementEventCard({
 }
 
 /* =========================================================
-   DROPDOWN
+   CUSTOM DROPDOWN
 ========================================================= */
 
 function CustomDropdown({
@@ -1784,16 +2001,16 @@ function EmptyEventsState({
         {hasFilters
           ? "No events found"
           : isOrganizer
-          ? "No events yet"
-          : "No events available"}
+            ? "No events yet"
+            : "No events available"}
       </h3>
 
       <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
         {hasFilters
           ? "Try changing your search or filter options."
           : isOrganizer
-          ? "Create your first event and it will appear here."
-          : "Events created in EventON will appear here."}
+            ? "Create your first event and it will appear here."
+            : "Events created in EventON will appear here."}
       </p>
 
       {hasFilters && (

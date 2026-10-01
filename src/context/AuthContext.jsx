@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
   useState,
@@ -28,6 +29,7 @@ const VALID_ROLES = [
  * EventON currently uses localStorage as its demo data layer.
  *
  * This Admin account is therefore NOT production security.
+ *
  * In a real application, Admin credentials must be stored
  * and verified on a backend with hashed passwords.
  */
@@ -111,42 +113,29 @@ function normalizeUser(user) {
 
 function readAccountsFromStorage() {
   try {
-    const storedAccounts =
-      localStorage.getItem(
-        ACCOUNTS_STORAGE_KEY
-      );
+    const storedAccounts = localStorage.getItem(
+      ACCOUNTS_STORAGE_KEY
+    );
 
     if (!storedAccounts) {
       return [];
     }
 
-    const parsedAccounts =
-      JSON.parse(storedAccounts);
+    const parsedAccounts = JSON.parse(
+      storedAccounts
+    );
 
     if (!Array.isArray(parsedAccounts)) {
       return [];
     }
 
-    return parsedAccounts.map(
-      (account) => ({
-        ...account,
-
-        email: normalizeEmail(
-          account.email
-        ),
-
-        mobile: normalizeMobile(
-          account.mobile
-        ),
-
-        role: normalizeRole(
-          account.role
-        ),
-
-        createdAt:
-          account.createdAt || "",
-      })
-    );
+    return parsedAccounts.map((account) => ({
+      ...account,
+      email: normalizeEmail(account.email),
+      mobile: normalizeMobile(account.mobile),
+      role: normalizeRole(account.role),
+      createdAt: account.createdAt || "",
+    }));
   } catch (error) {
     console.error(
       "Unable to read EventON accounts:",
@@ -181,8 +170,7 @@ function saveAccountsToStorage(accounts) {
 
 function ensureInternalAdminAccount() {
   try {
-    const accounts =
-      readAccountsFromStorage();
+    const accounts = readAccountsFromStorage();
 
     /*
      * Remove every existing Admin account.
@@ -190,24 +178,20 @@ function ensureInternalAdminAccount() {
      * This guarantees that EventON has exactly ONE
      * Admin account.
      */
-    const nonAdminAccounts =
-      accounts.filter(
-        (account) =>
-          normalizeRole(account.role) !==
-          "admin"
-      );
+
+    const nonAdminAccounts = accounts.filter(
+      (account) =>
+        normalizeRole(account.role) !== "admin"
+    );
 
     const adminAccount = {
       ...INTERNAL_ADMIN,
-
       email: normalizeEmail(
         INTERNAL_ADMIN.email
       ),
-
       mobile: normalizeMobile(
         INTERNAL_ADMIN.mobile
       ),
-
       role: "admin",
     };
 
@@ -216,9 +200,7 @@ function ensureInternalAdminAccount() {
       adminAccount,
     ];
 
-    saveAccountsToStorage(
-      updatedAccounts
-    );
+    saveAccountsToStorage(updatedAccounts);
 
     return adminAccount;
   } catch (error) {
@@ -241,20 +223,19 @@ function getInitialUser() {
      * Always make sure the single internal Admin exists
      * before restoring the current session.
      */
+
     const internalAdmin =
       ensureInternalAdminAccount();
 
-    const storedUser =
-      localStorage.getItem(
-        USER_STORAGE_KEY
-      );
+    const storedUser = localStorage.getItem(
+      USER_STORAGE_KEY
+    );
 
     if (!storedUser) {
       return null;
     }
 
-    const parsedUser =
-      JSON.parse(storedUser);
+    const parsedUser = JSON.parse(storedUser);
 
     const normalizedUser =
       normalizeUser(parsedUser);
@@ -274,10 +255,10 @@ function getInitialUser() {
      * This prevents an old/stale Admin account from
      * remaining active after initialization.
      */
+
     if (
-      normalizeRole(
-        normalizedUser.role
-      ) === "admin"
+      normalizeRole(normalizedUser.role) ===
+      "admin"
     ) {
       if (!internalAdmin) {
         localStorage.removeItem(
@@ -293,8 +274,7 @@ function getInitialUser() {
         email: internalAdmin.email,
         mobile: internalAdmin.mobile,
         role: "admin",
-        createdAt:
-          internalAdmin.createdAt,
+        createdAt: internalAdmin.createdAt,
       };
 
       localStorage.setItem(
@@ -305,8 +285,7 @@ function getInitialUser() {
       return restoredAdmin;
     }
 
-    const accounts =
-      readAccountsFromStorage();
+    const accounts = readAccountsFromStorage();
 
     const account = accounts.find(
       (item) =>
@@ -326,6 +305,7 @@ function getInitialUser() {
      * A normal user must never be restored as Admin
      * through a stale session.
      */
+
     const accountRole =
       normalizeRole(account.role);
 
@@ -344,8 +324,7 @@ function getInitialUser() {
         email: internalAdmin.email,
         mobile: internalAdmin.mobile,
         role: "admin",
-        createdAt:
-          internalAdmin.createdAt,
+        createdAt: internalAdmin.createdAt,
       };
 
       localStorage.setItem(
@@ -411,6 +390,7 @@ export function AuthProvider({ children }) {
   /*
    * Restore the session during state initialization.
    */
+
   const [user, setUser] = useState(
     getInitialUser
   );
@@ -421,13 +401,16 @@ export function AuthProvider({ children }) {
      ACCOUNTS
   ======================================================= */
 
-  function getAccounts() {
+  const getAccounts = useCallback(() => {
     return readAccountsFromStorage();
-  }
+  }, []);
 
-  function saveAccounts(accounts) {
-    return saveAccountsToStorage(accounts);
-  }
+  const saveAccounts = useCallback(
+    (accounts) => {
+      return saveAccountsToStorage(accounts);
+    },
+    []
+  );
 
   /* =======================================================
      CHECK REGISTRATION DETAILS
@@ -437,633 +420,652 @@ export function AuthProvider({ children }) {
      Only field-specific errors are returned.
   ======================================================= */
 
-  const checkRegistrationDetails = ({
-    email,
-    mobile,
-    excludeUserId = null,
-  }) => {
-    const accounts = getAccounts();
+  const checkRegistrationDetails = useCallback(
+    ({
+      email,
+      mobile,
+      excludeUserId = null,
+    }) => {
+      const accounts = getAccounts();
 
-    const normalizedEmail =
-      normalizeEmail(email);
+      const normalizedEmail =
+        normalizeEmail(email);
 
-    const normalizedMobile =
-      normalizeMobile(mobile);
+      const normalizedMobile =
+        normalizeMobile(mobile);
 
-    const emailExists = accounts.some(
-      (account) =>
-        String(account.id) !==
-          String(excludeUserId) &&
-        normalizeEmail(account.email) ===
-          normalizedEmail
-    );
-
-    const mobileExists =
-      normalizedMobile &&
-      accounts.some(
+      const emailExists = accounts.some(
         (account) =>
           String(account.id) !==
             String(excludeUserId) &&
-          normalizeMobile(account.mobile) ===
-            normalizedMobile
+          normalizeEmail(account.email) ===
+            normalizedEmail
       );
 
-    if (!emailExists && !mobileExists) {
+      const mobileExists =
+        normalizedMobile &&
+        accounts.some(
+          (account) =>
+            String(account.id) !==
+              String(excludeUserId) &&
+            normalizeMobile(account.mobile) ===
+              normalizedMobile
+        );
+
+      if (!emailExists && !mobileExists) {
+        return {
+          success: true,
+          fields: {},
+        };
+      }
+
       return {
-        success: true,
-        fields: {},
+        success: false,
+
+        fields: {
+          ...(emailExists
+            ? {
+                email:
+                  "An account with this email already exists.",
+              }
+            : {}),
+
+          ...(mobileExists
+            ? {
+                mobile:
+                  "An account with this mobile number already exists.",
+              }
+            : {}),
+        },
       };
-    }
-
-    return {
-      success: false,
-
-      fields: {
-        ...(emailExists
-          ? {
-              email:
-                "An account with this email already exists.",
-            }
-          : {}),
-
-        ...(mobileExists
-          ? {
-              mobile:
-                "An account with this mobile number already exists.",
-            }
-          : {}),
-      },
-    };
-  };
+    },
+    [getAccounts]
+  );
 
   /* =======================================================
      REGISTER
   ======================================================= */
 
-  const register = (userData) => {
-    const accounts = getAccounts();
+  const register = useCallback(
+    (userData) => {
+      const accounts = getAccounts();
 
-    const normalizedName =
-      String(userData.name || "").trim();
+      const normalizedName =
+        String(userData.name || "").trim();
 
-    const normalizedEmail =
-      normalizeEmail(userData.email);
+      const normalizedEmail =
+        normalizeEmail(userData.email);
 
-    const normalizedMobile =
-      normalizeMobile(userData.mobile);
+      const normalizedMobile =
+        normalizeMobile(userData.mobile);
 
-    /* ---------- NAME ---------- */
+      /* ---------- NAME ---------- */
 
-    if (!normalizedName) {
-      return {
-        success: false,
-        fields: {
-          name: "Name is required.",
-        },
-      };
-    }
+      if (!normalizedName) {
+        return {
+          success: false,
+          fields: {
+            name: "Name is required.",
+          },
+        };
+      }
 
-    if (normalizedName.length < 2) {
-      return {
-        success: false,
-        fields: {
-          name:
-            "Name must contain at least 2 characters.",
-        },
-      };
-    }
+      if (normalizedName.length < 2) {
+        return {
+          success: false,
+          fields: {
+            name:
+              "Name must contain at least 2 characters.",
+          },
+        };
+      }
 
-    /* ---------- MOBILE ---------- */
+      /* ---------- MOBILE ---------- */
 
-    if (!normalizedMobile) {
-      return {
-        success: false,
-        fields: {
-          mobile:
-            "Mobile number is required.",
-        },
-      };
-    }
+      if (!normalizedMobile) {
+        return {
+          success: false,
+          fields: {
+            mobile:
+              "Mobile number is required.",
+          },
+        };
+      }
 
-    if (
-      !isValidIndianMobile(
-        normalizedMobile
-      )
-    ) {
-      return {
-        success: false,
-        fields: {
-          mobile:
-            "Enter a valid 10-digit Indian mobile number.",
-        },
-      };
-    }
+      if (
+        !isValidIndianMobile(
+          normalizedMobile
+        )
+      ) {
+        return {
+          success: false,
+          fields: {
+            mobile:
+              "Enter a valid 10-digit Indian mobile number.",
+          },
+        };
+      }
 
-    /* ---------- EMAIL ---------- */
+      /* ---------- EMAIL ---------- */
 
-    if (!normalizedEmail) {
-      return {
-        success: false,
-        fields: {
-          email: "Email is required.",
-        },
-      };
-    }
+      if (!normalizedEmail) {
+        return {
+          success: false,
+          fields: {
+            email: "Email is required.",
+          },
+        };
+      }
 
-    if (!isValidGmail(normalizedEmail)) {
-      return {
-        success: false,
-        fields: {
-          email:
-            "Enter a valid Gmail address ending with @gmail.com.",
-        },
-      };
-    }
+      if (!isValidGmail(normalizedEmail)) {
+        return {
+          success: false,
+          fields: {
+            email:
+              "Enter a valid Gmail address ending with @gmail.com.",
+          },
+        };
+      }
 
-    /* ---------- PASSWORD ---------- */
+      /* ---------- PASSWORD ---------- */
 
-    if (!userData.password) {
-      return {
-        success: false,
-        fields: {
-          password:
-            "Password is required.",
-        },
-      };
-    }
+      if (!userData.password) {
+        return {
+          success: false,
+          fields: {
+            password:
+              "Password is required.",
+          },
+        };
+      }
 
-    /* ---------- DUPLICATE CHECK ---------- */
+      /* ---------- DUPLICATE CHECK ---------- */
 
-    const availability =
-      checkRegistrationDetails({
-        email: normalizedEmail,
-        mobile: normalizedMobile,
-      });
+      const availability =
+        checkRegistrationDetails({
+          email: normalizedEmail,
+          mobile: normalizedMobile,
+        });
 
-    if (!availability.success) {
-      return {
-        success: false,
-        fields: availability.fields,
-      };
-    }
+      if (!availability.success) {
+        return {
+          success: false,
+          fields: availability.fields,
+        };
+      }
 
-    /* ---------- ROLE ---------- */
+      /* ---------- ROLE ---------- */
 
-    const selectedRole =
-      String(
+      const selectedRole = String(
         userData.role || DEFAULT_ROLE
       )
         .trim()
         .toLowerCase();
 
-    /*
-     * IMPORTANT:
-     *
-     * Public registration can ONLY create:
-     * - attendee
-     * - organizer
-     *
-     * Admin can NEVER be created here.
-     */
-    const role = [
-      "attendee",
-      "organizer",
-    ].includes(selectedRole)
-      ? selectedRole
-      : DEFAULT_ROLE;
+      /*
+       * IMPORTANT:
+       *
+       * Public registration can ONLY create:
+       * - attendee
+       * - organizer
+       *
+       * Admin can NEVER be created here.
+       */
 
-    /* ---------- CREATE ACCOUNT ---------- */
+      const role = [
+        "attendee",
+        "organizer",
+      ].includes(selectedRole)
+        ? selectedRole
+        : DEFAULT_ROLE;
 
-    const newAccount = {
-      id: `user-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`,
+      /* ---------- CREATE ACCOUNT ---------- */
 
-      name: normalizedName,
+      const newAccount = {
+        id: `user-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
 
-      mobile: normalizedMobile,
+        name: normalizedName,
 
-      email: normalizedEmail,
+        mobile: normalizedMobile,
 
-      password: userData.password,
+        email: normalizedEmail,
 
-      role,
+        password: userData.password,
 
-      createdAt:
-        new Date().toISOString(),
-    };
+        role,
 
-    const updatedAccounts = [
-      ...accounts,
-      newAccount,
-    ];
-
-    const saved =
-      saveAccounts(updatedAccounts);
-
-    if (!saved) {
-      return {
-        success: false,
-        error:
-          "Unable to create your account. Please try again.",
+        createdAt:
+          new Date().toISOString(),
       };
-    }
 
-    /* ---------- CREATE SESSION ---------- */
+      const updatedAccounts = [
+        ...accounts,
+        newAccount,
+      ];
 
-    const loggedInUser = {
-      id: newAccount.id,
-      name: newAccount.name,
-      mobile: newAccount.mobile,
-      email: newAccount.email,
-      role: newAccount.role,
-      createdAt: newAccount.createdAt,
-    };
+      const saved =
+        saveAccounts(updatedAccounts);
 
-    localStorage.setItem(
-      USER_STORAGE_KEY,
-      JSON.stringify(loggedInUser)
-    );
+      if (!saved) {
+        return {
+          success: false,
+          error:
+            "Unable to create your account. Please try again.",
+        };
+      }
 
-    setUser(loggedInUser);
+      /* ---------- CREATE SESSION ---------- */
 
-    notifyAuthUpdated();
+      const loggedInUser = {
+        id: newAccount.id,
+        name: newAccount.name,
+        mobile: newAccount.mobile,
+        email: newAccount.email,
+        role: newAccount.role,
+        createdAt: newAccount.createdAt,
+      };
 
-    return {
-      success: true,
-      user: loggedInUser,
-    };
-  };
+      localStorage.setItem(
+        USER_STORAGE_KEY,
+        JSON.stringify(loggedInUser)
+      );
+
+      setUser(loggedInUser);
+
+      notifyAuthUpdated();
+
+      return {
+        success: true,
+        user: loggedInUser,
+      };
+    },
+    [checkRegistrationDetails, getAccounts, saveAccounts]
+  );
 
   /* =======================================================
      LOGIN
   ======================================================= */
 
-  const login = (userData) => {
-    const accounts = getAccounts();
+  const login = useCallback(
+    (userData) => {
+      const accounts = getAccounts();
 
-    const normalizedEmail =
-      normalizeEmail(userData.email);
+      const normalizedEmail =
+        normalizeEmail(userData.email);
 
-    const account = accounts.find(
-      (item) =>
-        normalizeEmail(item.email) ===
-        normalizedEmail
-    );
+      const account = accounts.find(
+        (item) =>
+          normalizeEmail(item.email) ===
+          normalizedEmail
+      );
 
-    if (!account) {
-      return {
-        success: false,
-        error:
-          "No account found with this email.",
-      };
-    }
+      if (!account) {
+        return {
+          success: false,
+          error:
+            "No account found with this email.",
+        };
+      }
 
-    if (
-      account.password !==
-      userData.password
-    ) {
-      return {
-        success: false,
-        error: "Incorrect password.",
-      };
-    }
+      if (
+        account.password !==
+        userData.password
+      ) {
+        return {
+          success: false,
+          error: "Incorrect password.",
+        };
+      }
 
-    const selectedRole =
-      String(
+      const selectedRole = String(
         userData.role || DEFAULT_ROLE
       )
         .trim()
         .toLowerCase();
 
-    const accountRole =
-      normalizeRole(account.role);
+      const accountRole =
+        normalizeRole(account.role);
 
-    if (selectedRole !== accountRole) {
+      if (selectedRole !== accountRole) {
+        return {
+          success: false,
+          error: `This account is registered as ${accountRole}. Please select ${accountRole} to continue.`,
+        };
+      }
+
+      /*
+       * Admin login must always resolve to the
+       * canonical internal Admin account.
+       */
+
+      const loggedInUser =
+        accountRole === "admin"
+          ? {
+              id: INTERNAL_ADMIN.id,
+              name: INTERNAL_ADMIN.name,
+              mobile:
+                INTERNAL_ADMIN.mobile,
+              email:
+                INTERNAL_ADMIN.email,
+              role: "admin",
+              createdAt:
+                INTERNAL_ADMIN.createdAt,
+            }
+          : {
+              id: account.id,
+
+              name: account.name || "",
+
+              mobile:
+                normalizeMobile(
+                  account.mobile
+                ),
+
+              email:
+                normalizeEmail(
+                  account.email
+                ),
+
+              role: accountRole,
+
+              createdAt:
+                account.createdAt || "",
+            };
+
+      localStorage.setItem(
+        USER_STORAGE_KEY,
+        JSON.stringify(loggedInUser)
+      );
+
+      setUser(loggedInUser);
+
+      notifyAuthUpdated();
+
       return {
-        success: false,
-        error: `This account is registered as ${accountRole}. Please select ${accountRole} to continue.`,
+        success: true,
+        user: loggedInUser,
       };
-    }
-
-    /*
-     * Admin login must always resolve to the
-     * canonical internal Admin account.
-     */
-    const loggedInUser =
-      accountRole === "admin"
-        ? {
-            id: INTERNAL_ADMIN.id,
-            name: INTERNAL_ADMIN.name,
-            mobile:
-              INTERNAL_ADMIN.mobile,
-            email:
-              INTERNAL_ADMIN.email,
-            role: "admin",
-            createdAt:
-              INTERNAL_ADMIN.createdAt,
-          }
-        : {
-            id: account.id,
-
-            name: account.name || "",
-
-            mobile:
-              normalizeMobile(
-                account.mobile
-              ),
-
-            email:
-              normalizeEmail(
-                account.email
-              ),
-
-            role: accountRole,
-
-            createdAt:
-              account.createdAt || "",
-          };
-
-    localStorage.setItem(
-      USER_STORAGE_KEY,
-      JSON.stringify(loggedInUser)
-    );
-
-    setUser(loggedInUser);
-
-    notifyAuthUpdated();
-
-    return {
-      success: true,
-      user: loggedInUser,
-    };
-  };
+    },
+    [getAccounts]
+  );
 
   /* =======================================================
      UPDATE USER / PROFILE
   ======================================================= */
 
-  const updateUser = (updates) => {
-    if (!user) {
-      return {
-        success: false,
-        error:
-          "No authenticated user found.",
-      };
-    }
-
-    const accounts = getAccounts();
-
-    const currentAccount =
-      accounts.find(
-        (account) =>
-          String(account.id) ===
-          String(user.id)
-      );
-
-    if (!currentAccount) {
-      return {
-        success: false,
-        error:
-          "Your account could not be found. Please log in again.",
-      };
-    }
-
-    /* ---------- NAME ---------- */
-
-    const updatedName =
-      updates.name !== undefined
-        ? String(updates.name).trim()
-        : currentAccount.name ||
-          user.name;
-
-    if (!updatedName) {
-      return {
-        success: false,
-        fields: {
-          name: "Name is required.",
-        },
-      };
-    }
-
-    if (updatedName.length < 2) {
-      return {
-        success: false,
-        fields: {
-          name:
-            "Name must contain at least 2 characters.",
-        },
-      };
-    }
-
-    /* ---------- EMAIL ---------- */
-
-    const updatedEmail =
-      updates.email !== undefined
-        ? normalizeEmail(updates.email)
-        : normalizeEmail(
-            currentAccount.email ||
-              user.email
-          );
-
-    if (!updatedEmail) {
-      return {
-        success: false,
-        fields: {
-          email: "Email is required.",
-        },
-      };
-    }
-
-    if (!isValidGmail(updatedEmail)) {
-      return {
-        success: false,
-        fields: {
-          email:
-            "Enter a valid Gmail address ending with @gmail.com.",
-        },
-      };
-    }
-
-    /* ---------- MOBILE ---------- */
-
-    const updatedMobile =
-      updates.mobile !== undefined
-        ? normalizeMobile(updates.mobile)
-        : normalizeMobile(
-            currentAccount.mobile ||
-              user.mobile
-          );
-
-    if (!updatedMobile) {
-      return {
-        success: false,
-        fields: {
-          mobile:
-            "Mobile number is required.",
-        },
-      };
-    }
-
-    if (
-      !isValidIndianMobile(
-        updatedMobile
-      )
-    ) {
-      return {
-        success: false,
-        fields: {
-          mobile:
-            "Enter a valid 10-digit Indian mobile number.",
-        },
-      };
-    }
-
-    /* ---------- DUPLICATE CHECK ---------- */
-
-    const availability =
-      checkRegistrationDetails({
-        email: updatedEmail,
-        mobile: updatedMobile,
-        excludeUserId: user.id,
-      });
-
-    if (!availability.success) {
-      return {
-        success: false,
-        fields: availability.fields,
-      };
-    }
-
-    /* ---------- PRESERVE ROLE ---------- */
-
-    const currentRole =
-      normalizeRole(
-        currentAccount.role ||
-          user.role
-      );
-
-    /*
-     * The Admin role can NEVER be changed
-     * through profile updates.
-     */
-    const finalRole =
-      currentRole === "admin"
-        ? "admin"
-        : currentRole;
-
-    /*
-     * Admin identity remains canonical.
-     */
-    const isAdmin =
-      finalRole === "admin";
-
-    const updatedUser = isAdmin
-      ? {
-          ...user,
-
-          id: INTERNAL_ADMIN.id,
-
-          name: updatedName,
-
-          mobile: updatedMobile,
-
-          email: updatedEmail,
-
-          role: "admin",
-
-          createdAt:
-            INTERNAL_ADMIN.createdAt,
-        }
-      : {
-          ...user,
-
-          name: updatedName,
-
-          mobile: updatedMobile,
-
-          email: updatedEmail,
-
-          role: finalRole,
-
-          createdAt:
-            currentAccount.createdAt ||
-            user.createdAt ||
-            "",
-        };
-
-    /* ---------- UPDATE ACCOUNT ---------- */
-
-    const updatedAccounts =
-      accounts.map((account) => {
-        if (
-          String(account.id) !==
-          String(user.id)
-        ) {
-          return account;
-        }
-
-        /*
-         * Never allow profile editing to
-         * change an account's role.
-         */
+  const updateUser = useCallback(
+    (updates) => {
+      if (!user) {
         return {
-          ...account,
+          success: false,
+          error:
+            "No authenticated user found.",
+        };
+      }
 
-          id: isAdmin
-            ? INTERNAL_ADMIN.id
-            : account.id,
+      const accounts = getAccounts();
 
-          name: updatedName,
+      const currentAccount =
+        accounts.find(
+          (account) =>
+            String(account.id) ===
+            String(user.id)
+        );
 
-          mobile: updatedMobile,
+      if (!currentAccount) {
+        return {
+          success: false,
+          error:
+            "Your account could not be found. Please log in again.",
+        };
+      }
 
+      /* ---------- NAME ---------- */
+
+      const updatedName =
+        updates.name !== undefined
+          ? String(updates.name).trim()
+          : currentAccount.name ||
+            user.name;
+
+      if (!updatedName) {
+        return {
+          success: false,
+          fields: {
+            name: "Name is required.",
+          },
+        };
+      }
+
+      if (updatedName.length < 2) {
+        return {
+          success: false,
+          fields: {
+            name:
+              "Name must contain at least 2 characters.",
+          },
+        };
+      }
+
+      /* ---------- EMAIL ---------- */
+
+      const updatedEmail =
+        updates.email !== undefined
+          ? normalizeEmail(updates.email)
+          : normalizeEmail(
+              currentAccount.email ||
+                user.email
+            );
+
+      if (!updatedEmail) {
+        return {
+          success: false,
+          fields: {
+            email: "Email is required.",
+          },
+        };
+      }
+
+      if (!isValidGmail(updatedEmail)) {
+        return {
+          success: false,
+          fields: {
+            email:
+              "Enter a valid Gmail address ending with @gmail.com.",
+          },
+        };
+      }
+
+      /* ---------- MOBILE ---------- */
+
+      const updatedMobile =
+        updates.mobile !== undefined
+          ? normalizeMobile(updates.mobile)
+          : normalizeMobile(
+              currentAccount.mobile ||
+                user.mobile
+            );
+
+      if (!updatedMobile) {
+        return {
+          success: false,
+          fields: {
+            mobile:
+              "Mobile number is required.",
+          },
+        };
+      }
+
+      if (
+        !isValidIndianMobile(
+          updatedMobile
+        )
+      ) {
+        return {
+          success: false,
+          fields: {
+            mobile:
+              "Enter a valid 10-digit Indian mobile number.",
+          },
+        };
+      }
+
+      /* ---------- DUPLICATE CHECK ---------- */
+
+      const availability =
+        checkRegistrationDetails({
           email: updatedEmail,
+          mobile: updatedMobile,
+          excludeUserId: user.id,
+        });
 
-          role: finalRole,
+      if (!availability.success) {
+        return {
+          success: false,
+          fields: availability.fields,
+        };
+      }
 
-          createdAt:
-            isAdmin
+      /* ---------- PRESERVE ROLE ---------- */
+
+      const currentRole =
+        normalizeRole(
+          currentAccount.role ||
+            user.role
+        );
+
+      /*
+       * The Admin role can NEVER be changed
+       * through profile updates.
+       */
+
+      const finalRole =
+        currentRole === "admin"
+          ? "admin"
+          : currentRole;
+
+      /*
+       * Admin identity remains canonical.
+       */
+
+      const isAdmin =
+        finalRole === "admin";
+
+      const updatedUser = isAdmin
+        ? {
+            ...user,
+
+            id: INTERNAL_ADMIN.id,
+
+            name: updatedName,
+
+            mobile: updatedMobile,
+
+            email: updatedEmail,
+
+            role: "admin",
+
+            createdAt:
+              INTERNAL_ADMIN.createdAt,
+          }
+        : {
+            ...user,
+
+            name: updatedName,
+
+            mobile: updatedMobile,
+
+            email: updatedEmail,
+
+            role: finalRole,
+
+            createdAt:
+              currentAccount.createdAt ||
+              user.createdAt ||
+              "",
+          };
+
+      /* ---------- UPDATE ACCOUNT ---------- */
+
+      const updatedAccounts =
+        accounts.map((account) => {
+          if (
+            String(account.id) !==
+            String(user.id)
+          ) {
+            return account;
+          }
+
+          /*
+           * Never allow profile editing to
+           * change an account's role.
+           */
+
+          return {
+            ...account,
+
+            id: isAdmin
+              ? INTERNAL_ADMIN.id
+              : account.id,
+
+            name: updatedName,
+
+            mobile: updatedMobile,
+
+            email: updatedEmail,
+
+            role: finalRole,
+
+            createdAt: isAdmin
               ? INTERNAL_ADMIN.createdAt
               : account.createdAt ||
                 user.createdAt ||
                 new Date().toISOString(),
+          };
+        });
+
+      const saved =
+        saveAccounts(updatedAccounts);
+
+      if (!saved) {
+        return {
+          success: false,
+          error:
+            "Unable to save your profile changes.",
         };
-      });
+      }
 
-    const saved =
-      saveAccounts(updatedAccounts);
+      /* ---------- UPDATE SESSION ---------- */
 
-    if (!saved) {
+      localStorage.setItem(
+        USER_STORAGE_KEY,
+        JSON.stringify(updatedUser)
+      );
+
+      setUser(updatedUser);
+
+      notifyAuthUpdated();
+
       return {
-        success: false,
-        error:
-          "Unable to save your profile changes.",
+        success: true,
+        user: updatedUser,
       };
-    }
-
-    /* ---------- UPDATE SESSION ---------- */
-
-    localStorage.setItem(
-      USER_STORAGE_KEY,
-      JSON.stringify(updatedUser)
-    );
-
-    setUser(updatedUser);
-
-    notifyAuthUpdated();
-
-    return {
-      success: true,
-      user: updatedUser,
-    };
-  };
+    },
+    [
+      checkRegistrationDetails,
+      getAccounts,
+      saveAccounts,
+      user,
+    ]
+  );
 
   /* =======================================================
      LOGOUT
   ======================================================= */
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem(
       USER_STORAGE_KEY
     );
@@ -1075,7 +1077,7 @@ export function AuthProvider({ children }) {
     return {
       success: true,
     };
-  };
+  }, []);
 
   /* =======================================================
      CONTEXT VALUE
@@ -1100,7 +1102,15 @@ export function AuthProvider({ children }) {
 
       logout,
     }),
-    [user, isLoading]
+    [
+      user,
+      isLoading,
+      login,
+      register,
+      checkRegistrationDetails,
+      updateUser,
+      logout,
+    ]
   );
 
   return (

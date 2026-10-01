@@ -5,6 +5,8 @@ import {
   useState,
 } from "react";
 
+import { useNavigate } from "react-router-dom";
+
 import {
   ArrowRight,
   CalendarDays,
@@ -18,9 +20,9 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { Link } from "react-router-dom";
-
 import { useAuth } from "../../context/AuthContext";
+
+import BookingStatus from "../../components/bookings/BookingStatus";
 
 import {
   BOOKINGS_UPDATED_EVENT,
@@ -37,14 +39,19 @@ import {
    CONSTANTS
 ========================================================= */
 
-const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
+const ACCOUNTS_STORAGE_KEY =
+  "eventon_accounts";
 
 /* =========================================================
    BOOKING ID
 ========================================================= */
 
 function getBookingId(booking) {
-  return booking?.bookingId || booking?.id || "—";
+  return (
+    booking?.bookingId ||
+    booking?.id ||
+    "—"
+  );
 }
 
 /* =========================================================
@@ -56,6 +63,7 @@ function getTicketCount(booking) {
     booking?.quantity ??
       booking?.tickets ??
       booking?.ticketCount ??
+      booking?.numberOfTickets ??
       1
   );
 
@@ -64,30 +72,6 @@ function getTicketCount(booking) {
   }
 
   return value;
-}
-
-/* =========================================================
-   BOOKING AMOUNT
-========================================================= */
-
-function getBookingAmount(booking) {
-  const value = Number(
-    booking?.totalAmount ??
-      booking?.totalPrice ??
-      booking?.amount ??
-      booking?.price ??
-      0
-  );
-
-  return Number.isFinite(value) ? value : 0;
-}
-
-/* =========================================================
-   FORMAT CURRENCY
-========================================================= */
-
-function formatCurrency(value) {
-  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
 /* =========================================================
@@ -117,7 +101,9 @@ function formatDate(value) {
 ========================================================= */
 
 function isBookingCancelled(booking) {
-  const status = String(booking?.status || "")
+  const status = String(
+    booking?.status || ""
+  )
     .trim()
     .toLowerCase();
 
@@ -131,10 +117,19 @@ function isBookingCancelled(booking) {
    DATE + TIME PARSER
 ========================================================= */
 
-function parseDateTime(dateValue, timeValue) {
+function parseDateTime(
+  dateValue,
+  timeValue
+) {
   if (!dateValue) {
     return null;
   }
+
+  /*
+   * Support values such as:
+   * 2026-10-01
+   * 2026-10-01T17:30:00
+   */
 
   if (
     typeof dateValue === "string" &&
@@ -148,7 +143,8 @@ function parseDateTime(dateValue, timeValue) {
     }
   }
 
-  const dateString = String(dateValue).trim();
+  const dateString =
+    String(dateValue).trim();
 
   const match = dateString.match(
     /^(\d{4})-(\d{2})-(\d{2})/
@@ -163,7 +159,9 @@ function parseDateTime(dateValue, timeValue) {
     month = Number(match[2]) - 1;
     day = Number(match[3]);
   } else {
-    const parsed = new Date(dateString);
+    const parsed = new Date(
+      dateString
+    );
 
     if (Number.isNaN(parsed.getTime())) {
       return null;
@@ -178,7 +176,19 @@ function parseDateTime(dateValue, timeValue) {
   let minutes = 0;
 
   if (timeValue) {
-    const timeString = String(timeValue).trim();
+    const timeString = String(
+      timeValue
+    )
+      .trim()
+      .toUpperCase();
+
+    /*
+     * Supports:
+     * 17:30
+     * 05:30 PM
+     * 5:30 PM
+     * 05:30AM
+     */
 
     const timeMatch = timeString.match(
       /^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i
@@ -191,11 +201,17 @@ function parseDateTime(dateValue, timeValue) {
       const meridiem =
         timeMatch[3]?.toUpperCase();
 
-      if (meridiem === "PM" && hours < 12) {
+      if (
+        meridiem === "PM" &&
+        hours < 12
+      ) {
         hours += 12;
       }
 
-      if (meridiem === "AM" && hours === 12) {
+      if (
+        meridiem === "AM" &&
+        hours === 12
+      ) {
         hours = 0;
       }
     }
@@ -233,7 +249,10 @@ function getEventStart(event) {
     event?.eventTime ||
     null;
 
-  return parseDateTime(date, time);
+  return parseDateTime(
+    date,
+    time
+  );
 }
 
 /* =========================================================
@@ -244,6 +263,11 @@ function getEventEnd(event) {
   if (!event) {
     return null;
   }
+
+  /*
+   * EventON uses one event date.
+   * End date is intentionally not used.
+   */
 
   const date =
     event?.date ||
@@ -256,14 +280,21 @@ function getEventEnd(event) {
     event?.finishTime ||
     null;
 
+  /*
+   * Old events without endTime:
+   * Treat the end as the end of that event date.
+   */
+
   if (!time) {
-    const start = getEventStart(event);
+    const start =
+      getEventStart(event);
 
     if (!start) {
       return null;
     }
 
-    const endOfDay = new Date(start);
+    const endOfDay =
+      new Date(start);
 
     endOfDay.setHours(
       23,
@@ -275,20 +306,41 @@ function getEventEnd(event) {
     return endOfDay;
   }
 
-  return parseDateTime(date, time);
+  return parseDateTime(
+    date,
+    time
+  );
 }
 
 /* =========================================================
    BOOKING STATUS
 ========================================================= */
 
-function getBookingStatus(booking, event) {
-  if (isBookingCancelled(booking)) {
+function getBookingStatus(
+  booking,
+  event
+) {
+  /*
+   * Cancelled booking always remains
+   * cancelled even if the event date has passed.
+   */
+
+  if (
+    isBookingCancelled(booking)
+  ) {
     return "cancelled";
   }
 
-  const start = getEventStart(event);
-  const end = getEventEnd(event);
+  const start =
+    getEventStart(event);
+
+  const end =
+    getEventEnd(event);
+
+  /*
+   * If event information is unavailable,
+   * keep the booking as upcoming.
+   */
 
   if (!start) {
     return "upcoming";
@@ -296,9 +348,21 @@ function getBookingStatus(booking, event) {
 
   const now = new Date();
 
-  if (end && now > end) {
+  /*
+   * End time has priority.
+   * At the exact end time, event is completed.
+   */
+
+  if (
+    end &&
+    now >= end
+  ) {
     return "completed";
   }
+
+  /*
+   * After start and before end = ongoing.
+   */
 
   if (now >= start) {
     return "ongoing";
@@ -312,7 +376,9 @@ function getBookingStatus(booking, event) {
    NEWEST → OLDEST
 ========================================================= */
 
-function getBookingCreatedTime(booking) {
+function getBookingCreatedTime(
+  booking
+) {
   const value =
     booking?.createdAt ??
     booking?.bookedAt ??
@@ -325,7 +391,8 @@ function getBookingCreatedTime(booking) {
     return 0;
   }
 
-  const timestamp = new Date(value).getTime();
+  const timestamp =
+    new Date(value).getTime();
 
   return Number.isFinite(timestamp)
     ? timestamp
@@ -333,69 +400,13 @@ function getBookingCreatedTime(booking) {
 }
 
 /* =========================================================
-   BOOKING STATUS TAG
-========================================================= */
-
-function BookingStatus({ status }) {
-  const normalizedStatus = String(status || "")
-    .trim()
-    .toLowerCase();
-
-  const statusConfig = {
-    upcoming: {
-      label: "Upcoming",
-      icon: Clock3,
-      className:
-        "border-amber-200 bg-amber-50 text-amber-700",
-    },
-
-    ongoing: {
-      label: "Ongoing",
-      icon: PlayCircle,
-      className:
-        "border-blue-200 bg-blue-50 text-blue-700",
-    },
-
-    completed: {
-      label: "Completed",
-      icon: CheckCircle2,
-      className:
-        "border-emerald-200 bg-emerald-50 text-emerald-700",
-    },
-
-    cancelled: {
-      label: "Cancelled",
-      icon: XCircle,
-      className:
-        "border-red-200 bg-red-50 text-red-700",
-    },
-  };
-
-  const config =
-    statusConfig[normalizedStatus] ||
-    statusConfig.upcoming;
-
-  const Icon = config.icon;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm backdrop-blur-sm ${config.className}`}
-    >
-      <Icon
-        size={14}
-        strokeWidth={2.5}
-      />
-
-      <span>{config.label}</span>
-    </span>
-  );
-}
-
-/* =========================================================
    ATTENDEE RESOLVER
 ========================================================= */
 
-function getAttendee(booking, accounts) {
+function getAttendee(
+  booking,
+  accounts
+) {
   const attendee =
     booking?.attendee || {};
 
@@ -413,6 +424,10 @@ function getAttendee(booking, accounts) {
 
   let account = null;
 
+  /*
+   * First try user ID.
+   */
+
   if (bookingUserId) {
     account =
       accounts.find(
@@ -422,14 +437,25 @@ function getAttendee(booking, accounts) {
       ) || null;
   }
 
-  if (!account && bookingEmail) {
+  /*
+   * Then try email.
+   */
+
+  if (
+    !account &&
+    bookingEmail
+  ) {
     account =
       accounts.find(
         (item) =>
-          String(item?.email || "")
+          String(
+            item?.email || ""
+          )
             .trim()
             .toLowerCase() ===
-          String(bookingEmail)
+          String(
+            bookingEmail
+          )
             .trim()
             .toLowerCase()
       ) || null;
@@ -470,179 +496,206 @@ function getAttendee(booking, accounts) {
 function ManagementBookings() {
   const { user } = useAuth();
 
-  const normalizedRole = String(
-    user?.role || ""
-  )
-    .trim()
-    .toLowerCase();
+  const navigate =
+    useNavigate();
+
+  const normalizedRole =
+    String(user?.role || "")
+      .trim()
+      .toLowerCase();
 
   const isAdmin =
     normalizedRole === "admin";
 
   const isOrganizer =
-    normalizedRole === "organizer";
+    normalizedRole ===
+    "organizer";
 
-  /* =======================================================
-     STATE
-  ======================================================= */
+  const [
+    bookings,
+    setBookings,
+  ] = useState([]);
 
-  const [bookings, setBookings] =
-    useState([]);
+  const [
+    events,
+    setEvents,
+  ] = useState([]);
 
-  const [events, setEvents] =
-    useState([]);
+  const [
+    accounts,
+    setAccounts,
+  ] = useState([]);
 
-  const [accounts, setAccounts] =
-    useState([]);
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
 
-  const [searchQuery, setSearchQuery] =
-    useState("");
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState("all");
 
-  const [statusFilter, setStatusFilter] =
-    useState("all");
-
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
   /* =======================================================
      LOAD REAL DATA
   ======================================================= */
 
-  const loadData = useCallback(() => {
-    try {
-      const storedBookings =
-        getStoredBookings();
-
-      let storedEvents = [];
-
-      /* ADMIN → ALL EVENTS */
-      if (isAdmin) {
-        storedEvents =
-          getStoredEvents();
-      }
-
-      /* ORGANIZER → OWN EVENTS */
-      if (
-        isOrganizer &&
-        user?.id
-      ) {
-        storedEvents =
-          getStoredEventsByOrganizer(
-            user.id
-          );
-      }
-
-      /* =================================================
-         ACCOUNTS
-      ================================================= */
-
-      let storedAccounts = [];
-
+  const loadData =
+    useCallback(() => {
       try {
-        const rawAccounts =
-          localStorage.getItem(
-            ACCOUNTS_STORAGE_KEY
-          );
+        const storedBookings =
+          getStoredBookings();
 
-        if (rawAccounts) {
-          const parsedAccounts =
-            JSON.parse(rawAccounts);
+        let storedEvents = [];
 
-          if (
-            Array.isArray(
-              parsedAccounts
-            )
-          ) {
-            storedAccounts =
-              parsedAccounts;
-          }
+        /*
+         * Admin:
+         * Load every event.
+         */
+
+        if (isAdmin) {
+          storedEvents =
+            getStoredEvents();
         }
-      } catch (error) {
-        console.error(
-          "Unable to load EventON accounts:",
-          error
-        );
-      }
 
-      /* =================================================
-         BOOKINGS
-      ================================================= */
+        /*
+         * Organizer:
+         * Load only their events.
+         */
 
-      if (
-        isOrganizer &&
-        user?.id
-      ) {
-        const organizerEventIds =
-          new Set(
-            storedEvents.map((event) =>
-              String(event.id)
-            )
-          );
+        if (
+          isOrganizer &&
+          user?.id
+        ) {
+          storedEvents =
+            getStoredEventsByOrganizer(
+              user.id
+            );
+        }
 
-        const organizerBookings =
-          Array.isArray(
-            storedBookings
-          )
-            ? storedBookings.filter(
-                (booking) => {
-                  const bookingEventId =
-                    booking?.eventId ??
-                    booking?.event?.id;
+        /* =================================================
+           ACCOUNTS
+        ================================================= */
 
-                  return organizerEventIds.has(
-                    String(
-                      bookingEventId
-                    )
-                  );
-                }
+        let storedAccounts = [];
+
+        try {
+          const rawAccounts =
+            localStorage.getItem(
+              ACCOUNTS_STORAGE_KEY
+            );
+
+          if (rawAccounts) {
+            const parsedAccounts =
+              JSON.parse(
+                rawAccounts
+              );
+
+            if (
+              Array.isArray(
+                parsedAccounts
               )
-            : [];
+            ) {
+              storedAccounts =
+                parsedAccounts;
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Unable to load EventON accounts:",
+            error
+          );
+        }
 
-        setBookings(
-          organizerBookings
-        );
-      } else {
-        setBookings(
+        /* =================================================
+           ORGANIZER BOOKING FILTER
+        ================================================= */
+
+        if (
+          isOrganizer &&
+          user?.id
+        ) {
+          const organizerEventIds =
+            new Set(
+              storedEvents.map(
+                (event) =>
+                  String(event.id)
+              )
+            );
+
+          const organizerBookings =
+            Array.isArray(
+              storedBookings
+            )
+              ? storedBookings.filter(
+                  (booking) => {
+                    const bookingEventId =
+                      booking?.eventId ??
+                      booking?.event?.id;
+
+                    return organizerEventIds.has(
+                      String(
+                        bookingEventId
+                      )
+                    );
+                  }
+                )
+              : [];
+
+          setBookings(
+            organizerBookings
+          );
+        } else {
+          /*
+           * Admin receives all bookings.
+           */
+
+          setBookings(
+            Array.isArray(
+              storedBookings
+            )
+              ? storedBookings
+              : []
+          );
+        }
+
+        setEvents(
           Array.isArray(
-            storedBookings
+            storedEvents
           )
-            ? storedBookings
+            ? storedEvents
             : []
         );
+
+        setAccounts(
+          Array.isArray(
+            storedAccounts
+          )
+            ? storedAccounts
+            : []
+        );
+      } catch (error) {
+        console.error(
+          "Unable to load EventON booking data:",
+          error
+        );
+
+        setBookings([]);
+        setEvents([]);
+        setAccounts([]);
+      } finally {
+        setLoading(false);
       }
-
-      setEvents(
-        Array.isArray(
-          storedEvents
-        )
-          ? storedEvents
-          : []
-      );
-
-      setAccounts(
-        Array.isArray(
-          storedAccounts
-        )
-          ? storedAccounts
-          : []
-      );
-    } catch (error) {
-      console.error(
-        "Unable to load EventON booking data:",
-        error
-      );
-
-      setBookings([]);
-      setEvents([]);
-      setAccounts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    isAdmin,
-    isOrganizer,
-    user?.id,
-  ]);
+    }, [
+      isAdmin,
+      isOrganizer,
+      user?.id,
+    ]);
 
   /* =======================================================
      LIVE UPDATES
@@ -655,9 +708,24 @@ function ManagementBookings() {
       loadData();
     };
 
+    const handleStorage = (
+      event
+    ) => {
+      if (
+        event.key ===
+          "eventon_bookings" ||
+        event.key ===
+          "eventon_events" ||
+        event.key ===
+          "eventon_accounts"
+      ) {
+        loadData();
+      }
+    };
+
     window.addEventListener(
       "storage",
-      handleUpdate
+      handleStorage
     );
 
     window.addEventListener(
@@ -678,7 +746,7 @@ function ManagementBookings() {
     return () => {
       window.removeEventListener(
         "storage",
-        handleUpdate
+        handleStorage
       );
 
       window.removeEventListener(
@@ -715,239 +783,268 @@ function ManagementBookings() {
      ENRICH BOOKINGS
   ======================================================= */
 
-  const enrichedBookings = useMemo(() => {
-    return bookings.map((booking) => {
-      const eventId =
-        booking?.eventId ??
-        booking?.event?.id;
+  const enrichedBookings =
+    useMemo(() => {
+      return bookings.map(
+        (booking) => {
+          const eventId =
+            booking?.eventId ??
+            booking?.event?.id;
 
-      const event =
-        eventMap.get(
-          String(eventId)
-        ) ||
-        booking?.event ||
-        null;
+          const event =
+            eventMap.get(
+              String(eventId)
+            ) ||
+            booking?.event ||
+            null;
 
-      const attendee =
-        getAttendee(
-          booking,
-          accounts
-        );
+          const attendee =
+            getAttendee(
+              booking,
+              accounts
+            );
 
-      const status =
-        getBookingStatus(
-          booking,
-          event
-        );
+          const status =
+            getBookingStatus(
+              booking,
+              event
+            );
 
-      return {
-        ...booking,
+          return {
+            ...booking,
 
-        resolvedEvent:
-          event,
+            resolvedEvent:
+              event,
 
-        resolvedAttendee:
-          attendee,
+            resolvedAttendee:
+              attendee,
 
-        resolvedStatus:
-          status,
+            resolvedStatus:
+              status,
 
-        resolvedTicketCount:
-          getTicketCount(
-            booking
-          ),
-
-        resolvedAmount:
-          getBookingAmount(
-            booking
-          ),
-      };
-    });
-  }, [
-    bookings,
-    eventMap,
-    accounts,
-  ]);
+            resolvedTicketCount:
+              getTicketCount(
+                booking
+              ),
+          };
+        }
+      );
+    }, [
+      bookings,
+      eventMap,
+      accounts,
+    ]);
 
   /* =======================================================
      STATISTICS
   ======================================================= */
 
-  const statistics = useMemo(() => {
-    let upcoming = 0;
-    let ongoing = 0;
-    let completed = 0;
-    let cancelled = 0;
-    let tickets = 0;
+  const statistics =
+    useMemo(() => {
+      let upcoming = 0;
+      let ongoing = 0;
+      let completed = 0;
+      let cancelled = 0;
+      let tickets = 0;
 
-    enrichedBookings.forEach(
-      (booking) => {
-        const status =
-          booking.resolvedStatus;
+      enrichedBookings.forEach(
+        (booking) => {
+          const status =
+            booking.resolvedStatus;
 
-        if (
-          status === "upcoming"
-        ) {
-          upcoming += 1;
+          if (
+            status === "upcoming"
+          ) {
+            upcoming += 1;
+          }
+
+          if (
+            status === "ongoing"
+          ) {
+            ongoing += 1;
+          }
+
+          if (
+            status === "completed"
+          ) {
+            completed += 1;
+          }
+
+          if (
+            status === "cancelled"
+          ) {
+            cancelled += 1;
+          }
+
+          /*
+           * Cancelled bookings do not count
+           * towards tickets sold.
+           */
+
+          if (
+            status !== "cancelled"
+          ) {
+            tickets += Number(
+              booking.resolvedTicketCount ||
+                0
+            );
+          }
         }
+      );
 
-        if (
-          status === "ongoing"
-        ) {
-          ongoing += 1;
-        }
+      return {
+        total:
+          enrichedBookings.length,
 
-        if (
-          status === "completed"
-        ) {
-          completed += 1;
-        }
+        upcoming,
 
-        if (
-          status === "cancelled"
-        ) {
-          cancelled += 1;
-        }
+        ongoing,
 
-        if (
-          status !== "cancelled"
-        ) {
-          tickets += Number(
-            booking.resolvedTicketCount ||
-              0
-          );
-        }
-      }
-    );
+        completed,
 
-    return {
-      total:
-        enrichedBookings.length,
-      upcoming,
-      ongoing,
-      completed,
-      cancelled,
-      tickets,
-    };
-  }, [enrichedBookings]);
+        cancelled,
+
+        tickets,
+      };
+    }, [enrichedBookings]);
 
   /* =======================================================
      FILTER + SORT
-     
-     IMPORTANT:
      NEWEST BOOKING → OLDEST BOOKING
-     
-     Uses booking createdAt/bookedAt/bookingDate.
-     It does NOT sort using event date.
   ======================================================= */
 
-  const filteredBookings = useMemo(() => {
-    const query =
-      searchQuery
-        .trim()
-        .toLowerCase();
+  const filteredBookings =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
 
-    return [...enrichedBookings]
-      .filter((booking) => {
-        const attendeeName =
-          String(
-            booking
-              .resolvedAttendee
-              ?.name || ""
-          ).toLowerCase();
+      return [
+        ...enrichedBookings,
+      ]
+        .filter((booking) => {
+          const attendeeName =
+            String(
+              booking
+                .resolvedAttendee
+                ?.name || ""
+            ).toLowerCase();
 
-        const attendeeEmail =
-          String(
-            booking
-              .resolvedAttendee
-              ?.email || ""
-          ).toLowerCase();
+          const attendeeEmail =
+            String(
+              booking
+                .resolvedAttendee
+                ?.email || ""
+            ).toLowerCase();
 
-        const eventTitle =
-          String(
-            booking
-              .resolvedEvent
-              ?.title || ""
-          ).toLowerCase();
+          const eventTitle =
+            String(
+              booking
+                .resolvedEvent
+                ?.title || ""
+            ).toLowerCase();
 
-        const eventLocation =
-          String(
-            booking
-              .resolvedEvent
-              ?.location || ""
-          ).toLowerCase();
+          const eventLocation =
+            String(
+              booking
+                .resolvedEvent
+                ?.location || ""
+            ).toLowerCase();
 
-        const eventCity =
-          String(
-            booking
-              .resolvedEvent
-              ?.city || ""
-          ).toLowerCase();
+          const eventCity =
+            String(
+              booking
+                .resolvedEvent
+                ?.city || ""
+            ).toLowerCase();
 
-        const bookingId =
-          String(
-            getBookingId(booking)
-          ).toLowerCase();
+          const eventCategory =
+            String(
+              booking
+                .resolvedEvent
+                ?.category || ""
+            ).toLowerCase();
 
-        const matchesSearch =
-          !query ||
-          attendeeName.includes(
-            query
-          ) ||
-          attendeeEmail.includes(
-            query
-          ) ||
-          eventTitle.includes(
-            query
-          ) ||
-          eventLocation.includes(
-            query
-          ) ||
-          eventCity.includes(
-            query
-          ) ||
-          bookingId.includes(
-            query
+          const bookingId =
+            String(
+              getBookingId(
+                booking
+              )
+            ).toLowerCase();
+
+          const matchesSearch =
+            !query ||
+            attendeeName.includes(
+              query
+            ) ||
+            attendeeEmail.includes(
+              query
+            ) ||
+            eventTitle.includes(
+              query
+            ) ||
+            eventLocation.includes(
+              query
+            ) ||
+            eventCity.includes(
+              query
+            ) ||
+            eventCategory.includes(
+              query
+            ) ||
+            bookingId.includes(
+              query
+            );
+
+          const matchesStatus =
+            statusFilter ===
+              "all" ||
+            booking.resolvedStatus ===
+              statusFilter;
+
+          return (
+            matchesSearch &&
+            matchesStatus
           );
+        })
+        .sort((a, b) => {
+          const first =
+            getBookingCreatedTime(
+              a
+            );
 
-        const matchesStatus =
-          statusFilter === "all" ||
-          booking.resolvedStatus ===
-            statusFilter;
+          const second =
+            getBookingCreatedTime(
+              b
+            );
 
-        return (
-          matchesSearch &&
-          matchesStatus
-        );
-      })
-      .sort((a, b) => {
-        const first =
-          getBookingCreatedTime(a);
+          /*
+           * Newest → oldest.
+           */
 
-        const second =
-          getBookingCreatedTime(b);
-
-        return second - first;
-      });
-  }, [
-    enrichedBookings,
-    searchQuery,
-    statusFilter,
-  ]);
+          return (
+            second - first
+          );
+        });
+    }, [
+      enrichedBookings,
+      searchQuery,
+      statusFilter,
+    ]);
 
   /* =======================================================
      DETAIL ROUTE
   ======================================================= */
 
-  const getDetailsPath = (
-    bookingId
-  ) => {
-    if (isAdmin) {
-      return `/admin/bookings/${bookingId}`;
-    }
+  const getDetailsPath =
+    (bookingId) => {
+      if (isAdmin) {
+        return `/admin/bookings/${bookingId}`;
+      }
 
-    return `/organizer/bookings/${bookingId}`;
-  };
+      return `/organizer/bookings/${bookingId}`;
+    };
 
   /* =======================================================
      RESET FILTERS
@@ -1013,7 +1110,9 @@ function ManagementBookings() {
     <section className="min-h-full bg-slate-50">
       <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <div>
           <p className="text-sm font-semibold text-orange-500">
@@ -1029,7 +1128,7 @@ function ManagementBookings() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             {isAdmin
               ? "Manage and review all bookings made across EventON."
-              : "Manage attendees, tickets, booking status, and revenue across your events."}
+              : "Manage attendees, tickets, and booking status across your events."}
           </p>
         </div>
 
@@ -1040,14 +1139,18 @@ function ManagementBookings() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <BookingStatCard
             title="Total Bookings"
-            value={statistics.total}
+            value={
+              statistics.total
+            }
             icon={Ticket}
             iconClass="bg-violet-50 text-violet-600"
           />
 
           <BookingStatCard
             title="Tickets Sold"
-            value={statistics.tickets}
+            value={
+              statistics.tickets
+            }
             icon={Users}
             iconClass="bg-orange-50 text-orange-600"
           />
@@ -1056,28 +1159,36 @@ function ManagementBookings() {
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <BookingStatCard
             title="Upcoming"
-            value={statistics.upcoming}
+            value={
+              statistics.upcoming
+            }
             icon={Clock3}
             iconClass="bg-amber-50 text-amber-600"
           />
 
           <BookingStatCard
             title="Ongoing"
-            value={statistics.ongoing}
+            value={
+              statistics.ongoing
+            }
             icon={PlayCircle}
             iconClass="bg-blue-50 text-blue-600"
           />
 
           <BookingStatCard
             title="Completed"
-            value={statistics.completed}
+            value={
+              statistics.completed
+            }
             icon={CheckCircle2}
             iconClass="bg-emerald-50 text-emerald-600"
           />
 
           <BookingStatCard
             title="Cancelled"
-            value={statistics.cancelled}
+            value={
+              statistics.cancelled
+            }
             icon={XCircle}
             iconClass="bg-red-50 text-red-600"
           />
@@ -1089,7 +1200,9 @@ function ManagementBookings() {
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-          {/* SEARCH + STATUS */}
+          {/* =================================================
+              SEARCH + STATUS
+          ================================================= */}
 
           <div className="border-b border-slate-200 p-3 sm:p-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
@@ -1104,13 +1217,15 @@ function ManagementBookings() {
 
                 <input
                   type="text"
-                  value={searchQuery}
+                  value={
+                    searchQuery
+                  }
                   onChange={(event) =>
                     setSearchQuery(
                       event.target.value
                     )
                   }
-                  placeholder="Search by name, email or booking ID..."
+                  placeholder="Search by name, email, event, category or booking ID..."
                   className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-50"
                 />
 
@@ -1218,7 +1333,9 @@ function ManagementBookings() {
             </div>
           </div>
 
-          {/* DIRECTORY HEADER */}
+          {/* =================================================
+              DIRECTORY HEADER
+          ================================================= */}
 
           <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
@@ -1240,10 +1357,13 @@ function ManagementBookings() {
             </div>
 
             {(searchQuery ||
-              statusFilter !== "all") && (
+              statusFilter !==
+                "all") && (
               <button
                 type="button"
-                onClick={clearFilters}
+                onClick={
+                  clearFilters
+                }
                 className="inline-flex items-center gap-1.5 self-start rounded-lg px-2.5 py-2 text-xs font-semibold text-orange-600 transition hover:bg-orange-50 sm:self-auto"
               >
                 Clear filters
@@ -1252,16 +1372,23 @@ function ManagementBookings() {
             )}
           </div>
 
-          {/* CONTENT */}
+          {/* =================================================
+              CONTENT
+          ================================================= */}
 
           {filteredBookings.length ===
           0 ? (
             <EmptyBookingsState
               hasFilters={
-                Boolean(searchQuery) ||
-                statusFilter !== "all"
+                Boolean(
+                  searchQuery
+                ) ||
+                statusFilter !==
+                  "all"
               }
-              onClear={clearFilters}
+              onClear={
+                clearFilters
+              }
             />
           ) : (
             <>
@@ -1327,147 +1454,144 @@ function ManagementBookings() {
                         return (
                           <tr
                             key={bookingId}
-                            className="group cursor-pointer transition hover:bg-orange-50/40"
+                            tabIndex={0}
+                            role="link"
+                            aria-label={`Open booking ${bookingId}`}
+                            onClick={() =>
+                              navigate(
+                                detailsPath
+                              )
+                            }
+                            onKeyDown={(
+                              eventKey
+                            ) => {
+                              if (
+                                eventKey.key ===
+                                  "Enter" ||
+                                eventKey.key ===
+                                  " "
+                              ) {
+                                eventKey.preventDefault();
+
+                                navigate(
+                                  detailsPath
+                                );
+                              }
+                            }}
+                            className="group cursor-pointer transition hover:bg-orange-50/40 focus:bg-orange-50/40 focus:outline-none"
                           >
                             {/* ATTENDEE */}
 
                             <td className="px-6 py-5">
-                              <Link
-                                to={detailsPath}
-                                className="block"
-                              >
-                                <div className="flex min-w-[190px] items-center gap-3">
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
-                                    {attendee?.name
-                                      ? attendee.name
-                                          .charAt(0)
-                                          .toUpperCase()
-                                      : "A"}
-                                  </div>
-
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-slate-900">
-                                      {attendee?.name ||
-                                        "Attendee"}
-                                    </p>
-
-                                    <p className="mt-0.5 max-w-[190px] truncate text-xs text-slate-500">
-                                      {attendee?.email ||
-                                        "No email"}
-                                    </p>
-                                  </div>
+                              <div className="flex min-w-[190px] items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
+                                  {attendee?.name
+                                    ? attendee.name
+                                        .charAt(
+                                          0
+                                        )
+                                        .toUpperCase()
+                                    : "A"}
                                 </div>
-                              </Link>
+
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-900">
+                                    {attendee?.name ||
+                                      "Attendee"}
+                                  </p>
+
+                                  <p className="mt-0.5 max-w-[190px] truncate text-xs text-slate-500">
+                                    {attendee?.email ||
+                                      "No email"}
+                                  </p>
+                                </div>
+                              </div>
                             </td>
 
                             {/* EVENT */}
 
                             <td className="px-6 py-5">
-                              <Link
-                                to={detailsPath}
-                                className="block"
-                              >
-                                <div className="flex min-w-[220px] items-center gap-3">
-                                  <div className="h-11 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                                    {event?.image ? (
-                                      <img
-                                        src={
-                                          event.image
-                                        }
-                                        alt={
-                                          event.title ||
-                                          "Event"
-                                        }
-                                        className="h-full w-full object-cover"
+                              <div className="flex min-w-[220px] items-center gap-3">
+                                <div className="h-11 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                                  {event?.image ? (
+                                    <img
+                                      src={
+                                        event.image
+                                      }
+                                      alt={
+                                        event.title ||
+                                        "Event"
+                                      }
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-slate-400">
+                                      <CalendarDays
+                                        size={18}
                                       />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-slate-400">
-                                        <CalendarDays
-                                          size={18}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-slate-900">
-                                      {event?.title ||
-                                        "Event unavailable"}
-                                    </p>
-
-                                    <p className="mt-1 truncate text-xs text-slate-500">
-                                      {[
-                                        event?.location,
-                                        event?.city,
-                                      ]
-                                        .filter(
-                                          Boolean
-                                        )
-                                        .join(
-                                          ", "
-                                        ) ||
-                                        "Location unavailable"}
-                                    </p>
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
-                              </Link>
+
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-900">
+                                    {event?.title ||
+                                      "Event unavailable"}
+                                  </p>
+
+                                  <p className="mt-1 truncate text-xs text-slate-500">
+                                    {[
+                                      event?.location,
+                                      event?.city,
+                                    ]
+                                      .filter(
+                                        Boolean
+                                      )
+                                      .join(
+                                        ", "
+                                      ) ||
+                                      "Location unavailable"}
+                                  </p>
+                                </div>
+                              </div>
                             </td>
 
                             {/* BOOKING ID */}
 
                             <td className="px-6 py-5">
-                              <Link
-                                to={detailsPath}
-                                className="block"
-                              >
-                                <p className="font-mono text-xs font-semibold text-slate-600">
-                                  {bookingId}
-                                </p>
-                              </Link>
+                              <p className="font-mono text-xs font-semibold text-slate-600">
+                                {bookingId}
+                              </p>
                             </td>
 
-                            {/* EVENT DATE */}
+                            {/* DATE */}
 
                             <td className="px-6 py-5">
-                              <Link
-                                to={detailsPath}
-                                className="block"
-                              >
-                                <p className="text-xs font-medium text-slate-700">
-                                  {formatDate(
-                                    date
-                                  )}
-                                </p>
-                              </Link>
+                              <p className="text-xs font-medium text-slate-700">
+                                {formatDate(
+                                  date
+                                )}
+                              </p>
                             </td>
 
                             {/* STATUS */}
 
                             <td className="px-6 py-5">
-                              <Link
-                                to={detailsPath}
-                                className="block"
-                              >
-                                <BookingStatus
-                                  status={
-                                    status
-                                  }
-                                />
-                              </Link>
+                              <BookingStatus
+                                status={
+                                  status
+                                }
+                              />
                             </td>
 
                             {/* ARROW */}
 
                             <td className="px-4 py-5">
-                              <Link
-                                to={detailsPath}
-                                aria-label="Open booking"
-                                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition group-hover:bg-orange-100 group-hover:text-orange-600"
-                              >
+                              <div className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition group-hover:bg-orange-100 group-hover:text-orange-600">
                                 <ArrowRight
                                   size={17}
                                 />
-                              </Link>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1503,11 +1627,38 @@ function ManagementBookings() {
                         bookingId
                       );
 
+                    const date =
+                      event?.date ||
+                      booking?.bookingDate ||
+                      booking?.createdAt;
+
                     return (
-                      <Link
+                      <div
                         key={bookingId}
-                        to={detailsPath}
-                        className="group block p-5 transition hover:bg-orange-50/40 sm:p-6"
+                        role="link"
+                        tabIndex={0}
+                        onClick={() =>
+                          navigate(
+                            detailsPath
+                          )
+                        }
+                        onKeyDown={(
+                          eventKey
+                        ) => {
+                          if (
+                            eventKey.key ===
+                              "Enter" ||
+                            eventKey.key ===
+                              " "
+                          ) {
+                            eventKey.preventDefault();
+
+                            navigate(
+                              detailsPath
+                            );
+                          }
+                        }}
+                        className="group block cursor-pointer p-5 transition hover:bg-orange-50/40 focus:bg-orange-50/40 focus:outline-none sm:p-6"
                       >
                         {/* TOP */}
 
@@ -1562,7 +1713,9 @@ function ManagementBookings() {
                           </div>
 
                           <BookingStatus
-                            status={status}
+                            status={
+                              status
+                            }
                           />
                         </div>
 
@@ -1579,23 +1732,7 @@ function ManagementBookings() {
                           <MobileDetail
                             label="Date"
                             value={formatDate(
-                              event?.date ||
-                                booking?.bookingDate ||
-                                booking?.createdAt
-                            )}
-                          />
-
-                          <MobileDetail
-                            label="Tickets"
-                            value={
-                              booking.resolvedTicketCount
-                            }
-                          />
-
-                          <MobileDetail
-                            label="Amount"
-                            value={formatCurrency(
-                              booking.resolvedAmount
+                              date
                             )}
                           />
                         </div>
@@ -1613,7 +1750,7 @@ function ManagementBookings() {
                             </span>
                           </span>
                         </div>
-                      </Link>
+                      </div>
                     );
                   }
                 )}
@@ -1642,8 +1779,10 @@ function StatusFilterButton({
     upcoming: {
       active:
         "border-amber-300 bg-amber-50 text-amber-700",
+
       inactive:
         "border-slate-200 bg-white text-slate-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
+
       count:
         "bg-amber-100 text-amber-700",
     },
@@ -1651,8 +1790,10 @@ function StatusFilterButton({
     ongoing: {
       active:
         "border-blue-300 bg-blue-50 text-blue-700",
+
       inactive:
         "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700",
+
       count:
         "bg-blue-100 text-blue-700",
     },
@@ -1660,8 +1801,10 @@ function StatusFilterButton({
     completed: {
       active:
         "border-emerald-300 bg-emerald-50 text-emerald-700",
+
       inactive:
         "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700",
+
       count:
         "bg-emerald-100 text-emerald-700",
     },
@@ -1669,8 +1812,10 @@ function StatusFilterButton({
     cancelled: {
       active:
         "border-red-300 bg-red-50 text-red-700",
+
       inactive:
         "border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700",
+
       count:
         "bg-red-100 text-red-700",
     },

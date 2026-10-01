@@ -1,3 +1,7 @@
+// =========================================================
+// EVENT CATEGORIES
+// =========================================================
+
 export const eventCategories = [
   {
     id: 1,
@@ -55,21 +59,119 @@ export const eventCategories = [
   },
 ];
 
-/*
- * System-owned events
- *
- * These are the original EventON demo events.
- * They are not owned by a real registered user.
- *
- * Organizer-created events will use the logged-in
- * organizer's user ID as organizerId.
- */
+// =========================================================
+// SYSTEM ORGANIZER
+// =========================================================
 
 export const SYSTEM_ORGANIZER_ID = "system-organizer";
 
+// =========================================================
+// DATE / TIME HELPERS
+// =========================================================
+
+/**
+ * Format Date object as YYYY-MM-DD
+ */
+const formatDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Get a date relative to today.
+ *
+ * Example:
+ * getDateFromToday(5)
+ * = 5 days from today
+ *
+ * getDateFromToday(-3)
+ * = 3 days before today
+ */
+const getDateFromToday = (daysFromToday = 0) => {
+  const date = new Date();
+
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + daysFromToday);
+
+  return formatDate(date);
+};
+
+/**
+ * Format a Date object into 12-hour time.
+ */
+const formatTime = (date) => {
+  let hours = date.getHours();
+
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  const period = hours >= 12 ? "PM" : "AM";
+
+  hours = hours % 12;
+
+  if (hours === 0) {
+    hours = 12;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${minutes} ${period}`;
+};
+
+/**
+ * Create an event guaranteed to be Ongoing
+ * when the seed data is initialized.
+ *
+ * Start = 1 hour before current time
+ * End   = 2 hours after current time
+ */
+const getOngoingEventTiming = (startOffsetHours = -1, endOffsetHours = 2) => {
+  const now = new Date();
+
+  const start = new Date(
+    now.getTime() + startOffsetHours * 60 * 60 * 1000
+  );
+
+  const end = new Date(
+    now.getTime() + endOffsetHours * 60 * 60 * 1000
+  );
+
+  return {
+    date: formatDate(now),
+    time: formatTime(start),
+    endTime: formatTime(end),
+  };
+};
+
+// Two separate ongoing events.
+// Both use today's date and times surrounding the current time.
+const ongoingTiming1 = getOngoingEventTiming(-1, 2);
+const ongoingTiming2 = getOngoingEventTiming(-2, 3);
+
+// =========================================================
+// DEFAULT EVENTS
+// =========================================================
+//
+// TOTAL DEFAULT EVENTS = 15
+//
+// Lifecycle distribution:
+//
+// 1  -> Completed
+// 2  -> Completed
+//
+// 3  -> Ongoing
+// 4  -> Ongoing
+//
+// 5-13 -> Upcoming (9)
+//
+// 14 -> Cancelled
+// 15 -> Cancelled
+//
+// =========================================================
+
 export const events = [
   // =========================================================
-  // 1. TECHNOLOGY
+  // 1. TECHNOLOGY - COMPLETED
   // =========================================================
 
   {
@@ -80,7 +182,7 @@ export const events = [
     categorySlug: "technology",
     description:
       "A technology conference bringing developers, innovators, founders, and technology enthusiasts together.",
-    date: "2026-10-10",
+    date: getDateFromToday(-7),
     time: "09:00 AM",
     endTime: "05:00 PM",
     location: "HICC, Hyderabad",
@@ -96,6 +198,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 2. TECHNOLOGY - COMPLETED
+  // =========================================================
+
   {
     id: 2,
     title: "Future of AI Conference",
@@ -104,7 +210,7 @@ export const events = [
     categorySlug: "technology",
     description:
       "Explore artificial intelligence, machine learning, generative AI, and the future of intelligent systems.",
-    date: "2026-10-18",
+    date: getDateFromToday(-3),
     time: "10:00 AM",
     endTime: "04:30 PM",
     location: "T-Hub, Hyderabad",
@@ -120,6 +226,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 3. TECHNOLOGY - ONGOING
+  // =========================================================
+
   {
     id: 3,
     title: "Developer Community Meetup",
@@ -128,9 +238,9 @@ export const events = [
     categorySlug: "technology",
     description:
       "Meet developers, share projects, discuss modern technologies, and build meaningful professional connections.",
-    date: "2026-10-31",
-    time: "03:00 PM",
-    endTime: "07:00 PM",
+    date: ongoingTiming1.date,
+    time: ongoingTiming1.time,
+    endTime: ongoingTiming1.endTime,
     location: "Microsoft Reactor, Bengaluru",
     city: "Bengaluru",
     organizer: "Developer Network",
@@ -144,15 +254,47 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 4. BUSINESS - ONGOING
+  // =========================================================
+
   {
     id: 4,
+    title: "Startup & Founders Meetup",
+    slug: "startup-founders-meetup",
+    category: "Business",
+    categorySlug: "business",
+    description:
+      "Connect with startup founders, entrepreneurs, investors, and professionals building the next generation of businesses.",
+    date: ongoingTiming2.date,
+    time: ongoingTiming2.time,
+    endTime: ongoingTiming2.endTime,
+    location: "Novotel HICC, Hyderabad",
+    city: "Hyderabad",
+    organizer: "Startup Hyderabad",
+    organizerId: SYSTEM_ORGANIZER_ID,
+    price: 499,
+    capacity: 250,
+    bookedSeats: 0,
+    image:
+      "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=80",
+    featured: true,
+    status: "published",
+  },
+
+  // =========================================================
+  // 5. BUSINESS - UPCOMING
+  // =========================================================
+
+  {
+    id: 5,
     title: "Cloud & DevOps Connect",
     slug: "cloud-devops-connect",
     category: "Technology",
     categorySlug: "technology",
     description:
       "A practical technology meetup covering cloud computing, DevOps, containers, CI/CD, and modern infrastructure.",
-    date: "2026-11-21",
+    date: getDateFromToday(3),
     time: "10:00 AM",
     endTime: "04:00 PM",
     location: "NIMHANS Convention Centre, Bengaluru",
@@ -169,32 +311,8 @@ export const events = [
   },
 
   // =========================================================
-  // 2. BUSINESS
+  // 6. BUSINESS - UPCOMING
   // =========================================================
-
-  {
-    id: 5,
-    title: "Startup & Founders Meetup",
-    slug: "startup-founders-meetup",
-    category: "Business",
-    categorySlug: "business",
-    description:
-      "Connect with startup founders, entrepreneurs, investors, and professionals building the next generation of businesses.",
-    date: "2026-10-24",
-    time: "02:00 PM",
-    endTime: "07:00 PM",
-    location: "Novotel HICC, Hyderabad",
-    city: "Hyderabad",
-    organizer: "Startup Hyderabad",
-    organizerId: SYSTEM_ORGANIZER_ID,
-    price: 499,
-    capacity: 250,
-    bookedSeats: 0,
-    image:
-      "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=80",
-    featured: true,
-    status: "published",
-  },
 
   {
     id: 6,
@@ -204,7 +322,7 @@ export const events = [
     categorySlug: "business",
     description:
       "A leadership-focused forum featuring discussions on entrepreneurship, management, business strategy, and innovation.",
-    date: "2026-11-07",
+    date: getDateFromToday(8),
     time: "09:30 AM",
     endTime: "05:00 PM",
     location: "Taj Lands End, Mumbai",
@@ -220,6 +338,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 7. BUSINESS - UPCOMING
+  // =========================================================
+
   {
     id: 7,
     title: "Digital Marketing Masterclass",
@@ -228,7 +350,7 @@ export const events = [
     categorySlug: "business",
     description:
       "Learn practical digital marketing strategies covering content, social media, analytics, branding, and customer growth.",
-    date: "2026-12-05",
+    date: getDateFromToday(12),
     time: "10:00 AM",
     endTime: "03:30 PM",
     location: "Pune International Convention Centre",
@@ -245,7 +367,7 @@ export const events = [
   },
 
   // =========================================================
-  // 3. MUSIC
+  // 8. MUSIC - UPCOMING
   // =========================================================
 
   {
@@ -256,7 +378,7 @@ export const events = [
     categorySlug: "music",
     description:
       "An evening of live performances, independent artists, great music, and an unforgettable festival experience.",
-    date: "2026-11-01",
+    date: getDateFromToday(16),
     time: "05:00 PM",
     endTime: "10:00 PM",
     location: "Gachibowli Stadium, Hyderabad",
@@ -272,6 +394,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 9. MUSIC - UPCOMING
+  // =========================================================
+
   {
     id: 9,
     title: "Indie Music Night",
@@ -280,7 +406,7 @@ export const events = [
     categorySlug: "music",
     description:
       "Enjoy an intimate evening featuring independent musicians, acoustic performances, and emerging artists.",
-    date: "2026-10-17",
+    date: getDateFromToday(20),
     time: "06:00 PM",
     endTime: "10:00 PM",
     location: "Phoenix Marketcity, Mumbai",
@@ -296,6 +422,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 10. MUSIC - UPCOMING
+  // =========================================================
+
   {
     id: 10,
     title: "Sunset EDM Festival",
@@ -304,7 +434,7 @@ export const events = [
     categorySlug: "music",
     description:
       "A high-energy electronic music festival featuring DJs, live visuals, food, and a spectacular sunset experience.",
-    date: "2026-12-12",
+    date: getDateFromToday(24),
     time: "04:00 PM",
     endTime: "11:00 PM",
     location: "Vagator Beach, Goa",
@@ -321,7 +451,7 @@ export const events = [
   },
 
   // =========================================================
-  // 4. SPORTS
+  // 11. SPORTS - UPCOMING
   // =========================================================
 
   {
@@ -332,7 +462,7 @@ export const events = [
     categorySlug: "sports",
     description:
       "Join runners from across the city for a professionally organized marathon and fitness experience.",
-    date: "2026-11-15",
+    date: getDateFromToday(28),
     time: "06:00 AM",
     endTime: "11:00 AM",
     location: "Necklace Road, Hyderabad",
@@ -348,6 +478,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 12. SPORTS - UPCOMING
+  // =========================================================
+
   {
     id: 12,
     title: "City Football Championship",
@@ -356,7 +490,7 @@ export const events = [
     categorySlug: "sports",
     description:
       "Watch local football teams compete in a city-level championship featuring exciting matches and sporting talent.",
-    date: "2026-10-25",
+    date: getDateFromToday(32),
     time: "04:00 PM",
     endTime: "09:00 PM",
     location: "Jawaharlal Nehru Stadium, Chennai",
@@ -373,7 +507,7 @@ export const events = [
   },
 
   // =========================================================
-  // 5. EDUCATION
+  // 13. EDUCATION - UPCOMING
   // =========================================================
 
   {
@@ -384,7 +518,7 @@ export const events = [
     categorySlug: "education",
     description:
       "A practical career preparation event covering resumes, interviews, coding, communication, and placement strategies.",
-    date: "2026-11-08",
+    date: getDateFromToday(36),
     time: "10:00 AM",
     endTime: "05:00 PM",
     location: "JNTUH Campus, Hyderabad",
@@ -400,6 +534,10 @@ export const events = [
     status: "published",
   },
 
+  // =========================================================
+  // 14. EDUCATION - CANCELLED
+  // =========================================================
+
   {
     id: 14,
     title: "Study Abroad Education Fair",
@@ -408,7 +546,7 @@ export const events = [
     categorySlug: "education",
     description:
       "Explore international education opportunities, universities, scholarships, application processes, and career pathways.",
-    date: "2026-10-11",
+    date: getDateFromToday(18),
     time: "11:00 AM",
     endTime: "05:00 PM",
     location: "Chennai Trade Centre, Chennai",
@@ -421,74 +559,22 @@ export const events = [
     image:
       "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80",
     featured: false,
-    status: "published",
+    status: "cancelled",
   },
 
   // =========================================================
-  // 6. ARTS & CULTURE
+  // 15. HEALTH & WELLNESS - CANCELLED
   // =========================================================
 
   {
     id: 15,
-    title: "Creative Arts Exhibition",
-    slug: "creative-arts-exhibition",
-    category: "Arts & Culture",
-    categorySlug: "arts-culture",
-    description:
-      "Discover paintings, photography, digital art, installations, and creative works from emerging artists.",
-    date: "2026-11-20",
-    time: "11:00 AM",
-    endTime: "07:00 PM",
-    location: "State Art Gallery, Hyderabad",
-    city: "Hyderabad",
-    organizer: "Hyderabad Arts Collective",
-    organizerId: SYSTEM_ORGANIZER_ID,
-    price: 199,
-    capacity: 300,
-    bookedSeats: 0,
-    image:
-      "https://images.unsplash.com/photo-1561214115-f2f134cc4912?auto=format&fit=crop&w=1200&q=80",
-    featured: false,
-    status: "published",
-  },
-
-  {
-    id: 16,
-    title: "Heritage & Culture Festival",
-    slug: "heritage-culture-festival",
-    category: "Arts & Culture",
-    categorySlug: "arts-culture",
-    description:
-      "Experience traditional art, cultural performances, crafts, history, and local heritage in one vibrant festival.",
-    date: "2026-12-06",
-    time: "10:00 AM",
-    endTime: "08:00 PM",
-    location: "Albert Hall Museum, Jaipur",
-    city: "Jaipur",
-    organizer: "Indian Heritage Foundation",
-    organizerId: SYSTEM_ORGANIZER_ID,
-    price: 299,
-    capacity: 1200,
-    bookedSeats: 0,
-    image:
-      "https://images.unsplash.com/photo-1514222134-b57cbb8ce073?auto=format&fit=crop&w=1200&q=80",
-    featured: true,
-    status: "published",
-  },
-
-  // =========================================================
-  // 7. HEALTH & WELLNESS
-  // =========================================================
-
-  {
-    id: 17,
     title: "Wellness & Fitness Expo",
     slug: "wellness-fitness-expo",
     category: "Health & Wellness",
     categorySlug: "health-wellness",
     description:
       "Explore fitness, nutrition, wellness practices, healthy living, and modern approaches to personal wellbeing.",
-    date: "2026-10-31",
+    date: getDateFromToday(22),
     time: "09:00 AM",
     endTime: "06:00 PM",
     location: "Hitex Exhibition Centre, Hyderabad",
@@ -501,133 +587,30 @@ export const events = [
     image:
       "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80",
     featured: true,
-    status: "published",
-  },
-
-  // =========================================================
-  // 8. FOOD & LIFESTYLE
-  // =========================================================
-
-  {
-    id: 18,
-    title: "Hyderabad Food Carnival",
-    slug: "hyderabad-food-carnival",
-    category: "Food & Lifestyle",
-    categorySlug: "food-lifestyle",
-    description:
-      "Taste local favourites, street food, desserts, international flavours, and creative dishes from popular food brands.",
-    date: "2026-11-29",
-    time: "12:00 PM",
-    endTime: "10:00 PM",
-    location: "NTR Gardens, Hyderabad",
-    city: "Hyderabad",
-    organizer: "Food Carnival India",
-    organizerId: SYSTEM_ORGANIZER_ID,
-    price: 149,
-    capacity: 2500,
-    bookedSeats: 0,
-    image:
-      "https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=1200&q=80",
-    featured: true,
-    status: "published",
-  },
-
-  // =========================================================
-  // 9. TRAVEL
-  // =========================================================
-
-  {
-    id: 19,
-    title: "India Travel & Adventure Expo",
-    slug: "india-travel-adventure-expo",
-    category: "Travel",
-    categorySlug: "travel",
-    description:
-      "Discover destinations, adventure experiences, travel communities, tour operators, and unique Indian getaways.",
-    date: "2026-12-19",
-    time: "10:00 AM",
-    endTime: "06:00 PM",
-    location: "Bandra Kurla Complex, Mumbai",
-    city: "Mumbai",
-    organizer: "Travel India Expo",
-    organizerId: SYSTEM_ORGANIZER_ID,
-    price: 399,
-    capacity: 2000,
-    bookedSeats: 0,
-    image:
-      "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80",
-    featured: false,
-    status: "published",
-  },
-
-  // =========================================================
-  // 10. MIXED / TECHNOLOGY
-  // =========================================================
-
-  {
-    id: 20,
-    title: "Future Builders Conference",
-    slug: "future-builders-conference",
-    category: "Technology",
-    categorySlug: "technology",
-    description:
-      "A cross-industry conference exploring technology, entrepreneurship, innovation, careers, and the future of work.",
-    date: "2026-12-20",
-    time: "09:30 AM",
-    endTime: "05:30 PM",
-    location: "Bharat Mandapam, New Delhi",
-    city: "New Delhi",
-    organizer: "Future Builders India",
-    organizerId: SYSTEM_ORGANIZER_ID,
-    price: 1199,
-    capacity: 1800,
-    bookedSeats: 0,
-    image:
-      "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80",
-    featured: true,
-    status: "published",
+    status: "cancelled",
   },
 ];
 
-/*
- * ============================================================
- * EVENT HELPERS
- * ============================================================
- */
+// =========================================================
+// EVENT HELPERS
+// =========================================================
 
-/**
- * Get a single event by ID.
- */
 export const getEventById = (id) => {
   return events.find(
     (event) => String(event.id) === String(id)
   );
 };
 
-/**
- * Get all featured events.
- */
 export const getFeaturedEvents = () => {
+  return events.filter((event) => event.featured);
+};
+
+export const getEventsByCategory = (categorySlug) => {
   return events.filter(
-    (event) => event.featured
+    (event) => event.categorySlug === categorySlug
   );
 };
 
-/**
- * Get events belonging to a category.
- */
-export const getEventsByCategory = (
-  categorySlug
-) => {
-  return events.filter(
-    (event) =>
-      event.categorySlug === categorySlug
-  );
-};
-
-/**
- * Get available seats.
- */
 export const getAvailableSeats = (event) => {
   if (!event) {
     return 0;
@@ -640,23 +623,12 @@ export const getAvailableSeats = (event) => {
   );
 };
 
-/**
- * Check whether an event is sold out.
- */
 export const isEventSoldOut = (event) => {
   return getAvailableSeats(event) === 0;
 };
 
-/**
- * Get events created by a specific organizer.
- *
- * This will be used by the Organizer Dashboard.
- */
-export const getEventsByOrganizer = (
-  organizerId
-) => {
+export const getEventsByOrganizer = (organizerId) => {
   return events.filter(
-    (event) =>
-      event.organizerId === organizerId
+    (event) => event.organizerId === organizerId
   );
 };

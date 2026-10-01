@@ -259,15 +259,6 @@ function AdminUsers() {
                 and organizers across EventON.
               </p>
             </div>
-
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Users size={17} />
-
-              <span>
-                {statistics.total} registered users
-              </span>
-            </div>
-
           </div>
         </div>
       </section>

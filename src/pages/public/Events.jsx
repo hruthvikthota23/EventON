@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
   CalendarDays,
   ChevronDown,
@@ -8,10 +9,12 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+
 import { useSearchParams } from "react-router-dom";
 
 import EventCard from "../../components/events/EventCard";
 import { eventCategories } from "../../data/events";
+
 import {
   getStoredEvents,
   EVENTS_UPDATED_EVENT,
@@ -21,38 +24,52 @@ import {
    HELPERS
 ========================================================= */
 
+/**
+ * Convert an event date + time into a local timestamp.
+ *
+ * Supported dates:
+ * - YYYY-MM-DD
+ * - Other browser-supported date strings
+ *
+ * Supported times:
+ * - 10:30 AM
+ * - 7:00 PM
+ * - 10:30
+ */
 const getEventTimestamp = (event) => {
   if (!event?.date) return 0;
 
   const dateString = String(event.date).trim();
 
-  let timestamp = 0;
+  /*
+   * Parse YYYY-MM-DD locally to avoid UTC date shifting.
+   */
+  const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(dateString)
+    ? (() => {
+        const [year, month, day] = dateString.split("-").map(Number);
 
-  // Parse YYYY-MM-DD locally to avoid UTC date shifting
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    const [year, month, day] = dateString.split("-").map(Number);
-
-    timestamp = new Date(
-      year,
-      month - 1,
-      day
-    ).getTime();
-  } else {
-    timestamp = new Date(dateString).getTime();
-  }
+        return new Date(
+          year,
+          month - 1,
+          day
+        ).getTime();
+      })()
+    : new Date(dateString).getTime();
 
   if (Number.isNaN(timestamp)) return 0;
 
   /*
-    Parse event time when available.
-    Supports:
-    10:30 AM
-    7:00 PM
-    10:30
-  */
+   * Parse event time when available.
+   */
   if (event.time) {
     const timeValue = String(event.time).trim();
 
+    /*
+     * Supports:
+     * 10:30 AM
+     * 7:00 PM
+     * 10:30
+     */
     const timeMatch = timeValue.match(
       /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i
     );
@@ -194,12 +211,16 @@ function Events() {
 
   const publicEvents = useMemo(() => {
     return storedEvents.filter((event) => {
-      // Only published and sold-out events are public
+      /*
+       * Only published and sold-out events are public.
+       */
       if (!isPubliclyVisibleStatus(event)) {
         return false;
       }
 
-      // Hide completed events
+      /*
+       * Hide completed events.
+       */
       if (isEventCompleted(event, currentTime)) {
         return false;
       }
@@ -455,9 +476,9 @@ function Events() {
     if (!searchSection) return;
 
     /*
-      Navbar height is approximately 64px.
-      Keep the search section directly below it.
-    */
+     * Navbar height is approximately 64px.
+     * Keep the search section directly below it.
+     */
 
     const navbarOffset = 64;
 
@@ -519,7 +540,6 @@ function Events() {
             <h1 className="text-5xl font-black leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl">
               Discover events
               <br />
-
               <span className="text-orange-500">
                 worth attending.
               </span>
@@ -533,9 +553,7 @@ function Events() {
           </div>
         </div>
 
-        {/* =================================================
-            EXPLORE EVENTS BUTTON
-        ================================================= */}
+        {/* Explore Events Button */}
 
         <button
           type="button"
