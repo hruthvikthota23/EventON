@@ -1,24 +1,23 @@
-# 🎫 EventON — Event Management System
+# 🎫 EventON --- Event Management System
 
-> 🚀 A modern, responsive, role-based **Event Management Web Application built with React.js**.
+> A modern, responsive, role-based event management web application
+> built with React.js, Vite and Tailwind CSS.
 
-EventON is a React-based event management platform that allows users to **discover events, book tickets, manage bookings, create events, manage events, and monitor event activity** through dedicated dashboards.
+**EventON** is a frontend event management platform for discovering
+events, booking tickets, managing bookings, creating events, and
+managing users/events through separate attendee, organizer, and admin
+workflows.
 
-The application supports three major roles:
+🌐 **Live Application:** https://eventon-iota.vercel.app/\
+💻 **GitHub Repository:** https://github.com/hruthvikthota23/EventON
 
-- 👤 **Attendee**
-- 🎤 **Organizer**
-- 🛡️ **Admin**
+------------------------------------------------------------------------
 
----
+## ✨ Project Overview
 
-## 🌟 Project Overview
+EventON provides three main role-based experiences:
 
-EventON is designed to provide a complete digital platform for managing events and bookings.
-
-The application provides separate workflows for different users:
-
-```text
+``` text
                          🎫 EVENTON
                             │
              ┌──────────────┼──────────────┐
@@ -33,1015 +32,774 @@ The application provides separate workflows for different users:
         Profile           Dashboard       Dashboard
 ```
 
-### 🎯 Main Objectives
+### Main Goals
 
-- 🎫 Simplify event discovery and ticket booking
-- 🎤 Help organizers create and manage events
-- 🛡️ Give administrators centralized platform management
-- 📊 Provide dashboards for monitoring events and bookings
-- 🔐 Implement role-based access
-- 📱 Provide a responsive user experience
-- 🧩 Maintain reusable React components
-- 🔄 Keep event and booking data synchronized across the application
+-   🎫 Discover and book events
+-   📅 Manage event lifecycle and availability
+-   🎤 Give organizers tools to create and manage their own events
+-   🛡️ Give admins platform-level management
+-   🔐 Protect routes by user role
+-   🎟️ Keep ticket and seat counts synchronized
+-   📊 Provide dashboard statistics and event performance information
+-   📱 Provide a responsive UI
+-   🧩 Use reusable React components and centralized storage utilities
+-   🚀 Deploy the frontend as a production Vite application
 
----
+------------------------------------------------------------------------
 
-# ✨ Features
+# 👥 User Roles
 
-## 👤 Attendee Features
+## 👤 Attendee
 
 Attendees can:
 
-- 🏠 Browse the EventON home page
-- 🔎 Search for events
-- 🏷️ Filter events by category
-- 📍 Filter events by location
-- 📅 View event details
-- 🎟️ Book tickets
-- 💰 View booking amount
-- ✅ View booking confirmation
-- 📋 View personal bookings
-- 🔍 Search bookings
-- 📊 Filter bookings by status
-- 📄 View booking details
-- ❌ Cancel eligible upcoming bookings
-- 👤 View and edit their profile
+-   Browse public events
+-   Search and filter events
+-   View event details
+-   Book tickets
+-   View booking confirmation
+-   View and search their bookings
+-   Filter bookings by status
+-   View booking details
+-   Cancel eligible upcoming bookings
+-   View and edit their profile
 
----
-
-## 🎤 Organizer Features
+## 🎤 Organizer
 
 Organizers can:
 
-- 📊 Access an organizer dashboard
-- ➕ Create events
-- ✏️ Edit events
-- 📅 View their events
-- 🔎 Search events
-- 🏷️ Filter events
-- 🎟️ Track tickets sold
-- 👥 Track available seats
-- 💰 Monitor event revenue
-- 📋 View bookings for their events
-- 📄 View booking details
-- ❌ Cancel eligible bookings
-- 🚫 Cancel eligible events
-- 📈 Monitor event performance
+-   Access the organizer dashboard
+-   Create events
+-   View and search their events
+-   Filter events
+-   View event details
+-   Edit/manage their events
+-   View bookings for their own events
+-   View booking details
+-   Cancel eligible bookings
+-   Cancel eligible events
+-   Monitor ticket sales, seats and event performance
 
----
+## 🛡️ Admin
 
-## 🛡️ Admin Features
+Admins can:
 
-Administrators can:
+-   Access the admin dashboard
+-   Manage users
+-   View user details
+-   Manage all events
+-   View event details
+-   Manage all bookings
+-   View booking details
+-   Cancel eligible bookings
+-   Cancel eligible events
+-   Monitor platform statistics and event performance
 
-- 📊 Access the admin dashboard
-- 👥 Manage users
-- 👤 View user details
-- 📅 Manage events
-- 🔎 Search and filter events
-- 📄 View event details
-- 🎟️ Monitor tickets
-- 📋 Manage bookings
-- 📄 View booking details
-- 📈 Monitor event performance
-- ❌ Cancel eligible bookings
-- 🚫 Cancel eligible events
+------------------------------------------------------------------------
 
----
+# 🚀 Core Features
 
-# ⚛️ Technology Stack
+## 🌐 Public Experience
 
-EventON is a **React-based frontend application**.
+-   Home page
+-   Event discovery
+-   Event search
+-   Category filtering
+-   Location filtering
+-   Event details
+-   Event availability
+-   About
+-   Contact
+-   Careers
+-   Help Center
+-   Privacy Policy
+-   Terms & Conditions
 
-| Technology | Purpose |
-|---|---|
-| ⚛️ React.js | Frontend UI and component architecture |
-| ⚡ Vite | Development server and production build tool |
-| 🎨 Tailwind CSS | Styling and responsive layouts |
-| 🧭 React Router | Client-side routing |
-| 🎯 Lucide React | UI icons |
-| 💾 LocalStorage | Current frontend data persistence |
-| 🧹 ESLint | Code quality and linting |
-| 🟨 JavaScript | Application programming language |
+## 🔐 Authentication
 
----
+-   Login
+-   Registration
+-   User session restoration
+-   Role-based route protection
+-   Logout
+-   Profile management
+-   Profile editing
 
-# ⚛️ React Architecture
+## 🎟️ Booking System
 
-EventON follows a component-based React architecture.
+-   Ticket quantity selection
+-   Booking confirmation
+-   Booking details
+-   My Bookings
+-   Booking search
+-   Booking status filters
+-   Booking cancellation
+-   Ticket/seat count updates
+-   Seat rollback when a cancellation update fails
+-   Event availability updates
 
-```text
-                    ⚛️ React Application
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-          ▼                  ▼                  ▼
-      Components           Pages             Layouts
-          │                  │                  │
-          └──────────────────┼──────────────────┘
-                             │
-                    ┌────────┴────────┐
-                    │                 │
-                    ▼                 ▼
-                 Context          Utilities
-                    │                 │
-                    ▼                 ▼
-             Authentication      Storage Logic
+## 📅 Event Management
+
+-   Create event
+-   Edit event
+-   Event search
+-   Event filters
+-   Category information
+-   Location information
+-   Capacity management
+-   Booked-seat tracking
+-   Sold-out handling
+-   Event cancellation
+-   Dynamic event lifecycle status
+
+## 📊 Dashboards
+
+### Organizer Dashboard
+
+Includes:
+
+-   Event statistics
+-   Booking statistics
+-   Ticket information
+-   Revenue information
+-   Recent bookings
+-   Recent events
+-   Event performance information
+
+### Admin Dashboard
+
+Includes:
+
+-   User statistics
+-   Event statistics
+-   Booking statistics
+-   Revenue information
+-   Recent bookings
+-   Recent events
+-   Top event performance information
+
+------------------------------------------------------------------------
+
+# 🔄 Event Lifecycle
+
+EventON uses these displayed event lifecycle statuses:
+
+``` text
+🟡 Upcoming
+      │
+      ▼
+🔵 Ongoing
+      │
+      ▼
+🟢 Completed
 ```
 
-The application is organized into:
+An event can also become:
 
-- 🧩 Reusable components
-- 📄 Page-level components
-- 🏗️ Layout components
-- 🔐 React Context
-- 💾 Storage utilities
-- 🛡️ Route protection
+``` text
+🔴 Cancelled
+```
 
----
+### Sold Out
+
+**Sold Out is an availability state, not a lifecycle status.**
+
+``` text
+Booked Seats >= Capacity
+        ↓
+     Sold Out
+```
+
+There is no displayed **Draft** event status in the current application.
+
+------------------------------------------------------------------------
+
+# 🎟️ Booking Lifecycle
+
+Displayed booking statuses are:
+
+``` text
+Upcoming
+Ongoing
+Completed
+Cancelled
+```
+
+Cancellation is available only when the booking is eligible for
+cancellation, such as an upcoming booking.
+
+When a booking is cancelled, the related event's booked-seat count is
+reduced.
+
+The storage logic also supports rollback if the booking update fails
+after the seat count has already been changed.
+
+------------------------------------------------------------------------
+
+# 🧠 Data Flow
+
+The current EventON version is a **frontend application using browser
+LocalStorage** as its persistence mechanism.
+
+``` text
+                    React UI
+                       │
+          ┌────────────┼────────────┐
+          │            │            │
+          ▼            ▼            ▼
+     AuthContext     Pages      Components
+          │            │            │
+          └────────────┼────────────┘
+                       │
+              Storage Utilities
+                 ┌─────┴─────┐
+                 │           │
+                 ▼           ▼
+          eventStorage   bookingStorage
+                 │           │
+                 └─────┬─────┘
+                       ▼
+                  LocalStorage
+```
+
+### Main LocalStorage Keys
+
+  Key                      Purpose
+  ------------------------ --------------------------------------------
+  `eventon_user`           Current logged-in user/session
+  `eventon_accounts`       Registered account data
+  `eventon_events`         Stored event data
+  `eventon_bookings`       Stored booking data
+  `eventon_data_version`   Clean-data initialization/version tracking
+
+### Important
+
+Because the current application uses LocalStorage:
+
+-   Data is stored in the user's browser.
+-   Data is not shared between different browsers/devices.
+-   Clearing site/browser storage removes the stored data.
+-   This version does not use a backend database.
+-   The architecture is suitable for a frontend project, prototype,
+    portfolio project and demonstration.
+
+For a real multi-user production platform, EventON would need a backend
+and database.
+
+------------------------------------------------------------------------
+
+# 🏗️ React Architecture
+
+``` text
+                     ⚛️ React Application
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+      Components            Pages              Layouts
+          │                   │                   │
+          └───────────────────┼───────────────────┘
+                              │
+                 ┌────────────┴────────────┐
+                 │                         │
+                 ▼                         ▼
+             AuthContext             Storage Utilities
+                 │                         │
+                 ▼                    ┌────┴────┐
+            RoleRoute              Events    Bookings
+```
+
+The application uses:
+
+-   Reusable components
+-   Page-level components
+-   Layout components
+-   React Context
+-   Centralized LocalStorage utilities
+-   Protected role-based routes
+-   Shared management pages for Admin and Organizer
+
+------------------------------------------------------------------------
 
 # 📁 Project Structure
 
-```text
+``` text
 EventON/
 │
-├── 📁 public/
+├── public/
 │
-├── 📁 src/
+├── src/
 │   │
-│   ├── 📁 components/
-│   │   │
-│   │   ├── 📁 bookings/
+│   ├── components/
+│   │   ├── bookings/
 │   │   │   ├── BookingCard.jsx
 │   │   │   ├── BookingEmptyState.jsx
-│   │   │   ├── BookingStatus.jsx
-│   │   │   └── ...
+│   │   │   └── BookingStatus.jsx
 │   │   │
-│   │   ├── 📁 common/
+│   │   ├── common/
 │   │   │   ├── RoleRoute.jsx
-│   │   │   ├── ScrollToTop.jsx
-│   │   │   └── ...
+│   │   │   └── ScrollToTop.jsx
 │   │   │
-│   │   ├── 📁 events/
-│   │   │   ├── EventCard.jsx
+│   │   ├── events/
 │   │   │   ├── CategorySection.jsx
+│   │   │   ├── EventCard.jsx
 │   │   │   ├── FeaturedEvents.jsx
-│   │   │   ├── UpcomingEvents.jsx
-│   │   │   └── ...
+│   │   │   └── UpcomingEvents.jsx
 │   │   │
-│   │   ├── 📁 home/
-│   │   │   ├── WhyEventON.jsx
+│   │   ├── home/
+│   │   │   ├── HomeHero.jsx
 │   │   │   ├── OrganizerCTA.jsx
-│   │   │   └── ...
+│   │   │   └── WhyEventON.jsx
 │   │   │
-│   │   └── 📁 layout/
-│   │       ├── Navbar.jsx
-│   │       └── Footer.jsx
+│   │   └── layout/
+│   │       ├── Footer.jsx
+│   │       └── Navbar.jsx
 │   │
-│   ├── 📁 context/
+│   ├── context/
 │   │   └── AuthContext.jsx
 │   │
-│   ├── 📁 data/
-│   │   ├── events.js
-│   │   └── bookings.js
+│   ├── data/
+│   │   └── events.js
 │   │
-│   ├── 📁 layouts/
+│   ├── layouts/
 │   │   ├── AppLayout.jsx
 │   │   └── DashboardLayout.jsx
 │   │
-│   ├── 📁 pages/
-│   │   │
-│   │   ├── 📁 public/
+│   ├── pages/
+│   │   ├── public/
 │   │   │   ├── Home.jsx
 │   │   │   ├── Events.jsx
-│   │   │   ├── About.jsx
 │   │   │   ├── EventDetails.jsx
+│   │   │   ├── About.jsx
 │   │   │   ├── Contact.jsx
 │   │   │   ├── Careers.jsx
 │   │   │   ├── HelpCenter.jsx
 │   │   │   ├── PrivacyPolicy.jsx
 │   │   │   └── TermsConditions.jsx
 │   │   │
-│   │   ├── 📁 auth/
+│   │   ├── auth/
 │   │   │   ├── Login.jsx
 │   │   │   └── Register.jsx
 │   │   │
-│   │   ├── 📁 authenticated/
+│   │   ├── authenticated/
 │   │   │   ├── Booking.jsx
 │   │   │   ├── BookingConfirmation.jsx
-│   │   │   ├── MyBookings.jsx
+│   │   │   ├── EditProfile.jsx
 │   │   │   ├── MyBookingDetails.jsx
-│   │   │   ├── Profile.jsx
-│   │   │   └── EditProfile.jsx
+│   │   │   ├── MyBookings.jsx
+│   │   │   └── Profile.jsx
 │   │   │
-│   │   ├── 📁 management/
-│   │   │   ├── Events.jsx
-│   │   │   ├── Bookings.jsx
-│   │   │   ├── BookingDetails.jsx
-│   │   │   └── EventDetails.jsx
+│   │   ├── management/
+│   │   │   ├── ManagementBookingDetails.jsx
+│   │   │   ├── ManagementBookings.jsx
+│   │   │   ├── ManagementEventDetails.jsx
+│   │   │   └── ManagementEvents.jsx
 │   │   │
-│   │   ├── 📁 organizer/
-│   │   │   ├── OrganizerDashboard.jsx
-│   │   │   ├── OrganizerEvents.jsx
+│   │   ├── organizer/
 │   │   │   ├── CreateEvent.jsx
-│   │   │   ├── EditEvent.jsx
-│   │   │   └── ...
+│   │   │   └── OrganizerDashboard.jsx
 │   │   │
-│   │   └── 📁 admin/
+│   │   └── admin/
 │   │       ├── AdminDashboard.jsx
-│   │       ├── AdminUsers.jsx
 │   │       ├── AdminUserDetails.jsx
-│   │       ├── AdminEvents.jsx
-│   │       ├── AdminEventDetails.jsx
-│   │       ├── AdminBookings.jsx
-│   │       └── AdminBookingDetails.jsx
+│   │       └── AdminUsers.jsx
 │   │
-│   ├── 📁 services/
-│   │   └── bookingService.js
-│   │
-│   ├── 📁 utils/
+│   ├── utils/
 │   │   ├── bookingStorage.js
+│   │   ├── dataInitialization.js
 │   │   └── eventStorage.js
 │   │
 │   ├── App.jsx
-│   ├── main.jsx
-│   └── index.css
+│   ├── index.css
+│   └── main.jsx
 │
-├── 📄 .gitignore
-├── 📄 eslint.config.js
-├── 📄 index.html
-├── 📄 package.json
-├── 📄 package-lock.json
-├── 📄 README.md
-└── 📄 vite.config.js
+├── .gitignore
+├── eslint.config.js
+├── index.html
+├── package.json
+├── package-lock.json
+├── README.md
+├── vercel.json
+└── vite.config.js
 ```
 
-> 📌 The project structure can evolve as development continues and unused modules are removed or reorganized.
+------------------------------------------------------------------------
 
----
+# 🧭 Application Routes
 
-# 🧭 Application Routing
+EventON uses React Router.
 
-EventON uses **React Router** for client-side navigation.
+## 🌐 Public / General Routes
 
-## 🌐 Public Routes
-
-```text
+``` text
 /
 ├── /events
 ├── /events/:id
+├── /events/:id/book
+├── /booking-confirmation
 ├── /about
 ├── /contact
 ├── /careers
 ├── /help-center
 ├── /privacy-policy
-└── /terms-and-conditions
+└── /terms
 ```
-
----
 
 ## 🔐 Authentication Routes
 
-```text
+``` text
 /login
 /register
 ```
 
----
+## 👤 Authenticated User Routes
 
-## 👤 Attendee Routes
-
-```text
-/events/:id/book
-/booking-confirmation
-/my-bookings
-/my-bookings/:bookingId
+``` text
 /profile
 /profile/edit
+/my-bookings
+/my-bookings/:bookingId
 ```
-
----
 
 ## 🎤 Organizer Routes
 
-```text
-/organizer/dashboard
+Protected for the `organizer` role:
+
+``` text
+/organizer
 /organizer/events
 /organizer/events/create
 /organizer/events/:id
-/organizer/events/:id/edit
 /organizer/bookings
 /organizer/bookings/:bookingId
+/organizer/profile
 ```
-
----
 
 ## 🛡️ Admin Routes
 
-```text
-/admin/dashboard
+Protected for the `admin` role:
+
+``` text
+/admin
 /admin/users
 /admin/users/:userId
 /admin/events
 /admin/events/:id
 /admin/bookings
 /admin/bookings/:bookingId
+/admin/profile
 ```
 
----
+------------------------------------------------------------------------
 
-# 🔐 Authentication & Authorization
+# 🔐 Role-Based Access
 
-EventON uses a React Context-based authentication system.
+`RoleRoute.jsx` is used to protect organizer and admin routes.
 
-Main authentication logic is handled through:
-
-```text
-src/context/AuthContext.jsx
+``` text
+                  User
+                   │
+                   ▼
+                RoleRoute
+                   │
+          ┌────────┴────────┐
+          │                 │
+      Organizer            Admin
+          │                 │
+          ▼                 ▼
+   Organizer Routes    Admin Routes
 ```
 
-The authentication system manages:
+The management pages are shared where the workflows are common:
 
-- 🔑 Login
-- 📝 Registration
-- 🚪 Logout
-- 👤 Current user
-- 🔄 User restoration
-- ✏️ Profile updates
-- ✅ Registration validation
-
----
-
-## 👥 User Roles
-
-EventON supports three major roles:
-
-```text
-👤 Attendee
-🎤 Organizer
-🛡️ Admin
+``` text
+ManagementEvents
+ManagementEventDetails
+ManagementBookings
+ManagementBookingDetails
 ```
 
-Role-based access is controlled through:
+The current application therefore avoids maintaining separate duplicate
+implementations for the same management workflows.
 
-```text
-RoleRoute.jsx
-```
+------------------------------------------------------------------------
 
-### Role Flow
+# 💾 Storage Layer
 
-```text
-                    🔐 Authentication
-                           │
-            ┌──────────────┼──────────────┐
-            │              │              │
-            ▼              ▼              ▼
-        👤 Attendee    🎤 Organizer    🛡️ Admin
-            │              │              │
-            ▼              ▼              ▼
-       My Bookings    Organizer       Admin
-       Profile        Dashboard       Dashboard
-       Booking        Events          Users
-                      Bookings        Events
-                                      Bookings
-```
+## Event Storage
 
----
+`src/utils/eventStorage.js` manages:
 
-# 💾 Data Persistence
+-   Reading events
+-   Saving events
+-   Creating events
+-   Updating events
+-   Deleting events
+-   Finding events
+-   Organizer event filtering
+-   Featured events
+-   Available seats
+-   Sold-out state
+-   Updating booked seats
+-   Incrementing booked seats
+-   Decrementing booked seats
+-   Initializing event data
+-   Clearing stored events
 
-The current EventON frontend uses **Browser LocalStorage** for data persistence.
+Main storage key:
 
-### 👤 Current User
-
-```text
-eventon_user
-```
-
-### 👥 Accounts
-
-```text
-eventon_accounts
-```
-
-### 📅 Events
-
-```text
+``` text
 eventon_events
 ```
 
-### 🎟️ Bookings
+## Booking Storage
 
-```text
+`src/utils/bookingStorage.js` manages:
+
+-   Reading bookings
+-   Finding bookings
+-   User bookings
+-   Attendee bookings
+-   Event bookings
+-   Saving bookings
+-   Updating bookings
+-   Removing bookings
+-   Cancelling bookings
+-   Clearing bookings
+
+Main storage key:
+
+``` text
 eventon_bookings
 ```
 
-> ⚠️ LocalStorage is currently used as the frontend persistence layer. It is suitable for this project's current frontend/prototype architecture but should be replaced by a secure backend database for production use.
+## Data Initialization
 
----
+`src/utils/dataInitialization.js` handles the clean-data foundation and
+migration version.
 
-# 📅 Event Data Flow
+It uses:
 
-```text
-🎤 Organizer
-      │
-      ▼
-➕ Create Event
-      │
-      ▼
-eventStorage.js
-      │
-      ▼
-💾 LocalStorage
-      │
-      ▼
-📅 EventON Events
-      │
- ┌────┼───────────────┐
- ▼    ▼               ▼
-Home Events      Organizer      Admin
-                Dashboard     Dashboard
+``` text
+eventon_data_version
 ```
 
----
+and removes legacy storage keys when a new clean-data migration version
+is introduced.
 
-# 🎟️ Booking Data Flow
+------------------------------------------------------------------------
 
-```text
-👤 Attendee
-     │
-     ▼
-📅 Event Details
-     │
-     ▼
-🎟️ Book Tickets
-     │
-     ▼
-bookingStorage.js
-     │
-     ▼
-💾 LocalStorage
-     │
- ┌───┼───────────────┐
- ▼   ▼               ▼
-My Bookings     Organizer       Admin
-               Bookings        Bookings
+# 🎟️ Seat Management
+
+EventON keeps the seat relationship within:
+
+``` text
+0 <= bookedSeats <= capacity
 ```
 
----
+### Booking
 
-# 🔄 Live Data Synchronization
-
-EventON uses browser events to keep different pages synchronized.
-
-### 📅 Event Updates
-
-```javascript
-EVENTS_UPDATED_EVENT
+``` text
+Available Seats
+      ↓
+Book Tickets
+      ↓
+Increase bookedSeats
+      ↓
+Recalculate availability
 ```
 
-### 🎟️ Booking Updates
+### Cancellation
 
-```javascript
-BOOKINGS_UPDATED_EVENT
+``` text
+Booking Cancellation
+      ↓
+Decrease bookedSeats
+      ↓
+Recalculate availability
+      ↓
+Sold Out can become available again
 ```
 
-Pages can listen for these events and refresh their data when changes occur.
+### Failed Update Rollback
 
-The application also uses the browser:
+If seat data is changed before a booking update and the booking update
+fails, the seat change is rolled back to keep event and booking data
+consistent.
 
-```javascript
-storage
-```
+------------------------------------------------------------------------
 
-event to respond to LocalStorage changes from another browser tab.
+# 📊 Dashboard Data
 
----
-
-# 🎫 Booking & Seat Management
-
-EventON maintains consistency between:
-
-- 🎟️ Tickets sold
-- 🪑 Booked seats
-- 🪑 Available seats
-- 💰 Revenue
-- 📋 Booking records
-
-The core seat rule is:
-
-```text
-Booked Seats <= Event Capacity
-```
-
-Available seats:
-
-```text
-Available Seats = Capacity - Booked Seats
-```
-
-The system also ensures:
-
-```text
-0 <= Booked Seats <= Capacity
-```
-
----
-
-## ➕ Booking Flow
-
-When a booking is created:
-
-```text
-🎟️ Booking Created
-       │
-       ▼
-📈 Booked Seats Increase
-       │
-       ▼
-📉 Available Seats Decrease
-```
-
----
-
-## ❌ Cancellation Flow
-
-When an eligible booking is cancelled:
-
-```text
-❌ Booking Cancelled
-       │
-       ▼
-📉 Booked Seats Decrease
-       │
-       ▼
-📈 Available Seats Increase
-```
-
----
-
-## 🔄 Cancellation Rollback
-
-If the booking update fails after seats have been changed:
-
-```text
-Decrease Seats
-      │
-      ▼
-Update Booking
-      │
-      ▼
-   ❌ Failed
-      │
-      ▼
-Restore Seats
-```
-
-This prevents the event from keeping an incorrect seat count.
-
----
-
-# 📅 Event Lifecycle
-
-EventON uses four main event lifecycle statuses:
-
-### 🟢 Upcoming
-
-The event has not started yet.
-
-### 🔵 Ongoing
-
-The current time is between the event's start and end time.
-
-### ⚫ Completed
-
-The event's end time has passed.
-
-### 🔴 Cancelled
-
-The event has been cancelled.
-
----
-
-## 🎟️ Sold Out
-
-**Sold Out is an availability state rather than a lifecycle status.**
-
-An event becomes sold out when:
-
-```text
-Booked Seats >= Capacity
-```
-
-Therefore:
-
-```text
-Lifecycle:
-🟢 Upcoming
-🔵 Ongoing
-⚫ Completed
-🔴 Cancelled
-
-Availability:
-🟢 Available
-🟠 Sold Out
-```
-
----
-
-# 🎟️ Booking Status
-
-The shared booking status component is:
-
-```text
-src/components/bookings/BookingStatus.jsx
-```
-
-Supported booking statuses:
-
-```text
-🟡 Upcoming
-🔵 Ongoing
-🟢 Completed
-🔴 Cancelled
-```
-
-The displayed booking lifecycle does not use:
-
-```text
-❌ Confirmed
-❌ Pending
-```
-
----
-
-# 📅 Event Creation
-
-Organizers can create an event using:
-
-- 📝 Event title
-- 📄 Description
-- 🏷️ Category
-- 📅 Date
-- 🕐 Start time
-- 🕐 End time
-- 📍 Location
-- 🌆 City
-- 👥 Capacity
-- 💰 Ticket price
-- 🖼️ Image URL
-- ⭐ Featured option
-
-### ✅ Validation
-
-Required event information must be provided.
-
-### 📝 Description
-
-Maximum:
-
-```text
-150 words
-```
-
-### 🖼️ Image
-
-The image field supports HTTP/HTTPS image URLs.
-
-> ℹ️ A normal webpage URL is not necessarily a direct image resource. An `<img>` element requires an image resource URL or a supported image endpoint.
-
----
-
-# ✏️ Event Editing
-
-Organizers can edit their events through the edit-event interface.
-
-The edit interface follows the same design approach as the create-event interface.
-
-Editable information includes:
-
-- 📝 Title
-- 📄 Description
-- 🏷️ Category
-- 📅 Date
-- 🕐 Start time
-- 🕐 End time
-- 📍 Location
-- 🌆 City
-- 👥 Capacity
-- 💰 Ticket price
-- 🖼️ Image
-- ⭐ Featured option
-
----
-
-# 📊 Dashboards
-
-## 🎤 Organizer Dashboard
-
-The organizer dashboard provides event and booking information such as:
-
-```text
-📅 Total Events
-🎟️ Tickets Sold
-💰 Revenue
-🟢 Upcoming Events
-🔵 Ongoing Events
-⚫ Completed Events
-🔴 Cancelled Events
-📋 Recent Bookings
-📅 Recent Events
-📈 Event Performance
-```
-
----
-
-## 🛡️ Admin Dashboard
-
-The admin dashboard provides platform-level information such as:
-
-```text
-👥 Users
-📅 Events
-🎟️ Bookings
-💰 Revenue
-📋 Recent Bookings
-📅 Recent Events
-📈 Event Performance
-```
-
----
-
-# 📈 Event Performance
-
-Event performance information can include:
-
-- 🎟️ Tickets sold
-- 💰 Revenue
-- 📊 Booking percentage
-- 👥 Event capacity
-- 📅 Event status
-
-The dashboard includes an event performance section for events with active bookings.
-
----
-
-# 🎨 UI / UX
-
-EventON follows a clean, modern dashboard-oriented interface.
-
-## 🎨 Visual Style
-
-```text
-⬜ White
-⬛ Slate / Dark Text
-🟧 Orange Primary
-🟢 Emerald Success
-🔵 Blue Information
-🔴 Red Cancellation
-🟡 Amber Upcoming
-```
-
-## ✨ UI Characteristics
-
-- ✨ Clean cards
-- 🔲 Rounded corners
-- 🌫️ Soft shadows
-- 🎨 Consistent status colors
-- 📱 Responsive layouts
-- 🧩 Reusable components
-- 🖱️ Interactive states
-- 🔍 Search and filtering
-- 📊 Dashboard statistics
-- 🪟 Confirmation modals
-- 📭 Empty states
-
----
-
-# 📱 Responsive Design
-
-EventON is designed for:
-
-- 💻 Desktop
-- 💻 Laptop
-- 📱 Mobile
-- 📲 Tablet
-
-Tailwind CSS responsive utilities are used throughout the application.
-
-Responsive areas include:
-
-- 🧭 Navigation
-- 🎫 Event cards
-- 📊 Dashboard cards
-- 🔎 Search filters
-- 📝 Forms
-- 📋 Tables
-- 🎟️ Booking pages
-- 🪟 Modals
-- 📱 Management pages
-
----
-
-# 🧩 Reusable Components
-
-EventON uses reusable React components for common functionality.
+Dashboards calculate information from the stored events and bookings.
 
 Examples include:
 
-```text
-BookingCard
-BookingEmptyState
-BookingStatus
-EventCard
-CategorySection
-FeaturedEvents
-UpcomingEvents
-RoleRoute
-ScrollToTop
-Navbar
-Footer
-```
+-   Total events
+-   Upcoming events
+-   Ongoing events
+-   Completed events
+-   Cancelled events
+-   Sold-out events
+-   Total bookings
+-   Tickets sold
+-   Revenue
+-   Recent bookings
+-   Recent events
+-   Event performance
 
-Reusable components help maintain:
+The admin dashboard also includes top event performance information.
 
-- 🎨 UI consistency
-- 🧹 Cleaner code
-- ♻️ Code reuse
-- 🔧 Easier maintenance
+------------------------------------------------------------------------
 
----
+# 🎨 UI & UX
 
-# 🗂️ Important Utility Modules
+The project focuses on:
 
-## 📅 eventStorage.js
+-   Responsive layouts
+-   Consistent dashboard styling
+-   Reusable cards
+-   Search interfaces
+-   Status filters
+-   Dropdowns
+-   Confirmation modals
+-   Empty states
+-   Status badges
+-   Responsive navigation
+-   Event availability indicators
+-   Clear booking flows
 
-Responsible for event persistence and event-related operations.
+The interface uses **Lucide React** icons and **Tailwind CSS** utility
+classes.
 
-Examples include:
+------------------------------------------------------------------------
 
-```javascript
-getStoredEvents()
-getStoredEventById()
-getStoredEventsByOrganizer()
-createStoredEvent()
-updateStoredEvent()
-incrementEventSeats()
-decrementEventSeats()
-updateEventSeats()
-```
+# 🛠️ Technology Stack
 
----
+  Technology       Purpose
+  ---------------- -----------------------------------------
+  React 19         UI and component architecture
+  Vite 8           Development server and production build
+  Tailwind CSS 4   Styling and responsive UI
+  React Router 7   Client-side routing
+  Lucide React     Icons
+  JavaScript       Application language
+  LocalStorage     Current browser-side persistence
+  ESLint           Linting and code quality
+  Vercel           Production deployment
+  Git / GitHub     Version control
 
-## 🎟️ bookingStorage.js
+------------------------------------------------------------------------
 
-Responsible for booking persistence and booking-related operations.
+# 📦 Installation
 
-Examples include:
+## 1. Clone the repository
 
-```javascript
-getStoredBookings()
-createStoredBooking()
-updateStoredBooking()
-```
-
----
-
-## 🔐 AuthContext.jsx
-
-Responsible for authentication state and user management.
-
----
-
-# 🧠 Application Architecture
-
-```text
-                         ⚛️ React Application
-                                  │
-             ┌────────────────────┼────────────────────┐
-             │                    │                    │
-             ▼                    ▼                    ▼
-        🌐 Public UI        🔐 Authentication      📊 Dashboards
-             │                    │                    │
-             │                    ▼              ┌─────┴─────┐
-             │               AuthContext         │           │
-             │                                  🎤          🛡️
-             │                               Organizer     Admin
-             │
-             ▼
-        📅 Events
-             │
-             ▼
-        📄 Event Details
-             │
-             ▼
-        🎟️ Booking
-             │
-             ▼
-        💾 Storage Layer
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-eventStorage   bookingStorage
-       │           │
-       └─────┬─────┘
-             ▼
-       💾 LocalStorage
-```
-
----
-
-# 🛠️ Installation
-
-## 1️⃣ Clone the Repository
-
-```bash
+``` bash
 git clone https://github.com/hruthvikthota23/EventON.git
 ```
 
----
+## 2. Enter the project
 
-## 2️⃣ Navigate to the Project
-
-```bash
+``` bash
 cd EventON
 ```
 
----
+## 3. Install dependencies
 
-## 3️⃣ Install Dependencies
-
-```bash
+``` bash
 npm install
 ```
 
----
+## 4. Start development
 
-## 4️⃣ Start the Development Server
-
-```bash
+``` bash
 npm run dev
 ```
 
-The Vite development server will provide the local application URL in the terminal.
+Vite will provide the local development URL, normally:
 
-Usually:
-
-```text
+``` text
 http://localhost:5173
 ```
 
----
+------------------------------------------------------------------------
 
-# 🧹 Run ESLint
+# 🧹 Linting
 
-To check the project for lint errors and warnings:
+Run:
 
-```bash
+``` bash
 npm run lint
 ```
 
-ESLint helps identify:
+This checks the project using ESLint.
 
-- ❌ Unused variables
-- ⚠️ Hook dependency issues
-- 🧹 Code-quality problems
-- 🧩 React-related lint problems
-
----
+------------------------------------------------------------------------
 
 # 🏗️ Production Build
 
 Create a production build:
 
-```bash
+``` bash
 npm run build
 ```
 
-Preview the production build:
+Vite generates the production files inside:
 
-```bash
+``` text
+dist/
+```
+
+Preview the production build locally:
+
+``` bash
 npm run preview
 ```
 
----
+------------------------------------------------------------------------
+
+# 🚀 Deployment
+
+EventON is deployed on **Vercel**.
+
+🌐 Live application:
+
+https://eventon-iota.vercel.app/
+
+The project includes a `vercel.json` rewrite configuration for React
+Router SPA navigation:
+
+``` json
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+This allows direct navigation and browser refreshes on client-side
+routes to be handled by the React application.
+
+------------------------------------------------------------------------
 
 # 🧪 Recommended Testing Flow
 
-## 👤 Attendee Testing
+## 👤 Attendee
 
-```text
+``` text
 Register
    ↓
 Login
    ↓
 Browse Events
    ↓
-Search Event
+Search / Filter
    ↓
-Filter Event
-   ↓
-View Event Details
+View Event
    ↓
 Book Tickets
    ↓
@@ -1054,35 +812,29 @@ Booking Details
 Cancel Upcoming Booking
 ```
 
----
+## 🎤 Organizer
 
-## 🎤 Organizer Testing
-
-```text
+``` text
 Login
    ↓
 Organizer Dashboard
    ↓
 Create Event
    ↓
-My Events
+Manage Events
    ↓
-Event Details
+View Event
    ↓
-Edit Event
+Edit / Cancel Event
    ↓
 View Bookings
    ↓
-Booking Details
-   ↓
-Manage Event
+Manage Booking
 ```
 
----
+## 🛡️ Admin
 
-## 🛡️ Admin Testing
-
-```text
+``` text
 Login
    ↓
 Admin Dashboard
@@ -1100,350 +852,317 @@ Bookings
 Booking Details
 ```
 
----
-
-# 🔄 Event Lifecycle Testing
-
-## Normal Lifecycle
-
-```text
-🟢 Upcoming
-      │
-      ▼
-🔵 Ongoing
-      │
-      ▼
-⚫ Completed
-```
-
-## Cancellation
-
-```text
-🟢 Upcoming
-      │
-      ▼
-🔴 Cancelled
-```
-
-## Sold Out
-
-```text
-🟢 Upcoming
-      │
-      ▼
-🎟️ Booked Seats = Capacity
-      │
-      ▼
-🟠 Sold Out
-```
-
----
-
-# 🐛 Development & Bug-Tracking Areas
-
-During development, important areas include:
-
-## 🔐 Authentication
-
-- Login redirect
-- Registration
-- Role-based routing
-- User restoration
-- Logout
-- Profile updates
-
-## 🧭 Navigation
-
-- Public routes
-- Protected routes
-- Organizer routes
-- Admin routes
-- Back navigation
-- Route redirects
-
-## 📅 Events
-
-- Event creation
-- Event editing
-- Event cancellation
-- Event status calculation
-- Event capacity
-- Sold-out calculation
-- Search
-- Filtering
-
-## 🎟️ Bookings
-
-- Booking creation
-- Ticket quantity
-- Booking status
-- Booking cancellation
-- Seat rollback
-- Booking details
-- Booking filtering
-
-## 🔄 Data Flow
-
-- Event storage
-- Booking storage
-- Cross-page updates
-- LocalStorage synchronization
-- Custom browser events
-
-## 🎨 UI
-
-- Responsive layouts
-- Dashboard consistency
-- Search
-- Filters
-- Dropdowns
-- Modals
-- Empty states
-- Status indicators
-
----
+------------------------------------------------------------------------
 
 # 📌 Important Development Rules
 
-## 1️⃣ No Draft Event Status
+### 1. No displayed Draft status
 
-EventON uses the following event lifecycle statuses:
+The current event lifecycle is:
 
-```text
+``` text
 Upcoming
 Ongoing
 Completed
 Cancelled
 ```
 
-Draft is not part of the displayed event lifecycle.
+### 2. Sold Out is availability
 
----
+Sold Out is calculated from ticket availability and is not treated as a
+lifecycle status.
 
-## 2️⃣ Sold Out Is an Availability State
+### 3. Centralized storage
 
-Sold Out represents ticket availability rather than event lifecycle.
+Use:
 
-```text
-Booked Seats >= Capacity
-```
-
----
-
-## 3️⃣ Booking Status
-
-The application uses:
-
-```text
-Upcoming
-Ongoing
-Completed
-Cancelled
-```
-
-for displayed booking status.
-
----
-
-## 4️⃣ Use Storage Utilities
-
-Components should use the centralized storage utilities:
-
-```text
+``` text
 eventStorage.js
 bookingStorage.js
 ```
 
-instead of creating separate LocalStorage implementations.
+for event and booking persistence instead of creating separate
+LocalStorage implementations.
 
----
+### 4. Seat consistency
 
-## 5️⃣ Seat Consistency
+Maintain:
 
-Always maintain:
-
-```text
+``` text
 0 <= bookedSeats <= capacity
 ```
 
----
+### 5. Organizer isolation
 
-## 6️⃣ Cancellation Rollback
+Organizers should manage only:
 
-If seat count is changed before a booking cancellation and the booking update fails, the seat count must be restored.
-
----
-
-## 7️⃣ Organizer Data Isolation
-
-Organizers should only manage:
-
-```text
+``` text
 Their own events
 Their own event bookings
 ```
 
----
+### 6. Admin access
 
-## 8️⃣ Admin Access
+Admins have platform-level management access to:
 
-Admins can manage platform-level:
-
-```text
+``` text
 Users
 Events
 Bookings
 ```
 
----
+### 7. Shared components
 
-## 9️⃣ Shared Components
+Reuse common components such as:
 
-Common functionality should use shared components such as:
-
-```text
+``` text
 BookingStatus
 EventCard
 BookingCard
 RoleRoute
 ```
 
-rather than creating duplicate versions.
+when functionality is shared.
 
----
-
-## 🔟 ESLint
-
-Lint issues should be fixed instead of disabling ESLint rules.
+### 8. Keep lint clean
 
 Run:
 
-```bash
+``` bash
 npm run lint
 ```
 
----
+before committing significant changes.
+
+### 9. Verify production builds
+
+Run:
+
+``` bash
+npm run build
+```
+
+before deployment.
+
+------------------------------------------------------------------------
 
 # 📊 Role Permissions
 
-| Feature | 👤 Attendee | 🎤 Organizer | 🛡️ Admin |
-|---|:---:|:---:|:---:|
-| Browse Events | ✅ | ✅ | ✅ |
-| Search Events | ✅ | ✅ | ✅ |
-| View Event Details | ✅ | ✅ | ✅ |
-| Book Tickets | ✅ | ❌ | ❌ |
-| View Own Bookings | ✅ | ❌ | ❌ |
-| Cancel Own Booking | ✅ | ❌ | ❌ |
-| Create Event | ❌ | ✅ | ❌ |
-| Edit Own Event | ❌ | ✅ | ❌ |
-| Manage Own Events | ❌ | ✅ | ❌ |
-| View Own Event Bookings | ❌ | ✅ | ❌ |
-| Organizer Dashboard | ❌ | ✅ | ❌ |
-| Manage Users | ❌ | ❌ | ✅ |
-| Manage All Events | ❌ | ❌ | ✅ |
-| Manage All Bookings | ❌ | ❌ | ✅ |
-| Admin Dashboard | ❌ | ❌ | ✅ |
+  Feature                    👤 Attendee   🎤 Organizer   🛡️ Admin
+  ------------------------- ------------- -------------- ----------
+  Browse Events                  ✅             ✅           ✅
+  Search Events                  ✅             ✅           ✅
+  View Event Details             ✅             ✅           ✅
+  Book Tickets                   ✅            ---          ---
+  View Own Bookings              ✅            ---          ---
+  Cancel Own Booking             ✅            ---          ---
+  Create Events                  ---            ✅          ---
+  Edit Own Events                ---            ✅          ---
+  Manage Own Events              ---            ✅          ---
+  View Own Event Bookings        ---            ✅          ---
+  Organizer Dashboard            ---            ✅          ---
+  Manage Users                   ---           ---           ✅
+  Manage All Events              ---           ---           ✅
+  Manage All Bookings            ---           ---           ✅
+  Admin Dashboard                ---           ---           ✅
 
----
+------------------------------------------------------------------------
+
+# 🐛 Important Problem Areas Addressed
+
+During development, EventON required work across several connected
+areas:
+
+### Authentication
+
+-   Login and registration flow
+-   User restoration
+-   Role-based routing
+-   Profile updates
+-   Logout handling
+
+### Navigation
+
+-   Public routes
+-   Authenticated routes
+-   Organizer routes
+-   Admin routes
+-   Back navigation
+-   Route redirects
+-   React Router refresh handling
+
+### Events
+
+-   Event creation
+-   Event editing
+-   Event cancellation
+-   Event lifecycle calculation
+-   Capacity handling
+-   Sold-out calculation
+-   Search and filtering
+-   Dynamic date/time handling
+
+### Bookings
+
+-   Ticket quantity
+-   Booking creation
+-   Booking status
+-   Booking cancellation
+-   Seat updates
+-   Seat rollback
+-   Booking details
+-   Booking filtering
+
+### Data Flow
+
+-   Event storage
+-   Booking storage
+-   Authentication storage
+-   Cross-page updates
+-   Browser storage events
+-   Custom application update events
+
+### UI
+
+-   Dashboard consistency
+-   Responsive layouts
+-   Dropdown behavior
+-   Search
+-   Filters
+-   Modals
+-   Empty states
+-   Status indicators
+
+------------------------------------------------------------------------
+
+# 🗺️ Current Development State
+
+The current EventON version is a deployed frontend application.
+
+``` text
+React
+  ↓
+Vite
+  ↓
+Tailwind CSS
+  ↓
+LocalStorage
+  ↓
+Vercel
+```
+
+It is suitable for:
+
+-   🎓 Academic demonstration
+-   💼 Portfolio presentation
+-   🧪 Frontend prototyping
+-   🧩 React practice
+-   🚀 Learning through building and debugging
+
+The current version does **not** provide a shared server-side database.
+
+------------------------------------------------------------------------
 
 # 🔮 Future Improvements
 
-The current project is primarily a frontend implementation. A future full-stack version can introduce additional infrastructure.
+The next major architectural step is a full-stack implementation.
 
 ## 🖥️ Backend
 
-Potential future additions:
+Potential stack:
 
-- 🟢 Node.js
-- 🚂 Express.js
-- 🗄️ MySQL / PostgreSQL
-- 🌐 REST APIs
-- 🔐 JWT authentication
-- 🛡️ Server-side authorization
+``` text
+React Frontend
+      ↓
+REST API
+      ↓
+Node.js / Express
+      ↓
+MySQL / PostgreSQL
+```
 
----
+Potential backend features:
+
+-   Server-side authentication
+-   Secure password hashing
+-   JWT/session management
+-   Server-side authorization
+-   Persistent users
+-   Persistent events
+-   Persistent bookings
+-   Shared data between devices
 
 ## 💳 Payments
 
-Potential future additions:
+Potential additions:
 
-- 💳 Online ticket payment
-- 💰 Payment verification
-- 🔄 Refund processing
-- 🧾 Payment history
-
----
+-   Online ticket payments
+-   Payment verification
+-   Refund processing
+-   Payment history
 
 ## 🎟️ Digital Tickets
 
-Potential future additions:
+Potential additions:
 
-- 📱 QR-code tickets
-- 📄 Ticket downloads
-- 📧 Email tickets
-- 🔍 Ticket verification
+-   QR-code tickets
+-   Ticket downloads
+-   Email tickets
+-   Ticket verification
 
----
+## ☁️ Media
 
-## ☁️ Event Images
+Potential additions:
 
-Potential future additions:
-
-- 📤 Image upload
-- ☁️ Cloud image storage
-- 🖼️ Image optimization
-- 🗂️ Media management
-
----
+-   Image uploads
+-   Cloud image storage
+-   Image optimization
+-   Media management
 
 ## 📧 Notifications
 
-Potential future additions:
+Potential additions:
 
-- 📩 Booking confirmation emails
-- ⏰ Event reminders
-- ❌ Cancellation notifications
-- 🎤 Organizer notifications
-
----
+-   Booking confirmation emails
+-   Event reminders
+-   Cancellation notifications
+-   Organizer notifications
 
 ## 📊 Advanced Analytics
 
-Potential future additions:
+Potential additions:
 
-- 📈 Revenue analytics
-- 📊 Booking trends
-- 👥 Attendance analytics
-- 🎟️ Ticket sales reports
-- 📅 Event performance reports
+-   Revenue analytics
+-   Booking trends
+-   Attendance analytics
+-   Ticket sales reports
+-   Event performance reports
 
----
+------------------------------------------------------------------------
 
 # 🏗️ Future Full-Stack Architecture
 
-A future production architecture could follow:
-
-```text
-                 ⚛️ React Frontend
-                        │
-                        ▼
-                   🌐 REST API
-                        │
-                        ▼
-              🟢 Node.js / Express
-                        │
-                        ▼
-                    🗄️ Database
-                        │
-             ┌──────────┼──────────┐
-             │          │          │
-             ▼          ▼          ▼
-           Users      Events     Bookings
+``` text
+                    ⚛️ React Frontend
+                           │
+                           ▼
+                      🌐 REST API
+                           │
+                           ▼
+                   🟢 Node.js / Express
+                           │
+                           ▼
+                      🗄️ Database
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+              ▼            ▼            ▼
+            Users        Events      Bookings
 ```
 
-Additional services could include:
+Additional services can later be connected:
 
-```text
+``` text
 💳 Payment Gateway
 ☁️ Cloud Storage
 📧 Email Service
@@ -1451,115 +1170,116 @@ Additional services could include:
 🎟️ QR Ticket Service
 ```
 
----
+------------------------------------------------------------------------
 
-# 🎯 Project Goals
+# 📚 Learning Outcomes
 
-## 🎫 For Attendees
+Building EventON provided practical experience with:
 
-Provide a simple way to:
+-   React component architecture
+-   React Router
+-   Protected routes
+-   Role-based access
+-   React Context
+-   LocalStorage persistence
+-   CRUD-style event management
+-   Booking workflows
+-   Seat management
+-   State synchronization
+-   Responsive UI development
+-   Tailwind CSS
+-   ESLint
+-   Git and GitHub
+-   Vite production builds
+-   Vercel deployment
+-   Debugging and refactoring
 
-```text
-Discover → View → Book → Manage
+------------------------------------------------------------------------
+
+# 💻 Development Philosophy
+
+EventON was built through an iterative development process:
+
+``` text
+Think
+  ↓
+Build
+  ↓
+Test
+  ↓
+Break
+  ↓
+Debug
+  ↓
+Understand
+  ↓
+Fix
+  ↓
+Refactor
+  ↓
+Deploy
 ```
 
-events and bookings.
+The project is an example of learning by building: features were
+developed, tested, debugged, refined and eventually deployed as a
+working web application.
 
----
+------------------------------------------------------------------------
 
-## 🎤 For Organizers
+# 🌐 Project Links
 
-Provide a complete workflow:
+### Live Application
 
-```text
-Create → Manage → Monitor → Analyze
-```
+https://eventon-iota.vercel.app/
 
-events and bookings.
-
----
-
-## 🛡️ For Administrators
-
-Provide centralized management:
-
-```text
-Users → Events → Bookings → Analytics
-```
-
----
-
-## 💻 For Development
-
-Build a maintainable React application using:
-
-- ⚛️ Component-based architecture
-- 🧩 Reusable components
-- 🧭 Client-side routing
-- 🔐 Role-based access
-- 💾 Centralized storage utilities
-- 📱 Responsive UI
-- 🧹 Clean code practices
-
----
-
-# 📌 Current Architecture
-
-The current EventON implementation is primarily a **React + Vite frontend application using LocalStorage as its persistence mechanism**.
-
-This architecture is suitable for:
-
-- 🎓 Academic projects
-- 💼 Portfolio projects
-- 🧪 Frontend demonstrations
-- 🎨 UI/UX development
-- 🚀 Prototype development
-
-For production deployment with multiple users and secure data management, a backend and database should be introduced.
-
----
-
-# 🌐 Repository
-
-## 🔗 GitHub
-
-**EventON Repository:**
+### GitHub Repository
 
 https://github.com/hruthvikthota23/EventON
 
----
+------------------------------------------------------------------------
 
 # 👨‍💻 Developer
 
 ## Hruthvik Thota
 
-🎓 Computer Science / AI & ML  
-💻 React.js Developer  
-🚀 Building EventON
+Computer Science / AI & ML
 
----
+Built with:
 
-# ⭐ EventON
-
-```text
-              🎫 EVENTON
-
-        Discover • Create • Manage
-
-              📅 Events
-              🎟️ Bookings
-              👥 Users
-              📊 Analytics
-              🔐 Role-Based Access
-
-                  ⚛️
-             Built with React
+``` text
+⚛️ React
+⚡ Vite
+🎨 Tailwind CSS
+🧭 React Router
+💾 LocalStorage
+🐙 GitHub
+▲ Vercel
 ```
 
----
+------------------------------------------------------------------------
+
+# 🎫 EventON
+
+``` text
+              🎫 EVENTON
+
+       Discover • Book • Manage
+
+             📅 Events
+             🎟️ Bookings
+             👥 Users
+             📊 Dashboards
+             🔐 Role-Based Access
+
+              Built with React
+```
+
+------------------------------------------------------------------------
 
 # 📜 License
 
-This project is currently developed for **educational, portfolio, and development purposes**.
+This project is currently intended for educational, portfolio and
+development purposes.
 
-A formal open-source license can be added when the project is ready for public distribution.
+A formal open-source license can be added if the project is later
+distributed as an open-source application.
