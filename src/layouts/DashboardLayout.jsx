@@ -6,16 +6,57 @@ import {
   LogOut,
   Menu,
   Ticket,
+  Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
+
 import { useAuth } from "../context/AuthContext";
 
-function OrganizerLayout() {
+function DashboardLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  // =========================================================
+  // MOBILE SIDEBAR STATE
+  // =========================================================
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // =========================================================
+  // ROLE
+  // =========================================================
+
+  const role = String(user?.role || "")
+    .trim()
+    .toLowerCase();
+
+  const isAdmin = role === "admin";
+  const isOrganizer = role === "organizer";
+
+  // =========================================================
+  // ROLE DETAILS
+  // =========================================================
+
+  const roleTitle = isAdmin
+    ? "Administrator"
+    : "Organizer";
+
+  const panelTitle = isAdmin
+    ? "Administrator"
+    : "Organizer";
+
+  const panelSubtitle = isAdmin
+    ? "EventON Administration"
+    : "EventON Management";
+
+  // =========================================================
+  // PROFILE ROUTE
+  // =========================================================
+
+  const profilePath = isAdmin
+    ? "/admin/profile"
+    : "/organizer/profile";
 
   // =========================================================
   // LOGOUT
@@ -26,7 +67,7 @@ function OrganizerLayout() {
 
     logout();
 
-    navigate("/", {
+    navigate("/login", {
       replace: true,
     });
   };
@@ -38,12 +79,16 @@ function OrganizerLayout() {
   const handleProfileClick = () => {
     setSidebarOpen(false);
 
-    navigate("/organizer/profile");
+    navigate(profilePath);
   };
 
   // =========================================================
-  // CLOSE MOBILE SIDEBAR
+  // MOBILE SIDEBAR
   // =========================================================
+
+  const openSidebar = () => {
+    setSidebarOpen(true);
+  };
 
   const closeSidebar = () => {
     setSidebarOpen(false);
@@ -53,7 +98,7 @@ function OrganizerLayout() {
   // NAVIGATION
   // =========================================================
 
-  const navigation = [
+  const organizerNavigation = [
     {
       label: "Home",
       path: "/",
@@ -78,6 +123,44 @@ function OrganizerLayout() {
     },
   ];
 
+  const adminNavigation = [
+    {
+      label: "Home",
+      path: "/",
+      icon: Home,
+      end: true,
+    },
+    {
+      label: "Dashboard",
+      path: "/admin",
+      icon: LayoutDashboard,
+      end: true,
+    },
+    {
+      label: "Users",
+      path: "/admin/users",
+      icon: Users,
+    },
+    {
+      label: "Events",
+      path: "/admin/events",
+      icon: CalendarDays,
+    },
+    {
+      label: "Bookings",
+      path: "/admin/bookings",
+      icon: Ticket,
+    },
+  ];
+
+  const navigation = isAdmin
+    ? adminNavigation
+    : organizerNavigation;
+
+  // =========================================================
+  // RETURN
+  // =========================================================
+
   return (
     <div className="min-h-screen bg-slate-50">
 
@@ -99,18 +182,31 @@ function OrganizerLayout() {
       ====================================================== */}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:translate-x-0 lg:shadow-none ${
-          sidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
-        }`}
+        className={`
+          fixed inset-y-0 left-0 z-50
+          flex w-72 flex-col
+          border-r border-slate-200
+          bg-white
+          shadow-xl
+          transition-transform duration-300
+          ${
+            sidebarOpen
+              ? "translate-x-0"
+              : "-translate-x-full lg:translate-x-0"
+          }
+          lg:shadow-none
+        `}
       >
 
         {/* ===================================================
-            LOGO
+            SIDEBAR HEADER
         =================================================== */}
 
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-5">
+        <div className="relative flex h-16 shrink-0 items-center justify-center border-b border-slate-200 px-5">
+
+          {/* =================================================
+              EVENTON LOGO
+          ================================================= */}
 
           <button
             type="button"
@@ -142,12 +238,14 @@ function OrganizerLayout() {
 
           </button>
 
-          {/* Mobile Close */}
+          {/* =================================================
+              MOBILE CLOSE
+          ================================================= */}
 
           <button
             type="button"
             onClick={closeSidebar}
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+            className="absolute right-3 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
             aria-label="Close menu"
           >
             <X size={20} />
@@ -156,22 +254,10 @@ function OrganizerLayout() {
         </div>
 
         {/* ===================================================
-            NAVIGATION LABEL
-        =================================================== */}
-
-        <div className="px-5 pb-3 pt-6">
-
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-            Organizer
-          </p>
-
-        </div>
-
-        {/* ===================================================
             NAVIGATION
         =================================================== */}
 
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-6">
 
           {navigation.map((item) => {
             const Icon = item.icon;
@@ -197,6 +283,7 @@ function OrganizerLayout() {
                       strokeWidth={
                         isActive ? 2.2 : 2
                       }
+                      className="shrink-0"
                     />
 
                     <span>
@@ -211,7 +298,7 @@ function OrganizerLayout() {
         </nav>
 
         {/* ===================================================
-            ACCOUNT / LOGOUT
+            LOGOUT
         =================================================== */}
 
         <div className="shrink-0 border-t border-slate-200 p-4">
@@ -221,7 +308,6 @@ function OrganizerLayout() {
             onClick={handleLogout}
             className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 transition hover:bg-red-50 hover:text-red-600"
           >
-
             <LogOut
               size={18}
               className="transition group-hover:text-red-600"
@@ -230,7 +316,6 @@ function OrganizerLayout() {
             <span>
               Logout
             </span>
-
           </button>
 
         </div>
@@ -244,7 +329,7 @@ function OrganizerLayout() {
       <div className="lg:pl-72">
 
         {/* ===================================================
-            TOP BAR
+            TOP NAVBAR
         =================================================== */}
 
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
@@ -255,7 +340,7 @@ function OrganizerLayout() {
 
           <button
             type="button"
-            onClick={() => setSidebarOpen(true)}
+            onClick={openSidebar}
             className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
             aria-label="Open menu"
             aria-expanded={sidebarOpen}
@@ -264,38 +349,36 @@ function OrganizerLayout() {
           </button>
 
           {/* =================================================
-              DESKTOP ORGANIZER INDICATOR
+              TOP NAVBAR ROLE
           ================================================= */}
 
-          <div className="hidden items-center gap-2 lg:flex">
+          <div className="flex items-center gap-2">
 
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
               <LayoutDashboard size={17} />
             </div>
 
             <div>
-
               <p className="text-sm font-semibold text-slate-900">
-                Organizer Panel
+                {panelTitle}
               </p>
 
               <p className="text-[11px] text-slate-500">
-                EventON Management
+                {panelSubtitle}
               </p>
-
             </div>
 
           </div>
 
           {/* =================================================
-              TOP RIGHT PROFILE
+              PROFILE
           ================================================= */}
 
           <button
             type="button"
             onClick={handleProfileClick}
             className="group ml-auto flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-slate-50"
-            aria-label="Open organizer profile"
+            aria-label={`Open ${roleTitle.toLowerCase()} profile`}
           >
 
             {/* Name */}
@@ -303,11 +386,11 @@ function OrganizerLayout() {
             <div className="hidden text-right sm:block">
 
               <p className="text-sm font-semibold text-slate-900 transition group-hover:text-orange-600">
-                {user?.name || "Organizer"}
+                {user?.name || roleTitle}
               </p>
 
               <p className="text-xs text-slate-500">
-                Organizer
+                {roleTitle}
               </p>
 
             </div>
@@ -315,13 +398,9 @@ function OrganizerLayout() {
             {/* Avatar */}
 
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600 transition group-hover:bg-orange-500 group-hover:text-white">
-
               {user?.name
-                ? user.name
-                    .charAt(0)
-                    .toUpperCase()
-                : "O"}
-
+                ? user.name.charAt(0).toUpperCase()
+                : roleTitle.charAt(0)}
             </div>
 
           </button>
@@ -333,9 +412,7 @@ function OrganizerLayout() {
         =================================================== */}
 
         <main className="min-h-[calc(100vh-4rem)]">
-
           <Outlet />
-
         </main>
 
       </div>
@@ -344,4 +421,4 @@ function OrganizerLayout() {
   );
 }
 
-export default OrganizerLayout;
+export default DashboardLayout;

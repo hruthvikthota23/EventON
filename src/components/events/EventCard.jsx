@@ -13,9 +13,11 @@ function formatDate(dateString) {
     month: date.toLocaleDateString("en-US", {
       month: "short",
     }),
+
     day: date.toLocaleDateString("en-US", {
       day: "numeric",
     }),
+
     full: date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -34,146 +36,181 @@ function EventCard({ event }) {
 
   const isSoldOut = availableSeats === 0;
 
+  // Full location with city
+  const fullLocation = [
+    event.location,
+    event.city,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
-    <article className="group overflow-hidden rounded-2xl border border-gray-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl">
+    <Link
+      to={`/events/${event.id}`}
+      className="group block h-full"
+    >
+      <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl">
 
-      {/* Image */}
-      <Link
-        to={`/events/${event.id}`}
-        className="relative block aspect-[16/10] overflow-hidden bg-gray-100"
-      >
-        <img
-          src={event.image}
-          alt={event.title}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-        />
+        {/* =====================================================
+            IMAGE
+        ====================================================== */}
 
-        {/* Category */}
-        <div className="absolute left-4 top-4">
-          <span className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-gray-800 shadow-sm backdrop-blur">
-            {event.category}
-          </span>
-        </div>
+        <div className="relative block aspect-[16/10] overflow-hidden bg-gray-100">
 
-        {/* Date Badge */}
-        <div className="absolute right-4 top-4 flex min-w-14 flex-col items-center rounded-xl bg-white px-3 py-2 shadow-md">
-          <span className="text-xs font-bold uppercase text-orange-500">
-            {date.month}
-          </span>
+          <img
+            src={event.image}
+            alt={event.title}
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
 
-          <span className="text-xl font-bold leading-6 text-gray-900">
-            {date.day}
-          </span>
-        </div>
+          {/* Category */}
 
-        {/* Sold Out */}
-        {isSoldOut && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-            <span className="rounded-full bg-gray-950 px-4 py-2 text-sm font-bold text-white">
-              Sold Out
+          <div className="absolute left-4 top-4">
+            <span className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-gray-800 shadow-sm backdrop-blur">
+              {event.category}
             </span>
           </div>
-        )}
-      </Link>
 
-      {/* Content */}
-      <div className="p-5">
+          {/* Date Badge */}
 
-        {/* Title */}
-        <Link to={`/events/${event.id}`}>
+          <div className="absolute right-4 top-4 flex min-w-14 flex-col items-center rounded-xl bg-white px-3 py-2 shadow-md">
+            <span className="text-xs font-bold uppercase text-orange-500">
+              {date.month}
+            </span>
+
+            <span className="text-xl font-bold leading-6 text-gray-900">
+              {date.day}
+            </span>
+          </div>
+
+          {/* Sold Out */}
+
+          {isSoldOut && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/45">
+              <span className="rounded-full bg-gray-950 px-4 py-2 text-sm font-bold text-white">
+                Sold Out
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* =====================================================
+            CONTENT
+        ====================================================== */}
+
+        <div className="flex flex-1 flex-col p-5">
+
+          {/* Title */}
+
           <h3 className="line-clamp-2 text-lg font-bold leading-6 text-gray-900 transition group-hover:text-orange-500">
             {event.title}
           </h3>
-        </Link>
 
-        {/* Organizer */}
-        <p className="mt-2 text-sm text-gray-500">
-          By {event.organizer}
-        </p>
+          {/* Organizer */}
 
-        {/* Event Information */}
-        <div className="mt-5 space-y-3">
+          <p className="mt-2 text-sm text-gray-500">
+            By {event.organizer}
+          </p>
 
-          {/* Date */}
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-            <CalendarDays
-              size={17}
-              className="shrink-0 text-gray-400"
-            />
+          {/* =================================================
+              EVENT INFORMATION
+          ================================================== */}
 
-            <span>{date.full}</span>
+          <div className="mt-5 space-y-3">
+
+            {/* Date */}
+
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <CalendarDays
+                size={17}
+                className="shrink-0 text-gray-400"
+              />
+
+              <span>
+                {date.full}
+              </span>
+            </div>
+
+            {/* Time */}
+
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <Clock3
+                size={17}
+                className="shrink-0 text-gray-400"
+              />
+
+              <span>
+                {event.time} – {event.endTime}
+              </span>
+            </div>
+
+            {/* Location */}
+
+            <div className="flex items-start gap-3 text-sm text-gray-600">
+              <MapPin
+                size={17}
+                className="mt-0.5 shrink-0 text-gray-400"
+              />
+
+              <span className="line-clamp-2">
+                {fullLocation || "Location not available"}
+              </span>
+            </div>
+
           </div>
 
-          {/* Time */}
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-            <Clock3
-              size={17}
-              className="shrink-0 text-gray-400"
-            />
+          {/* =================================================
+              BOTTOM
+          ================================================== */}
 
-            <span>
-              {event.time} – {event.endTime}
-            </span>
-          </div>
+          <div className="mt-auto flex items-end justify-between border-t border-gray-100 pt-5">
 
-          {/* Location */}
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-            <MapPin
-              size={17}
-              className="shrink-0 text-gray-400"
-            />
+            {/* Price */}
 
-            <span className="truncate">
-              {event.location}
-            </span>
-          </div>
+            <div>
+              <p className="text-xs text-gray-400">
+                Ticket from
+              </p>
 
-        </div>
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                {event.price === 0
+                  ? "Free"
+                  : `₹${event.price.toLocaleString("en-IN")}`}
+              </p>
+            </div>
 
-        {/* Bottom */}
-        <div className="mt-5 flex items-end justify-between border-t border-gray-100 pt-5">
+            {/* Availability */}
 
-          {/* Price */}
-          <div>
-            <p className="text-xs text-gray-400">
-              Ticket from
-            </p>
+            <div className="flex items-center gap-1.5 text-right">
 
-            <p className="mt-1 text-lg font-bold text-gray-900">
-              {event.price === 0
-                ? "Free"
-                : `₹${event.price.toLocaleString("en-IN")}`}
-            </p>
-          </div>
+              <Users
+                size={15}
+                className={
+                  isSoldOut
+                    ? "text-red-500"
+                    : "text-gray-400"
+                }
+              />
 
-          {/* Availability */}
-          <div className="flex items-center gap-1.5 text-right">
-            <Users
-              size={15}
-              className={
-                isSoldOut
-                  ? "text-red-500"
-                  : "text-gray-400"
-              }
-            />
-
-            <span
-              className={`text-xs font-medium ${
-                isSoldOut
-                  ? "text-red-500"
-                  : availableSeats < 30
+              <span
+                className={`text-xs font-medium ${
+                  isSoldOut
+                    ? "text-red-500"
+                    : availableSeats < 30
                     ? "text-orange-500"
                     : "text-gray-500"
-              }`}
-            >
-              {isSoldOut
-                ? "Sold out"
-                : `${availableSeats} seats left`}
-            </span>
+                }`}
+              >
+                {isSoldOut
+                  ? "Sold out"
+                  : `${availableSeats} seats left`}
+              </span>
+
+            </div>
           </div>
         </div>
-      </div>
-    </article>
+      </article>
+    </Link>
   );
 }
 

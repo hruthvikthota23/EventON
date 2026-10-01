@@ -1,154 +1,169 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+} from "react-router-dom";
+
 import ScrollToTop from "./components/common/ScrollToTop";
+import RoleRoute from "./components/common/RoleRoute";
 
-// =========================================================
-// LAYOUTS
-// =========================================================
+import AppLayout from "./layouts/AppLayout";
+import DashboardLayout from "./layouts/DashboardLayout";
 
-import MainLayout from "./layouts/MainLayout";
-import AuthLayout from "./layouts/AuthLayout";
-import OrganizerLayout from "./layouts/OrganizerLayout";
-import AdminLayout from "./layouts/AdminLayout";
-
-// =========================================================
-// PUBLIC PAGES
-// =========================================================
+/* =========================================================
+   PUBLIC PAGES
+========================================================= */
 
 import Home from "./pages/public/Home";
 import Events from "./pages/public/Events";
 import About from "./pages/public/About";
 import EventDetails from "./pages/public/EventDetails";
-import Booking from "./pages/public/Booking";
-import BookingConfirmation from "./pages/public/BookingConfirmation";
+import Contact from "./pages/public/Contact";
+import Careers from "./pages/public/Careers";
+import HelpCenter from "./pages/public/HelpCenter";
+import PrivacyPolicy from "./pages/public/PrivacyPolicy";
+import TermsConditions from "./pages/public/TermsConditions";
 
-// =========================================================
-// AUTH
-// =========================================================
+/* =========================================================
+   AUTH PAGES
+========================================================= */
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 
-// =========================================================
-// ATTENDEE / USER PAGES
-// =========================================================
+/* =========================================================
+   AUTHENTICATED PAGES
+========================================================= */
 
-import MyBookings from "./pages/attendee/MyBookings";
-import BookingDetails from "./pages/attendee/BookingDetails";
-import Profile from "./pages/attendee/Profile";
+import Booking from "./pages/authenticated/Booking";
+import BookingConfirmation from "./pages/authenticated/BookingConfirmation";
+import MyBookings from "./pages/authenticated/MyBookings";
+import BookingDetails from "./pages/authenticated/MyBookingDetails";
+import Profile from "./pages/authenticated/Profile";
+import EditProfile from "./pages/authenticated/EditProfile";
 
-// =========================================================
-// ORGANIZER
-// =========================================================
+/* =========================================================
+   MANAGEMENT PAGES
+   Shared by Admin + Organizer
+========================================================= */
+
+import ManagementBookings from "./pages/management/ManagementBookings";
+import ManagementBookingDetails from "./pages/management/ManagementBookingDetails";
+import ManagementEvents from "./pages/management/ManagnementEvents";
+import ManagementEventDetails from "./pages/management/ManagementEventDetails";
+
+
+/* =========================================================
+   ORGANIZER PAGES
+========================================================= */
 
 import OrganizerDashboard from "./pages/organizer/OrganizerDashboard";
-import OrganizerEvents from "./pages/organizer/OrganizerEvents";
 import CreateEvent from "./pages/organizer/CreateEvent";
-import OrganizerEventDetails from "./pages/organizer/OrganizerEventDetails";
-import EditEvent from "./pages/organizer/EditEvent";
-import OrganizerBookings from "./pages/organizer/OrganizerBookings";
-import OrganizerBookingDetails from "./pages/organizer/OrganizerBookingDetails";
-import OrganizerProfile from "./pages/organizer/OrganizerProfile";
 
-// =========================================================
-// ADMIN
-// =========================================================
+/* =========================================================
+   ADMIN PAGES
+========================================================= */
 
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminProfile from "./pages/admin/AdminProfile";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminUserDetails from "./pages/admin/AdminUserDetails";
-import AdminEvents from "./pages/admin/AdminEvents";
-import AdminEventDetails from "./pages/admin/AdminEventDetails";
-import AdminBookings from "./pages/admin/AdminBookings";
-import AdminBookingDetails from "./pages/admin/AdminBookingDetails";
 
-// =========================================================
-// ROLE PROTECTION
-// =========================================================
-
-import RoleRoute from "./components/common/RoleRoute";
+/* =========================================================
+   APP
+========================================================= */
 
 function App() {
   return (
     <BrowserRouter>
+
+      {/* =====================================================
+          SCROLL TO TOP
+      ===================================================== */}
+
       <ScrollToTop />
 
       <Routes>
 
-        {/* =====================================================
-            PUBLIC / USER WEBSITE
-            ATTENDEE + ORGANIZER + ADMIN
-            ALL CAN ACCESS
-        ====================================================== */}
+        {/* ===================================================
+            PUBLIC + AUTHENTICATED PAGES
+        =================================================== */}
 
-        <Route element={<MainLayout />}>
+        <Route element={<AppLayout />}>
 
-          {/* Home */}
+          {/* =================================================
+              PUBLIC PAGES
+          ================================================= */}
+
           <Route
             path="/"
             element={<Home />}
           />
 
-          {/* Events */}
           <Route
             path="/events"
             element={<Events />}
           />
 
-          {/* About */}
           <Route
             path="/about"
             element={<About />}
           />
 
-          {/* Event Details */}
           <Route
             path="/events/:id"
             element={<EventDetails />}
           />
 
-          {/* Book Any Event */}
+          {/* =================================================
+              AUTHENTICATED BOOKING PAGES
+          ================================================= */}
+
           <Route
             path="/events/:id/book"
             element={<Booking />}
           />
 
-          {/* Booking Confirmation */}
           <Route
             path="/booking-confirmation"
             element={<BookingConfirmation />}
           />
 
           {/* =================================================
-              USER ACCOUNT
-              ALL LOGGED-IN ROLES CAN ACCESS
+              COMPANY PAGES
           ================================================= */}
 
-          {/* My Bookings */}
           <Route
-            path="/bookings"
-            element={<MyBookings />}
+            path="/contact"
+            element={<Contact />}
           />
 
-          {/* Booking Details */}
           <Route
-            path="/bookings/:bookingId"
-            element={<BookingDetails />}
+            path="/careers"
+            element={<Careers />}
           />
 
-          {/* Profile */}
+          {/* =================================================
+              SUPPORT PAGES
+          ================================================= */}
+
           <Route
-            path="/profile"
-            element={<Profile />}
+            path="/help-center"
+            element={<HelpCenter />}
           />
 
-        </Route>
+          <Route
+            path="/privacy-policy"
+            element={<PrivacyPolicy />}
+          />
 
-        {/* =====================================================
-            AUTHENTICATION
-        ====================================================== */}
+          <Route
+            path="/terms"
+            element={<TermsConditions />}
+          />
 
-        <Route element={<AuthLayout />}>
+          {/* =================================================
+              AUTH
+          ================================================= */}
 
           <Route
             path="/login"
@@ -160,12 +175,35 @@ function App() {
             element={<Register />}
           />
 
+          {/* =================================================
+              AUTHENTICATED USER PAGES
+          ================================================= */}
+
+          <Route
+            path="/profile"
+            element={<Profile />}
+          />
+
+          <Route
+            path="/profile/edit"
+            element={<EditProfile />}
+          />
+
+          <Route
+            path="/my-bookings"
+            element={<MyBookings />}
+          />
+
+          <Route
+            path="/my-bookings/:bookingId"
+            element={<BookingDetails />}
+          />
+
         </Route>
 
-        {/* =====================================================
+        {/* ===================================================
             ORGANIZER PANEL
-            ONLY ORGANIZERS
-        ====================================================== */}
+        =================================================== */}
 
         <Route
           element={
@@ -175,64 +213,87 @@ function App() {
           }
         >
 
-          <Route element={<OrganizerLayout />}>
+          <Route
+            element={<DashboardLayout />}
+          >
 
-            {/* Dashboard */}
+            {/* =================================================
+                ORGANIZER DASHBOARD
+            ================================================= */}
+
             <Route
               path="/organizer"
-              element={<OrganizerDashboard />}
+              element={
+                <OrganizerDashboard />
+              }
             />
 
-            {/* Events */}
+            {/* =================================================
+                ORGANIZER EVENTS
+            ================================================= */}
+
             <Route
               path="/organizer/events"
-              element={<OrganizerEvents />}
+              element={
+                <ManagementEvents />
+              }
             />
 
-            {/* Create Event */}
             <Route
               path="/organizer/events/create"
-              element={<CreateEvent />}
+              element={
+                <CreateEvent />
+              }
             />
 
-            {/* Edit Event */}
-            <Route
-              path="/organizer/events/:id/edit"
-              element={<EditEvent />}
-            />
 
-            {/* Event Details */}
             <Route
               path="/organizer/events/:id"
-              element={<OrganizerEventDetails />}
+              element={
+                <ManagementEventDetails />
+              }
             />
 
-            {/* Bookings */}
+            {/* =================================================
+                SHARED MANAGEMENT BOOKINGS
+            ================================================= */}
+
             <Route
               path="/organizer/bookings"
-              element={<OrganizerBookings />}
+              element={
+                <ManagementBookings />
+              }
             />
 
-            {/* Booking Details */}
+            {/* =================================================
+                SHARED BOOKING DETAILS
+            ================================================= */}
+
             <Route
               path="/organizer/bookings/:bookingId"
-              element={<OrganizerBookingDetails />}
+              element={
+                <ManagementBookingDetails />
+              }
             />
 
-            {/* Profile */}
+            {/* =================================================
+                ORGANIZER PROFILE
+            ================================================= */}
+
             <Route
               path="/organizer/profile"
-              element={<OrganizerProfile />}
+              element={
+                <Profile />
+              }
             />
 
           </Route>
 
         </Route>
 
-        {/* =====================================================
+        {/* ===================================================
             ADMIN PANEL
-            ONLY ADMINS
-        ====================================================== */}
+        =================================================== */}
 
         <Route
           element={
@@ -242,54 +303,88 @@ function App() {
           }
         >
 
-          <Route element={<AdminLayout />}>
+          <Route
+            element={<DashboardLayout />}
+          >
 
-            {/* Dashboard */}
+            {/* =================================================
+                ADMIN DASHBOARD
+            ================================================= */}
+
             <Route
               path="/admin"
-              element={<AdminDashboard />}
+              element={
+                <AdminDashboard />
+              }
             />
 
-            {/* Profile */}
-            <Route
-              path="/admin/profile"
-              element={<AdminProfile />}
-            />
+            {/* =================================================
+                ADMIN USERS
+            ================================================= */}
 
-            {/* Users */}
             <Route
               path="/admin/users"
-              element={<AdminUsers />}
+              element={
+                <AdminUsers />
+              }
             />
 
-            {/* User Details */}
             <Route
               path="/admin/users/:userId"
-              element={<AdminUserDetails />}
+              element={
+                <AdminUserDetails />
+              }
             />
 
-            {/* Events */}
+            {/* =================================================
+                ADMIN EVENTS
+            ================================================= */}
+
             <Route
               path="/admin/events"
-              element={<AdminEvents />}
+              element={
+                <ManagementEvents />
+              }
             />
 
-            {/* Event Details */}
             <Route
               path="/admin/events/:id"
-              element={<AdminEventDetails />}
+              element={
+                <ManagementEventDetails />
+              }
             />
 
-            {/* Bookings */}
+            {/* =================================================
+                SHARED MANAGEMENT BOOKINGS
+            ================================================= */}
+
             <Route
               path="/admin/bookings"
-              element={<AdminBookings />}
+              element={
+                <ManagementBookings />
+              }
             />
 
-            {/* Booking Details */}
+            {/* =================================================
+                SHARED BOOKING DETAILS
+            ================================================= */}
+
             <Route
               path="/admin/bookings/:bookingId"
-              element={<AdminBookingDetails />}
+              element={
+                <ManagementBookingDetails />
+              }
+            />
+
+            {/* =================================================
+                ADMIN PROFILE
+            ================================================= */}
+
+            <Route
+              path="/admin/profile"
+              element={
+                <Profile />
+              }
             />
 
           </Route>
@@ -297,6 +392,7 @@ function App() {
         </Route>
 
       </Routes>
+
     </BrowserRouter>
   );
 }

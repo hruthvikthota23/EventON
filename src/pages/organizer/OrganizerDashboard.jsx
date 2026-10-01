@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+
 import {
+  ArrowUpRight,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  Clock3,
   IndianRupee,
   MapPin,
+  PlayCircle,
+  Plus,
   Ticket,
   TrendingUp,
   Users,
+  XCircle,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import {
   EVENTS_UPDATED_EVENT,
@@ -23,9 +29,9 @@ import {
 
 const USER_STORAGE_KEY = "eventon_user";
 
-// =========================================================
-// HELPERS
-// =========================================================
+/* =========================================================
+   HELPERS
+========================================================= */
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -49,16 +55,6 @@ function formatDate(dateValue) {
   });
 }
 
-function getEventDate(event) {
-  if (!event?.date) {
-    return null;
-  }
-
-  const date = new Date(event.date);
-
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function parseEventDateTime(dateValue, timeValue) {
   if (!dateValue) {
     return null;
@@ -72,9 +68,15 @@ function parseEventDateTime(dateValue, timeValue) {
   let day;
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
-    [year, month, day] = dateText.split("-").map(Number);
-  } else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
-    [day, month, year] = dateText.split(/[-/]/).map(Number);
+    [year, month, day] = dateText
+      .split("-")
+      .map(Number);
+  } else if (
+    /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)
+  ) {
+    [day, month, year] = dateText
+      .split(/[-/]/)
+      .map(Number);
   } else {
     const parsed = new Date(dateText);
 
@@ -117,13 +119,17 @@ function parseEventDateTime(dateValue, timeValue) {
     0
   );
 
-  return Number.isNaN(result.getTime()) ? null : result;
+  return Number.isNaN(result.getTime())
+    ? null
+    : result;
 }
 
 function getEventStart(event) {
   return parseEventDateTime(
     event?.date,
-    event?.time || event?.startTime || "00:00"
+    event?.time ||
+      event?.startTime ||
+      "00:00"
   );
 }
 
@@ -154,8 +160,17 @@ function getEventEnd(event) {
   return end;
 }
 
-function getEventLifecycleStatus(event, now = Date.now()) {
-  const storedStatus = String(event?.status || "published")
+/* =========================================================
+   EVENT STATUS
+========================================================= */
+
+function getEventLifecycleStatus(
+  event,
+  now = Date.now()
+) {
+  const storedStatus = String(
+    event?.status || "published"
+  )
     .trim()
     .toLowerCase();
 
@@ -190,15 +205,25 @@ function getEventLifecycleStatus(event, now = Date.now()) {
   return "published";
 }
 
-function isUpcomingEvent(event, now = Date.now()) {
+function isUpcomingEvent(
+  event,
+  now = Date.now()
+) {
   const start = getEventStart(event);
 
   return Boolean(
     start &&
       start.getTime() > now &&
-      getEventLifecycleStatus(event, now) === "published"
+      getEventLifecycleStatus(
+        event,
+        now
+      ) === "published"
   );
 }
+
+/* =========================================================
+   BOOKING HELPERS
+========================================================= */
 
 function getBookingEventId(booking) {
   return (
@@ -210,7 +235,9 @@ function getBookingEventId(booking) {
 }
 
 function isConfirmedBooking(booking) {
-  const status = String(booking?.status || "")
+  const status = String(
+    booking?.status || ""
+  )
     .trim()
     .toLowerCase();
 
@@ -224,7 +251,6 @@ function isConfirmedBooking(booking) {
 function getBookingTicketCount(booking) {
   return Number(
     booking?.ticketCount ??
-      booking?.ticketCount ??
       booking?.quantity ??
       0
   );
@@ -239,128 +265,138 @@ function getBookingRevenue(booking) {
   );
 }
 
-// =========================================================
-// STAT CARD
-// =========================================================
+/* =========================================================
+   STATUS BADGE
+========================================================= */
+
+function EventStatus({ status }) {
+  const normalizedStatus = String(
+    status || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const config = {
+    published: {
+      label: "Published",
+      icon: CheckCircle2,
+      className:
+        "border-emerald-200 bg-emerald-50 text-emerald-700",
+    },
+
+    ongoing: {
+      label: "Ongoing",
+      icon: PlayCircle,
+      className:
+        "border-blue-200 bg-blue-50 text-blue-700",
+    },
+
+    completed: {
+      label: "Completed",
+      icon: CheckCircle2,
+      className:
+        "border-slate-200 bg-slate-100 text-slate-700",
+    },
+
+    cancelled: {
+      label: "Cancelled",
+      icon: XCircle,
+      className:
+        "border-red-200 bg-red-50 text-red-700",
+    },
+
+    draft: {
+      label: "Draft",
+      icon: Clock3,
+      className:
+        "border-slate-200 bg-slate-100 text-slate-600",
+    },
+
+    "sold-out": {
+      label: "Sold Out",
+      icon: Ticket,
+      className:
+        "border-orange-200 bg-orange-50 text-orange-700",
+    },
+  };
+
+  const current =
+    config[normalizedStatus] ||
+    config.published;
+
+  const Icon = current.icon;
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${current.className}`}
+    >
+      <Icon size={12} strokeWidth={2.5} />
+      {current.label}
+    </span>
+  );
+}
+
+/* =========================================================
+   STAT CARD
+========================================================= */
 
 function StatCard({
   title,
   value,
   subtitle,
   icon: Icon,
+  iconClass,
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-slate-500">
             {title}
           </p>
 
-          <h3 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+          <h3 className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900">
             {value}
           </h3>
 
           {subtitle && (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1.5 text-xs text-slate-500">
               {subtitle}
             </p>
           )}
         </div>
 
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
-          <Icon size={21} strokeWidth={2} />
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconClass}`}
+        >
+          <Icon size={20} strokeWidth={2} />
         </div>
       </div>
     </div>
   );
 }
 
-// =========================================================
-// STATUS BADGE
-// =========================================================
-
-function EventStatus({ status }) {
-  const normalizedStatus = String(status || "")
-    .trim()
-    .toLowerCase();
-
-  const statusStyles = {
-    published:
-      "bg-emerald-50 text-emerald-700 border-emerald-200",
-    draft:
-      "bg-slate-100 text-slate-700 border-slate-200",
-    cancelled:
-      "bg-red-50 text-red-700 border-red-200",
-    completed:
-      "bg-blue-50 text-blue-700 border-blue-200",
-  };
-
-  const label =
-    normalizedStatus.charAt(0).toUpperCase() +
-    normalizedStatus.slice(1);
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
-        statusStyles[normalizedStatus] ||
-        "border-slate-200 bg-slate-50 text-slate-600"
-      }`}
-    >
-      {label || "Unknown"}
-    </span>
-  );
-}
-
-// =========================================================
-// DASHBOARD
-// =========================================================
+/* =========================================================
+   MAIN DASHBOARD
+========================================================= */
 
 function OrganizerDashboard() {
   const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [currentTime, setCurrentTime] =
+    useState(() => Date.now());
 
-  // =======================================================
-  // LOAD USER
-  // =======================================================
-
-  const loadUser = useCallback(() => {
-    try {
-      const storedUser =
-        localStorage.getItem(USER_STORAGE_KEY);
-
-      if (!storedUser) {
-        setUser(null);
-        return null;
-      }
-
-      const parsedUser = JSON.parse(storedUser);
-
-      setUser(parsedUser);
-
-      return parsedUser;
-    } catch (error) {
-      console.error(
-        "Unable to load organizer user:",
-        error
-      );
-
-      setUser(null);
-
-      return null;
-    }
-  }, []);
-
-  // =======================================================
-  // LOAD DASHBOARD DATA
-  // =======================================================
+  /* =======================================================
+     LOAD DASHBOARD DATA
+  ======================================================= */
 
   const loadDashboardData = useCallback(() => {
     try {
       const storedUser =
-        localStorage.getItem(USER_STORAGE_KEY);
+        localStorage.getItem(
+          USER_STORAGE_KEY
+        );
 
       if (!storedUser) {
         setUser(null);
@@ -369,7 +405,8 @@ function OrganizerDashboard() {
         return;
       }
 
-      const currentUser = JSON.parse(storedUser);
+      const currentUser =
+        JSON.parse(storedUser);
 
       setUser(currentUser);
 
@@ -379,27 +416,27 @@ function OrganizerDashboard() {
         return;
       }
 
-      // -----------------------------------------------
-      // Organizer's events only
-      // -----------------------------------------------
+      /* -----------------------------------------------
+         ORGANIZER EVENTS
+      ----------------------------------------------- */
 
       const organizerEvents =
         getStoredEventsByOrganizer(
           currentUser.id
         );
 
-      setEvents(organizerEvents);
+      setEvents(
+        Array.isArray(organizerEvents)
+          ? organizerEvents
+          : []
+      );
 
-      // -----------------------------------------------
-      // All bookings
-      // -----------------------------------------------
+      /* -----------------------------------------------
+         ORGANIZER BOOKINGS
+      ----------------------------------------------- */
 
       const allBookings =
         getStoredBookings();
-
-      // -----------------------------------------------
-      // Bookings belonging to organizer's events
-      // -----------------------------------------------
 
       const organizerEventIds =
         new Set(
@@ -411,34 +448,40 @@ function OrganizerDashboard() {
       const organizerBookings =
         allBookings.filter((booking) =>
           organizerEventIds.has(
-            String(getBookingEventId(booking))
+            String(
+              getBookingEventId(booking)
+            )
           )
         );
 
-      setBookings(organizerBookings);
+      setBookings(
+        Array.isArray(organizerBookings)
+          ? organizerBookings
+          : []
+      );
     } catch (error) {
       console.error(
         "Unable to load organizer dashboard:",
         error
       );
 
+      setUser(null);
       setEvents([]);
       setBookings([]);
     }
   }, []);
 
-  // =======================================================
-  // INITIAL LOAD
-  // =======================================================
+  /* =======================================================
+     INITIAL LOAD
+  ======================================================= */
 
   useEffect(() => {
-    loadUser();
     loadDashboardData();
-  }, [loadUser, loadDashboardData]);
+  }, [loadDashboardData]);
 
-  // =======================================================
-  // LISTEN FOR LOCALSTORAGE EVENTS
-  // =======================================================
+  /* =======================================================
+     LIVE UPDATES
+  ======================================================= */
 
   useEffect(() => {
     const handleEventsUpdated = () => {
@@ -492,9 +535,9 @@ function OrganizerDashboard() {
     };
   }, [loadDashboardData]);
 
-  // =======================================================
-  // LIFECYCLE CLOCK
-  // =======================================================
+  /* =======================================================
+     LIFECYCLE CLOCK
+  ======================================================= */
 
   useEffect(() => {
     const updateClock = () => {
@@ -513,105 +556,146 @@ function OrganizerDashboard() {
     };
   }, []);
 
-  // =======================================================
-  // CALCULATED STATISTICS
-  // =======================================================
+  /* =======================================================
+     STATISTICS
+  ======================================================= */
 
   const statistics = useMemo(() => {
-    const publishedEvents = events.filter(
-      (event) =>
-        getEventLifecycleStatus(event, currentTime) ===
-        "published"
-    );
+    const publishedEvents =
+      events.filter(
+        (event) =>
+          getEventLifecycleStatus(
+            event,
+            currentTime
+          ) === "published"
+      );
 
-    const upcomingEvents = events.filter(
-      (event) => isUpcomingEvent(event, currentTime)
-    );
+    const upcomingEvents =
+      events.filter((event) =>
+        isUpcomingEvent(
+          event,
+          currentTime
+        )
+      );
 
-    const completedEvents = events.filter(
-      (event) =>
-        getEventLifecycleStatus(event, currentTime) ===
-        "completed"
-    );
+    const completedEvents =
+      events.filter(
+        (event) =>
+          getEventLifecycleStatus(
+            event,
+            currentTime
+          ) === "completed"
+      );
 
-    const ongoingEvents = events.filter(
-      (event) =>
-        getEventLifecycleStatus(event, currentTime) ===
-        "ongoing"
-    );
+    const ongoingEvents =
+      events.filter(
+        (event) =>
+          getEventLifecycleStatus(
+            event,
+            currentTime
+          ) === "ongoing"
+      );
 
     const confirmedBookings =
-      bookings.filter(isConfirmedBooking);
+      bookings.filter(
+        isConfirmedBooking
+      );
 
     const ticketsSold =
       confirmedBookings.reduce(
         (total, booking) =>
-          total + getBookingTicketCount(booking),
+          total +
+          getBookingTicketCount(
+            booking
+          ),
         0
       );
 
     const revenue =
       confirmedBookings.reduce(
         (total, booking) =>
-          total + getBookingRevenue(booking),
+          total +
+          getBookingRevenue(
+            booking
+          ),
         0
       );
 
     return {
       totalEvents: events.length,
-      publishedEvents: publishedEvents.length,
-      upcomingEvents: upcomingEvents.length,
-      completedEvents: completedEvents.length,
-      ongoingEvents: ongoingEvents.length,
-      totalBookings: confirmedBookings.length,
+      publishedEvents:
+        publishedEvents.length,
+      upcomingEvents:
+        upcomingEvents.length,
+      completedEvents:
+        completedEvents.length,
+      ongoingEvents:
+        ongoingEvents.length,
+      totalBookings:
+        confirmedBookings.length,
       ticketsSold,
       revenue,
     };
-  }, [events, bookings, currentTime]);
+  }, [
+    events,
+    bookings,
+    currentTime,
+  ]);
 
-  // =======================================================
-  // UPCOMING EVENTS
-  // =======================================================
+  /* =======================================================
+     UPCOMING EVENTS
+  ======================================================= */
 
   const upcomingEvents = useMemo(() => {
     return [...events]
-      .filter((event) => isUpcomingEvent(event, currentTime))
+      .filter((event) =>
+        isUpcomingEvent(
+          event,
+          currentTime
+        )
+      )
       .sort((a, b) => {
-        const dateA = getEventDate(a)?.getTime() || 0;
-        const dateB = getEventDate(b)?.getTime() || 0;
+        const dateA =
+          getEventStart(a)?.getTime() || 0;
+
+        const dateB =
+          getEventStart(b)?.getTime() || 0;
 
         return dateA - dateB;
       })
       .slice(0, 5);
   }, [events, currentTime]);
 
-  // =======================================================
-  // RECENT BOOKINGS
-  // =======================================================
+  /* =======================================================
+     RECENT BOOKINGS
+  ======================================================= */
 
   const recentBookings = useMemo(() => {
     return [...bookings]
+      .filter(isConfirmedBooking)
       .sort((a, b) => {
-        const dateA = new Date(
-          a?.createdAt ||
-            a?.bookingDate ||
-            0
-        ).getTime();
+        const dateA =
+          new Date(
+            a?.createdAt ||
+              a?.bookingDate ||
+              0
+          ).getTime();
 
-        const dateB = new Date(
-          b?.createdAt ||
-            b?.bookingDate ||
-            0
-        ).getTime();
+        const dateB =
+          new Date(
+            b?.createdAt ||
+              b?.bookingDate ||
+              0
+          ).getTime();
 
         return dateB - dateA;
       })
       .slice(0, 5);
   }, [bookings]);
 
-  // =======================================================
-  // EVENT PERFORMANCE
-  // =======================================================
+  /* =======================================================
+     TOP 3 EVENT PERFORMANCE
+  ======================================================= */
 
   const eventPerformance = useMemo(() => {
     return events
@@ -620,9 +704,13 @@ function OrganizerDashboard() {
           bookings.filter(
             (booking) =>
               String(
-                getBookingEventId(booking)
+                getBookingEventId(
+                  booking
+                )
               ) === String(event.id) &&
-              isConfirmedBooking(booking)
+              isConfirmedBooking(
+                booking
+              )
           );
 
         const ticketsSold =
@@ -651,7 +739,8 @@ function OrganizerDashboard() {
         const percentage =
           capacity > 0
             ? Math.min(
-                (ticketsSold / capacity) *
+                (ticketsSold /
+                  capacity) *
                   100,
                 100
               )
@@ -661,30 +750,37 @@ function OrganizerDashboard() {
           ...event,
           ticketsSold,
           revenue,
+          capacity,
           percentage,
-          lifecycleStatus: getEventLifecycleStatus(
-            event,
-            currentTime
-          ),
+          lifecycleStatus:
+            getEventLifecycleStatus(
+              event,
+              currentTime
+            ),
         };
       })
       .sort(
         (a, b) =>
-          b.ticketsSold - a.ticketsSold
+          b.ticketsSold -
+          a.ticketsSold
       )
-      .slice(0, 5);
-  }, [events, bookings, currentTime]);
+      .slice(0, 3);
+  }, [
+    events,
+    bookings,
+    currentTime,
+  ]);
 
-  // =======================================================
-  // NO ORGANIZER USER
-  // =======================================================
+  /* =======================================================
+     LOGIN STATE
+  ======================================================= */
 
   if (!user) {
     return (
       <section className="min-h-[70vh] bg-slate-50">
         <div className="mx-auto flex min-h-[70vh] max-w-7xl items-center justify-center px-5 py-10">
-          <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
               <Users size={25} />
             </div>
 
@@ -709,40 +805,42 @@ function OrganizerDashboard() {
     );
   }
 
-  // =======================================================
-  // DASHBOARD UI
-  // =======================================================
+  /* =======================================================
+     DASHBOARD UI
+  ======================================================= */
 
   return (
     <section className="min-h-full bg-slate-50">
-      <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
+      <div className="mx-auto w-full max-w-7xl px-5 py-7 sm:px-6 lg:px-8">
+
         {/* =================================================
             HEADER
         ================================================= */}
 
-        <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+        <div className="mb-7 flex flex-col gap-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold text-orange-500">
+            <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-600">
+              <TrendingUp size={13} />
               Organizer Dashboard
-            </p>
+            </div>
 
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               Welcome back,{" "}
               {user.name || "Organizer"} 👋
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              Manage your events and keep track of
-              bookings, tickets, and revenue from one
-              place.
+              Manage your events, monitor bookings,
+              and track your event performance from
+              one place.
             </p>
           </div>
 
           <Link
             to="/organizer/events/create"
-            className="inline-flex w-fit items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
+            className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 hover:shadow-md"
           >
-            <CalendarDays size={18} />
+            <Plus size={18} />
             Create Event
           </Link>
         </div>
@@ -757,13 +855,15 @@ function OrganizerDashboard() {
             value={statistics.totalEvents}
             subtitle={`${statistics.upcomingEvents} upcoming • ${statistics.completedEvents} completed`}
             icon={CalendarDays}
+            iconClass="bg-orange-50 text-orange-500"
           />
 
           <StatCard
             title="Published Events"
             value={statistics.publishedEvents}
-            subtitle={`${statistics.ongoingEvents} ongoing`}
+            subtitle={`${statistics.ongoingEvents} currently ongoing`}
             icon={CheckCircle2}
+            iconClass="bg-emerald-50 text-emerald-600"
           />
 
           <StatCard
@@ -771,6 +871,7 @@ function OrganizerDashboard() {
             value={statistics.totalBookings}
             subtitle={`${statistics.ticketsSold} tickets sold`}
             icon={Ticket}
+            iconClass="bg-blue-50 text-blue-600"
           />
 
           <StatCard
@@ -780,22 +881,24 @@ function OrganizerDashboard() {
             )}
             subtitle="From confirmed bookings"
             icon={IndianRupee}
+            iconClass="bg-violet-50 text-violet-600"
           />
         </div>
 
         {/* =================================================
-            MAIN CONTENT
+            UPCOMING + RECENT BOOKINGS
         ================================================= */}
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+
           {/* =================================================
               UPCOMING EVENTS
           ================================================= */}
 
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
               <div>
-                <h2 className="font-bold text-slate-900">
+                <h2 className="text-base font-bold text-slate-900">
                   Upcoming Events
                 </h2>
 
@@ -806,34 +909,44 @@ function OrganizerDashboard() {
 
               <Link
                 to="/organizer/events"
-                className="inline-flex items-center gap-1 text-sm font-semibold text-orange-500 hover:text-orange-600"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-orange-500 transition hover:text-orange-600"
               >
                 View all
                 <ChevronRight size={16} />
               </Link>
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {upcomingEvents.length === 0 ? (
-                <div className="px-6 py-12 text-center">
-                  <CalendarDays
-                    className="mx-auto text-slate-300"
-                    size={36}
-                  />
-
-                  <p className="mt-3 text-sm font-medium text-slate-600">
-                    No upcoming events
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Create an event to see it here.
-                  </p>
+            {upcomingEvents.length === 0 ? (
+              <div className="flex min-h-[300px] flex-col items-center justify-center px-6 py-12 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                  <CalendarDays size={25} />
                 </div>
-              ) : (
-                upcomingEvents.map((event) => {
+
+                <p className="mt-4 text-sm font-semibold text-slate-700">
+                  No upcoming events
+                </p>
+
+                <p className="mt-1 max-w-xs text-xs leading-5 text-slate-400">
+                  Create an event to see your
+                  upcoming schedule here.
+                </p>
+
+                <Link
+                  to="/organizer/events/create"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-orange-600"
+                >
+                  <Plus size={15} />
+                  Create Event
+                </Link>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {upcomingEvents.map((event) => {
                   const availableSeats =
                     Math.max(
-                      Number(event.capacity || 0) -
+                      Number(
+                        event.capacity || 0
+                      ) -
                         Number(
                           event.bookedSeats || 0
                         ),
@@ -841,41 +954,57 @@ function OrganizerDashboard() {
                     );
 
                   return (
-                    <div
+                    <Link
                       key={event.id}
-                      className="flex gap-4 px-5 py-4 sm:px-6"
+                      to={`/organizer/events/${event.id}`}
+                      className="group flex gap-4 px-5 py-4 transition hover:bg-slate-50 sm:px-6"
                     >
-                      <div className="hidden h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:block">
+                      {/* IMAGE */}
+
+                      <div className="hidden h-20 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100 sm:block">
                         {event.image ? (
                           <img
                             src={event.image}
-                            alt={event.title}
-                            className="h-full w-full object-cover"
+                            alt={
+                              event.title ||
+                              "Event"
+                            }
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                           />
                         ) : (
                           <div className="flex h-full items-center justify-center text-slate-400">
                             <CalendarDays
-                              size={22}
+                              size={24}
                             />
                           </div>
                         )}
                       </div>
 
+                      {/* CONTENT */}
+
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <h3 className="line-clamp-1 font-semibold text-slate-900">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-sm font-bold text-slate-900">
                               {event.title}
                             </h3>
 
-                            <p className="mt-1 text-xs text-slate-500">
-                              {formatDate(
-                                event.date
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock3
+                                  size={12}
+                                />
+                                {formatDate(
+                                  event.date
+                                )}
+                              </span>
+
+                              {event.time && (
+                                <span>
+                                  {event.time}
+                                </span>
                               )}
-                              {event.time
-                                ? ` • ${event.time}`
-                                : ""}
-                            </p>
+                            </div>
                           </div>
 
                           <EventStatus
@@ -886,50 +1015,40 @@ function OrganizerDashboard() {
                           />
                         </div>
 
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
                           <span className="inline-flex items-center gap-1">
-                            <MapPin
-                              size={13}
-                            />
+                            <MapPin size={13} />
                             {event.city ||
                               event.location ||
                               "Location unavailable"}
                           </span>
 
                           <span className="inline-flex items-center gap-1">
-                            <Users
-                              size={13}
-                            />
+                            <Users size={13} />
                             {availableSeats} seats
                             left
                           </span>
                         </div>
                       </div>
 
-                      <Link
-                        to={`/organizer/events/${event.id}`}
-                        className="hidden items-center self-center text-slate-400 transition hover:text-orange-500 sm:flex"
-                        aria-label={`View ${event.title}`}
-                      >
-                        <ChevronRight
-                          size={20}
-                        />
-                      </Link>
-                    </div>
+                      <div className="hidden items-center self-center text-slate-300 transition group-hover:text-orange-500 sm:flex">
+                        <ArrowUpRight size={19} />
+                      </div>
+                    </Link>
                   );
-                })
-              )}
-            </div>
-          </div>
+                })}
+              </div>
+            )}
+          </section>
 
           {/* =================================================
               RECENT BOOKINGS
           ================================================= */}
 
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5">
               <div>
-                <h2 className="font-bold text-slate-900">
+                <h2 className="text-base font-bold text-slate-900">
                   Recent Bookings
                 </h2>
 
@@ -940,32 +1059,31 @@ function OrganizerDashboard() {
 
               <Link
                 to="/organizer/bookings"
-                className="inline-flex items-center gap-1 text-sm font-semibold text-orange-500 hover:text-orange-600"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-orange-500 transition hover:text-orange-600"
               >
                 View all
                 <ChevronRight size={16} />
               </Link>
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {recentBookings.length === 0 ? (
-                <div className="px-6 py-12 text-center">
-                  <Ticket
-                    className="mx-auto text-slate-300"
-                    size={36}
-                  />
-
-                  <p className="mt-3 text-sm font-medium text-slate-600">
-                    No bookings yet
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Bookings for your events will
-                    appear here.
-                  </p>
+            {recentBookings.length === 0 ? (
+              <div className="flex min-h-[300px] flex-col items-center justify-center px-6 py-12 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                  <Ticket size={25} />
                 </div>
-              ) : (
-                recentBookings.map((booking) => {
+
+                <p className="mt-4 text-sm font-semibold text-slate-700">
+                  No bookings yet
+                </p>
+
+                <p className="mt-1 max-w-xs text-xs leading-5 text-slate-400">
+                  Bookings for your events will
+                  appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {recentBookings.map((booking) => {
                   const event =
                     events.find(
                       (item) =>
@@ -977,259 +1095,354 @@ function OrganizerDashboard() {
                         )
                     );
 
+                  const bookingId =
+                    booking.bookingId ||
+                    booking.id;
+
                   return (
-                    <div
-                      key={
-                        booking.bookingId ||
-                        booking.id
-                      }
-                      className="px-5 py-4"
+                    <Link
+                      key={bookingId}
+                      to={`/organizer/bookings/${bookingId}`}
+                      className="group block px-5 py-4 transition hover:bg-slate-50"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        {/* AVATAR */}
+
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-sm font-bold text-orange-600">
+                          {String(
+                            booking.attendee
+                              ?.name ||
+                              booking.user
+                                ?.name ||
+                              "A"
+                          )
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        {/* INFO */}
+
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900">
                             {booking.attendee
                               ?.name ||
-                              booking.user?.name ||
+                              booking.user
+                                ?.name ||
                               "Attendee"}
                           </p>
 
                           <p className="mt-1 truncate text-xs text-slate-500">
                             {event?.title ||
-                              "Event"}
+                              "Event unavailable"}
+                          </p>
+
+                          <div className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-400">
+                            <span>
+                              {getBookingTicketCount(
+                                booking
+                              )}{" "}
+                              ticket
+                              {getBookingTicketCount(
+                                booking
+                              ) !== 1
+                                ? "s"
+                                : ""}
+                            </span>
+
+                            <span>
+                              {formatDate(
+                                booking.createdAt ||
+                                  booking.bookingDate
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* AMOUNT */}
+
+                        <div className="hidden shrink-0 text-right sm:block">
+                          <p className="text-sm font-bold text-slate-900">
+                            {formatCurrency(
+                              getBookingRevenue(
+                                booking
+                              )
+                            )}
+                          </p>
+
+                          <p className="mt-1 text-[10px] font-medium text-emerald-600">
+                            Confirmed
                           </p>
                         </div>
 
-                        <span className="shrink-0 text-sm font-bold text-slate-900">
-                          {formatCurrency(
-                            getBookingRevenue(
-                              booking
-                            )
-                          )}
-                        </span>
+                        <ChevronRight
+                          size={17}
+                          className="shrink-0 text-slate-300 transition group-hover:text-orange-500"
+                        />
                       </div>
-
-                      <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                        <span>
-                          {getBookingTicketCount(
-                            booking
-                          )}{" "}
-                          ticket
-                          {getBookingTicketCount(
-                            booking
-                          ) !== 1
-                            ? "s"
-                            : ""}
-                        </span>
-
-                        <span>
-                          {formatDate(
-                            booking.createdAt ||
-                              booking.bookingDate
-                          )}
-                        </span>
-                      </div>
-                    </div>
+                    </Link>
                   );
-                })
-              )}
-            </div>
-          </div>
+                })}
+              </div>
+            )}
+          </section>
         </div>
 
         {/* =================================================
-            EVENT PERFORMANCE
+            TOP 3 PERFORMANCE
         ================================================= */}
 
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+        <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5 sm:px-6">
             <div>
-              <h2 className="font-bold text-slate-900">
-                Event Performance
-              </h2>
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
+                  <TrendingUp size={17} />
+                </div>
+
+                <h2 className="text-base font-bold text-slate-900">
+                  Top 3 Event Performance
+                </h2>
+              </div>
 
               <p className="mt-1 text-xs text-slate-500">
-                Booking performance across your events
+                Your best events based on confirmed
+                tickets sold
               </p>
             </div>
 
-            <TrendingUp
-              size={20}
-              className="text-orange-500"
-            />
+            <Link
+              to="/organizer/events"
+              className="hidden items-center gap-1 text-sm font-semibold text-orange-500 transition hover:text-orange-600 sm:inline-flex"
+            >
+              View events
+              <ChevronRight size={16} />
+            </Link>
           </div>
 
           {eventPerformance.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <TrendingUp
-                className="mx-auto text-slate-300"
-                size={36}
-              />
+            <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-12 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                <TrendingUp size={25} />
+              </div>
 
-              <p className="mt-3 text-sm font-medium text-slate-600">
-                No event performance data
+              <p className="mt-4 text-sm font-semibold text-slate-700">
+                No performance data
               </p>
 
-              <p className="mt-1 text-xs text-slate-400">
-                Create events and receive bookings to
-                see performance.
+              <p className="mt-1 max-w-sm text-xs leading-5 text-slate-400">
+                Create events and receive bookings
+                to see your top performing events.
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {eventPerformance.map((event) => (
-                <div
-                  key={event.id}
-                  className="px-5 py-5 sm:px-6"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate font-semibold text-slate-900">
-                          {event.title}
-                        </h3>
+            <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-3">
+              {eventPerformance.map(
+                (event, index) => (
+                  <Link
+                    key={event.id}
+                    to={`/organizer/events/${event.id}`}
+                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white transition duration-200 hover:-translate-y-1 hover:border-orange-200 hover:shadow-md"
+                  >
+                    {/* IMAGE */}
 
+                    <div className="relative h-40 overflow-hidden bg-slate-100">
+                      {event.image ? (
+                        <img
+                          src={event.image}
+                          alt={
+                            event.title ||
+                            "Event"
+                          }
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-400">
+                          <CalendarDays
+                            size={32}
+                          />
+                        </div>
+                      )}
+
+                      {/* RANK */}
+
+                      <div className="absolute left-3 top-3 flex h-8 min-w-8 items-center justify-center rounded-lg bg-white/95 px-2 text-xs font-black text-orange-600 shadow-sm backdrop-blur">
+                        #{index + 1}
+                      </div>
+
+                      {/* STATUS */}
+
+                      <div className="absolute right-3 top-3">
                         <EventStatus
-                          status={event.lifecycleStatus}
-                        />
-                      </div>
-
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full bg-orange-500 transition-all"
-                          style={{
-                            width: `${event.percentage}%`,
-                          }}
+                          status={
+                            event.lifecycleStatus
+                          }
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-5 text-sm md:w-72">
-                      <div>
-                        <p className="text-xs text-slate-400">
-                          Tickets sold
-                        </p>
+                    {/* CONTENT */}
 
-                        <p className="mt-1 font-bold text-slate-900">
-                          {event.ticketsSold}
-                          {event.capacity
-                            ? ` / ${event.capacity}`
-                            : ""}
-                        </p>
-                      </div>
+                    <div className="p-4">
+                      <h3 className="truncate text-sm font-bold text-slate-900">
+                        {event.title ||
+                          "Untitled Event"}
+                      </h3>
 
-                      <div>
-                        <p className="text-xs text-slate-400">
-                          Revenue
-                        </p>
-
-                        <p className="mt-1 font-bold text-slate-900">
-                          {formatCurrency(
-                            event.revenue
+                      <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 size={12} />
+                          {formatDate(
+                            event.date
                           )}
-                        </p>
+                        </span>
+
+                        {event.city && (
+                          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                            <MapPin size={12} />
+                            {event.city}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* PROGRESS */}
+
+                      <div className="mt-4">
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-slate-500">
+                            Tickets sold
+                          </span>
+
+                          <span className="text-xs font-bold text-slate-900">
+                            {event.ticketsSold}
+                            {event.capacity
+                              ? ` / ${event.capacity}`
+                              : ""}
+                          </span>
+                        </div>
+
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                            style={{
+                              width: `${event.percentage}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* FOOTER */}
+
+                      <div className="mt-4 flex items-end justify-between">
+                        <div>
+                          <p className="text-[11px] text-slate-400">
+                            Revenue
+                          </p>
+
+                          <p className="mt-0.5 text-sm font-bold text-slate-900">
+                            {formatCurrency(
+                              event.revenue
+                            )}
+                          </p>
+                        </div>
+
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-500 transition group-hover:text-orange-600">
+                          Details
+                          <ArrowUpRight
+                            size={14}
+                          />
+                        </span>
                       </div>
                     </div>
-
-                    <Link
-                      to={`/organizer/events/${event.id}`}
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-orange-500 hover:text-orange-600"
-                    >
-                      Details
-                      <ChevronRight size={16} />
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                  </Link>
+                )
+              )}
             </div>
           )}
-        </div>
+        </section>
 
         {/* =================================================
             QUICK ACTIONS
         ================================================= */}
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Link
-            to="/organizer/events/create"
-            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
-          >
-            <CalendarDays
-              className="text-orange-500"
-              size={22}
+        <section className="mt-6">
+          <div className="mb-4">
+            <h2 className="text-base font-bold text-slate-900">
+              Quick Actions
+            </h2>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Quickly access the tools you use most.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <QuickAction
+              to="/organizer/events/create"
+              icon={CalendarDays}
+              title="Create an Event"
+              description="Publish a new event for attendees."
+              action="Create now"
             />
 
-            <h3 className="mt-4 font-bold text-slate-900">
-              Create an Event
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Publish a new event for attendees.
-            </p>
-
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-orange-500">
-              Create now
-              <ChevronRight
-                size={16}
-                className="transition group-hover:translate-x-0.5"
-              />
-            </span>
-          </Link>
-
-          <Link
-            to="/organizer/events"
-            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
-          >
-            <Ticket
-              className="text-orange-500"
-              size={22}
+            <QuickAction
+              to="/organizer/events"
+              icon={Ticket}
+              title="Manage Events"
+              description="View and manage all your events."
+              action="Manage events"
             />
 
-            <h3 className="mt-4 font-bold text-slate-900">
-              Manage Events
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Edit, publish, or manage your events.
-            </p>
-
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-orange-500">
-              Manage events
-              <ChevronRight
-                size={16}
-                className="transition group-hover:translate-x-0.5"
-              />
-            </span>
-          </Link>
-
-          <Link
-            to="/organizer/bookings"
-            className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
-          >
-            <Users
-              className="text-orange-500"
-              size={22}
+            <QuickAction
+              to="/organizer/bookings"
+              icon={Users}
+              title="View Bookings"
+              description="See attendees and booking activity."
+              action="View bookings"
             />
-
-            <h3 className="mt-4 font-bold text-slate-900">
-              View Bookings
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              See attendees and booking activity.
-            </p>
-
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-orange-500">
-              View bookings
-              <ChevronRight
-                size={16}
-                className="transition group-hover:translate-x-0.5"
-              />
-            </span>
-          </Link>
-        </div>
+          </div>
+        </section>
       </div>
     </section>
+  );
+}
+
+/* =========================================================
+   QUICK ACTION
+========================================================= */
+
+function QuickAction({
+  to,
+  icon: Icon,
+  title,
+  description,
+  action,
+}) {
+  return (
+    <Link
+      to={to}
+      className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+        <Icon size={21} />
+      </div>
+
+      <h3 className="mt-4 font-bold text-slate-900">
+        {title}
+      </h3>
+
+      <p className="mt-1 text-sm leading-5 text-slate-500">
+        {description}
+      </p>
+
+      <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-orange-500">
+        {action}
+
+        <ChevronRight
+          size={16}
+          className="transition group-hover:translate-x-0.5"
+        />
+      </span>
+    </Link>
   );
 }
 

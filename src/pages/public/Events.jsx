@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   ChevronDown,
+  ChevronsDown,
   MapPin,
   Search,
   SlidersHorizontal,
@@ -16,93 +17,97 @@ import {
   EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
-function getEventTimestamp(event) {
-  if (!event?.date) {
-    return Number.POSITIVE_INFINITY;
-  }
+/* =========================================================
+   HELPERS
+========================================================= */
 
-  const rawDate = String(event.date).trim();
-  let date;
+const getEventTimestamp = (event) => {
+  if (!event?.date) return 0;
 
-  // Parse YYYY-MM-DD as a local calendar date instead of UTC.
-  // This avoids date shifts for users in time zones such as IST.
-  const dateOnlyMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const dateString = String(event.date).trim();
 
-  if (dateOnlyMatch) {
-    date = new Date(
-      Number(dateOnlyMatch[1]),
-      Number(dateOnlyMatch[2]) - 1,
-      Number(dateOnlyMatch[3]),
-      0,
-      0,
-      0,
-      0
-    );
+  let timestamp = 0;
+
+  // Parse YYYY-MM-DD locally to avoid UTC date shifting
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [year, month, day] = dateString.split("-").map(Number);
+
+    timestamp = new Date(
+      year,
+      month - 1,
+      day
+    ).getTime();
   } else {
-    date = new Date(rawDate);
+    timestamp = new Date(dateString).getTime();
   }
 
-  if (Number.isNaN(date.getTime())) {
-    return Number.POSITIVE_INFINITY;
+  if (Number.isNaN(timestamp)) return 0;
+
+  /*
+    Parse event time when available.
+    Supports:
+    10:30 AM
+    7:00 PM
+    10:30
+  */
+  if (event.time) {
+    const timeValue = String(event.time).trim();
+
+    const timeMatch = timeValue.match(
+      /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i
+    );
+
+    if (timeMatch) {
+      let hours = Number(timeMatch[1]);
+      const minutes = Number(timeMatch[2]);
+      const meridiem = timeMatch[3]?.toUpperCase();
+
+      if (meridiem === "PM" && hours !== 12) {
+        hours += 12;
+      }
+
+      if (meridiem === "AM" && hours === 12) {
+        hours = 0;
+      }
+
+      const baseDate = new Date(timestamp);
+
+      baseDate.setHours(hours, minutes, 0, 0);
+
+      return baseDate.getTime();
+    }
   }
 
-  const time = String(event.time || "").trim();
+  return timestamp;
+};
 
-  const match = time.match(
-    /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i
-  );
-
-  if (match) {
-    let hours = Number(match[1]);
-    const minutes = Number(match[2] || 0);
-    const period = match[3]?.toUpperCase();
-
-    if (period === "PM" && hours < 12) {
-      hours += 12;
-    }
-
-    if (period === "AM" && hours === 12) {
-      hours = 0;
-    }
-
-    if (
-      hours >= 0 &&
-      hours <= 23 &&
-      minutes >= 0 &&
-      minutes <= 59
-    ) {
-      date.setHours(hours, minutes, 0, 0);
-    }
-  }
-
-  return date.getTime();
-}
-
-function normalize(value) {
-  return String(value ?? "")
+const normalize = (value) =>
+  String(value ?? "")
     .trim()
     .toLowerCase();
-}
 
-function isPubliclyVisibleStatus(event) {
-  const status = normalize(event?.status || "published");
+const isPubliclyVisibleStatus = (event) => {
+  const status = normalize(event?.status);
 
   return status === "published" || status === "sold-out";
-}
+};
 
-function isEventCompleted(event, currentTime = Date.now()) {
-  const eventTimestamp = getEventTimestamp(event);
+const isEventCompleted = (event, currentTime) => {
+  const eventTime = getEventTimestamp(event);
 
-  if (!Number.isFinite(eventTimestamp)) {
-    return false;
-  }
+  if (!eventTime) return false;
 
-  return eventTimestamp < currentTime;
-}
+  return eventTime < currentTime;
+};
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 function Events() {
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const [searchQuery, setSearchQuery] = useState(
     searchParams.get("search") || ""
@@ -120,579 +125,1021 @@ function Events() {
     searchParams.get("date") || "all"
   );
 
-  const [sortBy, setSortBy] = useState("date-asc");
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [sortBy, setSortBy] = useState(
+    searchParams.get("sort") || "date-asc"
+  );
 
-  const [storedEvents, setStoredEvents] = useState(() => {
-    try {
-      const events = getStoredEvents();
-      return Array.isArray(events) ? events : [];
-    } catch (error) {
-      console.error("EventON: unable to load events.", error);
-      return [];
-    }
-  });
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] =
+    useState(false);
+
+  const [storedEvents, setStoredEvents] = useState(() =>
+    getStoredEvents()
+  );
+
+  /* =========================================================
+     REFRESH EVENTS
+  ========================================================= */
 
   useEffect(() => {
     const refreshEvents = () => {
-      try {
-        const events = getStoredEvents();
-        setStoredEvents(Array.isArray(events) ? events : []);
-      } catch (error) {
-        console.error("EventON: unable to refresh events.", error);
-      }
+      setStoredEvents(getStoredEvents());
     };
 
-    window.addEventListener(EVENTS_UPDATED_EVENT, refreshEvents);
+    window.addEventListener(
+      EVENTS_UPDATED_EVENT,
+      refreshEvents
+    );
+
     window.addEventListener("storage", refreshEvents);
 
     return () => {
-      window.removeEventListener(EVENTS_UPDATED_EVENT, refreshEvents);
+      window.removeEventListener(
+        EVENTS_UPDATED_EVENT,
+        refreshEvents
+      );
+
       window.removeEventListener("storage", refreshEvents);
     };
   }, []);
+
+  /* =========================================================
+     SYNC URL FILTERS
+  ========================================================= */
 
   useEffect(() => {
     setSearchQuery(searchParams.get("search") || "");
     setSelectedCategory(searchParams.get("category") || "");
     setSelectedLocation(searchParams.get("location") || "");
     setSelectedDate(searchParams.get("date") || "all");
+    setSortBy(searchParams.get("sort") || "date-asc");
   }, [searchParams]);
 
-  const publicEvents = useMemo(
-    () =>
-      storedEvents.filter(
-        (event) =>
-          isPubliclyVisibleStatus(event) &&
-          !isEventCompleted(event, currentTime)
-      ),
-    [storedEvents, currentTime]
-  );
+  /* =========================================================
+     CURRENT TIME
+  ========================================================= */
 
-  // Keep the public lifecycle current if this page remains open
-  // while an event moves from upcoming/ongoing to completed.
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
+    const interval = window.setInterval(() => {
       setCurrentTime(Date.now());
     }, 60 * 1000);
 
     return () => {
-      window.clearInterval(intervalId);
+      window.clearInterval(interval);
     };
   }, []);
 
-  const selectedCategoryName = useMemo(() => {
-    const selected = normalize(selectedCategory);
+  /* =========================================================
+     PUBLIC EVENTS
+  ========================================================= */
 
-    return eventCategories.find(
-      (category) =>
-        normalize(category.slug) === selected ||
-        normalize(category.name) === selected
-    )?.name;
+  const publicEvents = useMemo(() => {
+    return storedEvents.filter((event) => {
+      // Only published and sold-out events are public
+      if (!isPubliclyVisibleStatus(event)) {
+        return false;
+      }
+
+      // Hide completed events
+      if (isEventCompleted(event, currentTime)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [storedEvents, currentTime]);
+
+  /* =========================================================
+     CATEGORY NAME
+  ========================================================= */
+
+  const selectedCategoryName = useMemo(() => {
+    if (!selectedCategory) return "";
+
+    const category = eventCategories.find((item) => {
+      return (
+        normalize(item.slug) === normalize(selectedCategory) ||
+        normalize(item.name) === normalize(selectedCategory)
+      );
+    });
+
+    return category?.name || selectedCategory;
   }, [selectedCategory]);
 
+  /* =========================================================
+     FILTER + SORT
+  ========================================================= */
+
   const filteredEvents = useMemo(() => {
-    const query = normalize(searchQuery);
-    const category = normalize(selectedCategory);
-    const location = normalize(selectedLocation);
+    const normalizedSearch = normalize(searchQuery);
+    const normalizedLocation = normalize(selectedLocation);
+    const normalizedCategory = normalize(selectedCategory);
 
-    return [...publicEvents]
-      .filter((event) => {
-        if (!query) {
-          return true;
-        }
+    const now = new Date(currentTime);
 
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const endOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999
+    );
+
+    const endOfWeek = new Date(startOfToday);
+
+    endOfWeek.setDate(
+      endOfWeek.getDate() + (7 - endOfWeek.getDay())
+    );
+
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+
+    const filtered = publicEvents.filter((event) => {
+      /* -----------------------------------------------------
+         SEARCH
+      ----------------------------------------------------- */
+
+      if (normalizedSearch) {
         const searchableText = [
           event.title,
           event.description,
           event.organizer,
+          event.organizerName,
           event.location,
           event.city,
           event.category,
           event.categorySlug,
         ]
-          .filter(Boolean)
           .map(normalize)
           .join(" ");
 
-        return searchableText.includes(query);
-      })
-
-      .filter((event) => {
-        if (!category) {
-          return true;
-        }
-
-        return (
-          normalize(event.categorySlug) === category ||
-          normalize(event.category) === category ||
-          normalize(event.category) === normalize(selectedCategoryName)
-        );
-      })
-
-      .filter((event) => {
-        if (!location) {
-          return true;
-        }
-
-        return (
-          normalize(event.city).includes(location) ||
-          normalize(event.location).includes(location)
-        );
-      })
-
-      .filter((event) => {
-        if (
-          selectedDate !== "today" &&
-          selectedDate !== "week" &&
-          selectedDate !== "month" &&
-          selectedDate !== "upcoming"
-        ) {
-          return true;
-        }
-
-        const timestamp = getEventTimestamp(event);
-
-        if (!Number.isFinite(timestamp)) {
+        if (!searchableText.includes(normalizedSearch)) {
           return false;
         }
+      }
 
-        const eventDate = new Date(timestamp);
-        const today = new Date();
+      /* -----------------------------------------------------
+         CATEGORY
+      ----------------------------------------------------- */
 
-        eventDate.setHours(0, 0, 0, 0);
-        today.setHours(0, 0, 0, 0);
+      if (normalizedCategory) {
+        const eventCategory = normalize(event.category);
+        const eventCategorySlug = normalize(
+          event.categorySlug
+        );
 
-        if (selectedDate === "today") {
-          return eventDate.getTime() === today.getTime();
+        if (
+          eventCategory !== normalizedCategory &&
+          eventCategorySlug !== normalizedCategory
+        ) {
+          return false;
         }
+      }
 
-        if (selectedDate === "upcoming") {
-          return timestamp >= currentTime;
+      /* -----------------------------------------------------
+         LOCATION
+      ----------------------------------------------------- */
+
+      if (normalizedLocation) {
+        const eventCity = normalize(event.city);
+        const eventLocation = normalize(event.location);
+
+        if (
+          !eventCity.includes(normalizedLocation) &&
+          !eventLocation.includes(normalizedLocation)
+        ) {
+          return false;
         }
+      }
 
-        if (selectedDate === "week") {
-          const day = today.getDay();
-          const daysFromMonday = day === 0 ? 6 : day - 1;
+      /* -----------------------------------------------------
+         DATE
+      ----------------------------------------------------- */
 
-          const monday = new Date(today);
-          monday.setDate(today.getDate() - daysFromMonday);
-          monday.setHours(0, 0, 0, 0);
+      const eventTimestamp = getEventTimestamp(event);
 
-          const sunday = new Date(monday);
-          sunday.setDate(monday.getDate() + 6);
-          sunday.setHours(23, 59, 59, 999);
+      if (!eventTimestamp) {
+        return false;
+      }
 
-          return eventDate >= monday && eventDate <= sunday;
+      const eventDate = new Date(eventTimestamp);
+
+      if (selectedDate === "today") {
+        if (
+          eventDate < startOfToday ||
+          eventDate > endOfToday
+        ) {
+          return false;
         }
+      }
 
-        if (selectedDate === "month") {
-          return (
-            eventDate.getMonth() === today.getMonth() &&
-            eventDate.getFullYear() === today.getFullYear()
-          );
+      if (selectedDate === "week") {
+        if (
+          eventDate < startOfToday ||
+          eventDate > endOfWeek
+        ) {
+          return false;
         }
+      }
 
-        return true;
-      })
-
-      .sort((a, b) => {
-        if (sortBy === "date-desc") {
-          return getEventTimestamp(b) - getEventTimestamp(a);
+      if (selectedDate === "month") {
+        if (
+          eventDate < startOfToday ||
+          eventDate > endOfMonth
+        ) {
+          return false;
         }
+      }
 
-        if (sortBy === "price-asc") {
-          return Number(a.price) - Number(b.price);
+      if (selectedDate === "upcoming") {
+        if (eventTimestamp < currentTime) {
+          return false;
         }
+      }
 
-        if (sortBy === "price-desc") {
-          return Number(b.price) - Number(a.price);
-        }
+      return true;
+    });
 
-        return getEventTimestamp(a) - getEventTimestamp(b);
-      });
+    /* -------------------------------------------------------
+       SORT
+    ------------------------------------------------------- */
+
+    return [...filtered].sort((a, b) => {
+      const timestampA = getEventTimestamp(a);
+      const timestampB = getEventTimestamp(b);
+
+      if (sortBy === "date-desc") {
+        return timestampB - timestampA;
+      }
+
+      if (sortBy === "price-asc") {
+        return (
+          Number(a.price || a.ticketPrice || 0) -
+          Number(b.price || b.ticketPrice || 0)
+        );
+      }
+
+      if (sortBy === "price-desc") {
+        return (
+          Number(b.price || b.ticketPrice || 0) -
+          Number(a.price || a.ticketPrice || 0)
+        );
+      }
+
+      return timestampA - timestampB;
+    });
   }, [
     publicEvents,
     searchQuery,
     selectedCategory,
-    selectedCategoryName,
     selectedLocation,
     selectedDate,
     sortBy,
     currentTime,
   ]);
 
+  /* =========================================================
+     UPDATE FILTER
+  ========================================================= */
+
   const updateFilter = (key, value) => {
-    const next = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(searchParams);
 
     if (!value || value === "all") {
-      next.delete(key);
+      params.delete(key);
     } else {
-      next.set(key, value);
+      params.set(key, value);
     }
 
-    setSearchParams(next);
+    setSearchParams(params);
   };
+
+  /* =========================================================
+     CLEAR FILTERS
+  ========================================================= */
 
   const clearFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory("");
+    setSelectedLocation("");
+    setSelectedDate("all");
+    setSortBy("date-asc");
+
     setSearchParams({});
-    setIsMobileFiltersOpen(false);
   };
 
+  /* =========================================================
+     SCROLL TO SEARCH
+  ========================================================= */
+
+  const scrollToSearch = () => {
+    const searchSection =
+      document.getElementById("event-search");
+
+    if (!searchSection) return;
+
+    /*
+      Navbar height is approximately 64px.
+      Keep the search section directly below it.
+    */
+
+    const navbarOffset = 64;
+
+    const targetPosition =
+      searchSection.getBoundingClientRect().top +
+      window.scrollY -
+      navbarOffset;
+
+    window.scrollTo({
+      top: Math.max(targetPosition, 0),
+      behavior: "smooth",
+    });
+  };
+
+  /* =========================================================
+     ACTIVE FILTERS
+  ========================================================= */
+
   const hasActiveFilters =
-    Boolean(searchQuery.trim()) ||
+    Boolean(searchQuery) ||
     Boolean(selectedCategory) ||
     Boolean(selectedLocation) ||
     selectedDate !== "all";
 
+  /* =========================================================
+     SELECT STYLES
+  ========================================================= */
+
   const selectClass =
-    "h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-11 pr-10 text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-orange-400 focus:ring-4 focus:ring-orange-100";
+    "h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-500/10";
+
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-10">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-500">
-            Explore EventON
-          </p>
+    <main className="min-h-screen bg-white">
+      {/* =====================================================
+          HERO
+      ===================================================== */}
 
-          <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-            Discover events worth attending.
-          </h1>
+      <section className="relative flex min-h-[calc(100vh-64px)] items-center overflow-hidden bg-[#070b14]">
+        {/* Background glows */}
 
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-            Search by event, category, city, location, or date and find
-            upcoming and ongoing events available on EventON.
-          </p>
+        <div className="pointer-events-none absolute -left-40 top-10 h-[500px] w-[500px] rounded-full bg-orange-500/10 blur-[120px]" />
+
+        <div className="pointer-events-none absolute -bottom-40 right-0 h-[500px] w-[500px] rounded-full bg-blue-500/10 blur-[120px]" />
+
+        <div className="pointer-events-none absolute right-[20%] top-[20%] h-32 w-32 rounded-full bg-orange-500/5 blur-3xl" />
+
+        {/* Hero content */}
+
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
+          <div className="max-w-4xl">
+            <p className="mb-6 text-sm font-bold uppercase tracking-[0.2em] text-orange-500">
+              Explore EventON
+            </p>
+
+            <h1 className="text-5xl font-black leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Discover events
+              <br />
+
+              <span className="text-orange-500">
+                worth attending.
+              </span>
+            </h1>
+
+            <p className="mt-8 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
+              Find conferences, workshops, concerts, meetups,
+              sports events, and experiences happening around
+              you.
+            </p>
+          </div>
         </div>
+
+        {/* =================================================
+            EXPLORE EVENTS BUTTON
+        ================================================= */}
+
+        <button
+          type="button"
+          onClick={scrollToSearch}
+          aria-label="Explore events"
+          className="group absolute bottom-7 left-1/2 z-20 -translate-x-1/2"
+        >
+          <span
+            className="
+              flex items-center gap-3
+              rounded-full
+              border border-white/15
+              bg-white/[0.06]
+              px-5 py-2.5
+              text-xs font-semibold uppercase
+              tracking-[0.18em]
+              text-slate-300
+              shadow-lg shadow-black/20
+              backdrop-blur-md
+              transition-all duration-300
+              hover:border-orange-400/40
+              hover:bg-white/10
+              hover:text-white
+              hover:shadow-orange-500/10
+            "
+          >
+            <span>Explore Events</span>
+
+            <span
+              className="
+                flex h-7 w-7 items-center justify-center
+                rounded-full
+                border border-white/20
+                bg-white/5
+                transition-all duration-300
+                group-hover:border-orange-400/50
+                group-hover:bg-orange-500/10
+              "
+            >
+              <ChevronsDown
+                size={17}
+                strokeWidth={2}
+                className="
+                  text-slate-300
+                  transition-all duration-300
+                  group-hover:translate-y-0.5
+                  group-hover:text-orange-400
+                "
+              />
+            </span>
+          </span>
+        </button>
       </section>
 
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
-          <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm lg:grid lg:grid-cols-[minmax(280px,1fr)_210px_210px_210px] lg:gap-2">
-            <div className="relative">
-              <Search
-                size={18}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
+      {/* =====================================================
+          SEARCH + FILTERS
+      ===================================================== */}
 
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSearchQuery(value);
-                  updateFilter("search", value);
-                }}
-                placeholder="Search events..."
-                aria-label="Search events"
-                className="h-12 w-full rounded-xl border border-transparent bg-white pl-11 pr-10 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-200 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-              />
+      <section
+        id="event-search"
+        className="border-b border-slate-200 bg-white"
+      >
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {/* =================================================
+              DESKTOP SEARCH
+          ================================================= */}
 
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => updateFilter("search", "")}
-                  className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Clear search"
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
+          <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm md:block">
+            <div className="grid grid-cols-12 gap-2">
+              {/* Search */}
 
-            <div className="relative">
-              <MapPin
-                size={17}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
+              <div className="relative col-span-5">
+                <Search
+                  size={19}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
 
-              <input
-                type="text"
-                value={selectedLocation}
-                onChange={(event) =>
-                  updateFilter("location", event.target.value)
-                }
-                placeholder="Any city or location"
-                aria-label="Filter by location"
-                className={selectClass}
-              />
-            </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
 
-            <div className="relative">
-              <SlidersHorizontal
-                size={17}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <select
-                value={selectedCategory}
-                onChange={(event) =>
-                  updateFilter("category", event.target.value)
-                }
-                className={selectClass}
-                aria-label="Filter by category"
-              >
-                <option value="">All categories</option>
-
-                {eventCategories.map((category) => (
-                  <option key={category.slug} value={category.slug}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-
-              <ChevronDown
-                size={16}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-            </div>
-
-            <div className="relative">
-              <CalendarDays
-                size={17}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <select
-                value={selectedDate}
-                onChange={(event) =>
-                  updateFilter("date", event.target.value)
-                }
-                className={selectClass}
-                aria-label="Filter by date"
-              >
-                <option value="all">All dates</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="today">Today</option>
-                <option value="week">This week</option>
-                <option value="month">This month</option>
-              </select>
-
-              <ChevronDown
-                size={16}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-            </div>
-          </div>
-
-          <div className="lg:hidden">
-            <div className="relative">
-              <Search
-                size={18}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSearchQuery(value);
-                  updateFilter("search", value);
-                }}
-                placeholder="Search events..."
-                aria-label="Search events"
-                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm text-slate-900 outline-none focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
-              />
-
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => updateFilter("search", "")}
-                  className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200"
-                  aria-label="Clear search"
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  setIsMobileFiltersOpen((current) => !current)
-                }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                <SlidersHorizontal size={17} />
-                Filters
-              </button>
-
-              <div className="relative">
-                <select
-                  value={sortBy}
-                  onChange={(event) => setSortBy(event.target.value)}
-                  aria-label="Sort events"
-                  className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-9 text-sm font-semibold text-slate-700 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                >
-                  <option value="date-asc">Soonest</option>
-                  <option value="date-desc">Latest</option>
-                  <option value="price-asc">Price: Low</option>
-                  <option value="price-desc">Price: High</option>
-                </select>
-
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    setSearchQuery(value);
+                    updateFilter("search", value);
+                  }}
+                  placeholder="Search events..."
+                  className="
+                    h-12 w-full rounded-xl
+                    border border-slate-200
+                    bg-white pl-11 pr-4
+                    text-sm text-slate-700
+                    outline-none transition
+                    placeholder:text-slate-400
+                    focus:border-orange-400
+                    focus:ring-4
+                    focus:ring-orange-500/10
+                  "
                 />
               </div>
-            </div>
 
-            {isMobileFiltersOpen && (
-              <div className="mt-3 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              {/* Location */}
+
+              <div className="relative col-span-3">
+                <MapPin
+                  size={18}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
                 <input
                   type="text"
                   value={selectedLocation}
-                  onChange={(event) =>
-                    updateFilter("location", event.target.value)
-                  }
-                  placeholder="City or location"
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    setSelectedLocation(value);
+                    updateFilter("location", value);
+                  }}
+                  placeholder="Any city or location"
+                  className="
+                    h-12 w-full rounded-xl
+                    border border-slate-200
+                    bg-white pl-11 pr-4
+                    text-sm text-slate-700
+                    outline-none transition
+                    placeholder:text-slate-400
+                    focus:border-orange-400
+                    focus:ring-4
+                    focus:ring-orange-500/10
+                  "
+                />
+              </div>
+
+              {/* Category */}
+
+              <div className="relative col-span-2">
+                <SlidersHorizontal
+                  size={17}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                 />
 
                 <select
                   value={selectedCategory}
-                  onChange={(event) =>
-                    updateFilter("category", event.target.value)
-                  }
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    setSelectedCategory(value);
+                    updateFilter("category", value);
+                  }}
+                  className={`${selectClass} pl-11`}
                 >
-                  <option value="">All categories</option>
+                  <option value="">
+                    All categories
+                  </option>
 
                   {eventCategories.map((category) => (
-                    <option key={category.slug} value={category.slug}>
+                    <option
+                      key={category.slug || category.name}
+                      value={
+                        category.slug || category.name
+                      }
+                    >
                       {category.name}
                     </option>
                   ))}
                 </select>
 
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
+
+              {/* Date */}
+
+              <div className="relative col-span-2">
+                <CalendarDays
+                  size={17}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
                 <select
                   value={selectedDate}
-                  onChange={(event) =>
-                    updateFilter("date", event.target.value)
-                  }
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    setSelectedDate(value);
+                    updateFilter("date", value);
+                  }}
+                  className={`${selectClass} pl-11`}
                 >
-                  <option value="all">All dates</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="today">Today</option>
-                  <option value="week">This week</option>
-                  <option value="month">This month</option>
+                  <option value="all">
+                    All dates
+                  </option>
+
+                  <option value="today">
+                    Today
+                  </option>
+
+                  <option value="week">
+                    This week
+                  </option>
+
+                  <option value="month">
+                    This month
+                  </option>
+
+                  <option value="upcoming">
+                    Upcoming
+                  </option>
                 </select>
 
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="h-11 rounded-xl bg-slate-900 text-sm font-semibold text-white"
-                >
-                  Clear filters
-                </button>
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* =================================================
+              MOBILE SEARCH
+          ================================================= */}
+
+          <div className="md:hidden">
+            <div className="flex gap-2">
+              {/* Search */}
+
+              <div className="relative flex-1">
+                <Search
+                  size={18}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    setSearchQuery(value);
+                    updateFilter("search", value);
+                  }}
+                  placeholder="Search events..."
+                  className="
+                    h-12 w-full rounded-xl
+                    border border-slate-200
+                    bg-slate-50 pl-11 pr-4
+                    text-sm outline-none transition
+                    focus:border-orange-400
+                    focus:ring-4
+                    focus:ring-orange-500/10
+                  "
+                />
+              </div>
+
+              {/* Filter button */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setIsMobileFiltersOpen(
+                    (prev) => !prev
+                  )
+                }
+                className="
+                  flex h-12 w-12 shrink-0
+                  items-center justify-center
+                  rounded-xl
+                  border border-slate-200
+                  bg-slate-50
+                  text-slate-600
+                  transition
+                  hover:border-orange-300
+                  hover:bg-orange-50
+                  hover:text-orange-600
+                "
+                aria-label="Open filters"
+              >
+                <SlidersHorizontal size={19} />
+              </button>
+            </div>
+
+            {/* Mobile filters */}
+
+            {isMobileFiltersOpen && (
+              <div className="mt-3 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                {/* Location */}
+
+                <div className="relative">
+                  <MapPin
+                    size={17}
+                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    type="text"
+                    value={selectedLocation}
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      setSelectedLocation(value);
+                      updateFilter("location", value);
+                    }}
+                    placeholder="Any city or location"
+                    className="
+                      h-12 w-full rounded-xl
+                      border border-slate-200
+                      bg-white pl-11 pr-4
+                      text-sm outline-none
+                      focus:border-orange-400
+                      focus:ring-4
+                      focus:ring-orange-500/10
+                    "
+                  />
+                </div>
+
+                {/* Category */}
+
+                <div className="relative">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      setSelectedCategory(value);
+                      updateFilter("category", value);
+                    }}
+                    className={selectClass}
+                  >
+                    <option value="">
+                      All categories
+                    </option>
+
+                    {eventCategories.map((category) => (
+                      <option
+                        key={category.slug || category.name}
+                        value={
+                          category.slug || category.name
+                        }
+                      >
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
+
+                {/* Date */}
+
+                <div className="relative">
+                  <select
+                    value={selectedDate}
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      setSelectedDate(value);
+                      updateFilter("date", value);
+                    }}
+                    className={selectClass}
+                  >
+                    <option value="all">
+                      All dates
+                    </option>
+
+                    <option value="today">
+                      Today
+                    </option>
+
+                    <option value="week">
+                      This week
+                    </option>
+
+                    <option value="month">
+                      This month
+                    </option>
+
+                    <option value="upcoming">
+                      Upcoming
+                    </option>
+                  </select>
+
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                </div>
               </div>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          EVENTS SECTION
+      ===================================================== */}
+
+      <section className="bg-slate-50 py-10 sm:py-12 lg:py-14">
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* =================================================
+              EVENTS HEADER
+          ================================================= */}
+
+          <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-2 text-sm font-bold uppercase tracking-[0.16em] text-orange-500">
+                {selectedCategoryName ||
+                  "EventON Events"}
+              </p>
+
+              <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                {hasActiveFilters
+                  ? "Matching events"
+                  : "Upcoming events"}
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                {filteredEvents.length === 0
+                  ? "No events match your current filters."
+                  : `${filteredEvents.length} event${
+                      filteredEvents.length === 1
+                        ? ""
+                        : "s"
+                    } available to explore.`}
+              </p>
+            </div>
+
+            {/* =================================================
+                SORT
+            ================================================= */}
+
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-slate-500">
+                Sort by
+              </span>
+
+              <div className="relative min-w-[180px]">
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    setSortBy(value);
+                    updateFilter("sort", value);
+                  }}
+                  className="
+                    h-11 w-full appearance-none
+                    rounded-xl
+                    border border-slate-200
+                    bg-white px-4 pr-10
+                    text-sm font-semibold
+                    text-slate-700
+                    outline-none transition
+                    focus:border-orange-400
+                    focus:ring-4
+                    focus:ring-orange-500/10
+                  "
+                >
+                  <option value="date-asc">
+                    Date: Earliest
+                  </option>
+
+                  <option value="date-desc">
+                    Date: Latest
+                  </option>
+
+                  <option value="price-asc">
+                    Price: Low to High
+                  </option>
+
+                  <option value="price-desc">
+                    Price: High to Low
+                  </option>
+                </select>
+
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* =================================================
+              ACTIVE FILTERS
+          ================================================= */}
 
           {hasActiveFilters && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mb-7 flex flex-wrap items-center gap-2">
+              {/* Search filter */}
+
               {searchQuery && (
-                <span className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
                   Search: {searchQuery}
                 </span>
               )}
 
-              {selectedCategory && (
-                <span className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700">
-                  Category: {selectedCategoryName || selectedCategory}
-                </span>
-              )}
+              {/* Location filter */}
 
               {selectedLocation && (
-                <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
                   Location: {selectedLocation}
                 </span>
               )}
 
+              {/* Category filter */}
+
+              {selectedCategory && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                  Category:{" "}
+                  {selectedCategoryName ||
+                    selectedCategory}
+                </span>
+              )}
+
+              {/* Date filter */}
+
               {selectedDate !== "all" && (
-                <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold capitalize text-emerald-700">
+                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold capitalize text-slate-600">
                   Date: {selectedDate}
                 </span>
               )}
 
+              {/* Clear filters */}
+
               <button
                 type="button"
                 onClick={clearFilters}
-                className="text-xs font-bold text-slate-500 hover:text-orange-600"
+                className="
+                  inline-flex items-center gap-1
+                  rounded-full
+                  px-3 py-1.5
+                  text-xs font-bold
+                  text-orange-600
+                  transition
+                  hover:bg-orange-50
+                "
               >
-                Clear all
+                <X size={14} />
+                Clear filters
               </button>
             </div>
           )}
-        </div>
-      </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-orange-500">
-              {filteredEvents.length.toLocaleString("en-IN")}{" "}
-              {filteredEvents.length === 1 ? "event" : "events"}
-            </p>
+          {/* =================================================
+              EVENT GRID
+          ================================================= */}
 
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-              {hasActiveFilters ? "Matching events" : "Upcoming & ongoing events"}
-            </h2>
-          </div>
-
-          <div className="relative w-full sm:w-52">
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-              className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-9 text-sm font-semibold text-slate-700 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-              aria-label="Sort events"
-            >
-              <option value="date-asc">Soonest first</option>
-              <option value="date-desc">Latest first</option>
-              <option value="price-asc">Price: low to high</option>
-              <option value="price-desc">Price: high to low</option>
-            </select>
-
-            <ChevronDown
-              size={16}
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-          </div>
-        </div>
-
-        {filteredEvents.length > 0 ? (
-          <div className="mt-7 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-7 rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
-              <Search size={25} className="text-slate-400" />
+          {filteredEvents.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredEvents.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                />
+              ))}
             </div>
+          ) : (
+            /* =================================================
+               EMPTY STATE
+            ================================================= */
 
-            <h3 className="mt-5 text-xl font-bold tracking-tight text-slate-900">
-              No events found
-            </h3>
+            <div className="rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm sm:px-10">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
+                <CalendarDays size={30} />
+              </div>
 
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-              No upcoming or ongoing events match your current search or filters.
-            </p>
+              <h3 className="mt-6 text-2xl font-black text-slate-950">
+                No events found
+              </h3>
 
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              Clear filters
-            </button>
-          </div>
-        )}
+              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500">
+                Try changing your search or filters to find
+                more events available on EventON.
+              </p>
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="
+                    mt-7 inline-flex
+                    items-center justify-center
+                    rounded-xl
+                    bg-orange-500
+                    px-6 py-3
+                    text-sm font-bold
+                    text-white
+                    shadow-lg
+                    shadow-orange-500/20
+                    transition
+                    hover:bg-orange-600
+                  "
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </section>
     </main>
   );

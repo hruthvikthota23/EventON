@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+
 import {
   ArrowRight,
   CalendarDays,
+  CheckCircle2,
   Clock3,
   IndianRupee,
   MapPin,
+  PlayCircle,
   Ticket,
   TrendingUp,
   UserRoundCog,
   Users,
+  XCircle,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
@@ -25,6 +29,10 @@ import {
 } from "../../utils/bookingStorage";
 
 const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
+
+/* =========================================================
+   DATE / TIME HELPERS
+========================================================= */
 
 function parseEventDateTime(dateValue, timeValue) {
   if (!dateValue) return null;
@@ -42,14 +50,19 @@ function parseEventDateTime(dateValue, timeValue) {
     [day, month, year] = dateText.split(/[-/]/).map(Number);
   } else {
     const parsed = new Date(dateText);
-    if (Number.isNaN(parsed.getTime())) return null;
+
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
 
     year = parsed.getFullYear();
     month = parsed.getMonth() + 1;
     day = parsed.getDate();
   }
 
-  const match = timeText.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+  const match = timeText.match(
+    /^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i
+  );
 
   if (!match) return null;
 
@@ -57,8 +70,13 @@ function parseEventDateTime(dateValue, timeValue) {
   const minute = Number(match[2]);
   const meridiem = match[3]?.toUpperCase();
 
-  if (meridiem === "PM" && hour !== 12) hour += 12;
-  if (meridiem === "AM" && hour === 12) hour = 0;
+  if (meridiem === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (meridiem === "AM" && hour === 12) {
+    hour = 0;
+  }
 
   const result = new Date(
     year,
@@ -73,12 +91,20 @@ function parseEventDateTime(dateValue, timeValue) {
   return Number.isNaN(result.getTime()) ? null : result;
 }
 
+/* =========================================================
+   EVENT LIFECYCLE STATUS
+========================================================= */
+
 function getEventLifecycleStatus(event, bookedTickets = 0) {
-  const storedStatus = String(event?.status || "published")
+  const storedStatus = String(
+    event?.status || "published"
+  )
     .trim()
     .toLowerCase();
 
-  if (storedStatus === "draft") return "Draft";
+  if (storedStatus === "draft") {
+    return "Draft";
+  }
 
   if (
     storedStatus === "cancelled" ||
@@ -120,6 +146,109 @@ function getEventLifecycleStatus(event, bookedTickets = 0) {
   return "Published";
 }
 
+/* =========================================================
+   FOUR STATUS SYSTEM
+========================================================= */
+
+function getUnifiedStatus(event) {
+  const storedStatus = String(
+    event?.status || "published"
+  )
+    .trim()
+    .toLowerCase();
+
+  if (
+    storedStatus === "cancelled" ||
+    storedStatus === "canceled"
+  ) {
+    return "cancelled";
+  }
+
+  const start = parseEventDateTime(
+    event?.date,
+    event?.time || event?.startTime
+  );
+
+  if (!start) {
+    return "upcoming";
+  }
+
+  const end = event?.endTime
+    ? parseEventDateTime(event.date, event.endTime)
+    : start;
+
+  const now = Date.now();
+
+  if (end && now >= end.getTime()) {
+    return "completed";
+  }
+
+  if (now >= start.getTime()) {
+    return "ongoing";
+  }
+
+  return "upcoming";
+}
+
+/* =========================================================
+   BOOKING STATUS
+========================================================= */
+
+function BookingStatus({ status }) {
+  const normalizedStatus = String(status || "")
+    .trim()
+    .toLowerCase();
+
+  const statusConfig = {
+    upcoming: {
+      label: "Upcoming",
+      icon: Clock3,
+      className:
+        "border-amber-200 bg-amber-50 text-amber-700",
+    },
+
+    ongoing: {
+      label: "Ongoing",
+      icon: PlayCircle,
+      className:
+        "border-blue-200 bg-blue-50 text-blue-700",
+    },
+
+    completed: {
+      label: "Completed",
+      icon: CheckCircle2,
+      className:
+        "border-emerald-200 bg-emerald-50 text-emerald-700",
+    },
+
+    cancelled: {
+      label: "Cancelled",
+      icon: XCircle,
+      className:
+        "border-red-200 bg-red-50 text-red-700",
+    },
+  };
+
+  const config =
+    statusConfig[normalizedStatus] ||
+    statusConfig.upcoming;
+
+  const Icon = config.icon;
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold ${config.className}`}
+    >
+      <Icon size={12} strokeWidth={2.5} />
+      {config.label}
+    </span>
+  );
+}
+
+/* =========================================================
+   MAIN DASHBOARD
+========================================================= */
+
 function AdminDashboard() {
   const { user } = useAuth();
 
@@ -127,15 +256,17 @@ function AdminDashboard() {
   const [events, setEvents] = useState([]);
   const [bookings, setBookings] = useState([]);
 
-  // =========================================================
-  // LOAD DASHBOARD DATA
-  // =========================================================
+  /* =======================================================
+     LOAD DATA
+  ======================================================= */
 
   const loadDashboardData = useCallback(() => {
     let storedAccounts = [];
 
     try {
-      const rawAccounts = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+      const rawAccounts = localStorage.getItem(
+        ACCOUNTS_STORAGE_KEY
+      );
 
       if (rawAccounts) {
         const parsedAccounts = JSON.parse(rawAccounts);
@@ -145,20 +276,37 @@ function AdminDashboard() {
         }
       }
     } catch (error) {
-      console.error("Unable to load EventON accounts:", error);
+      console.error(
+        "Unable to load EventON accounts:",
+        error
+      );
     }
 
     const storedEvents = getStoredEvents();
     const storedBookings = getStoredBookings();
 
-    setAccounts(Array.isArray(storedAccounts) ? storedAccounts : []);
-    setEvents(Array.isArray(storedEvents) ? storedEvents : []);
-    setBookings(Array.isArray(storedBookings) ? storedBookings : []);
+    setAccounts(
+      Array.isArray(storedAccounts)
+        ? storedAccounts
+        : []
+    );
+
+    setEvents(
+      Array.isArray(storedEvents)
+        ? storedEvents
+        : []
+    );
+
+    setBookings(
+      Array.isArray(storedBookings)
+        ? storedBookings
+        : []
+    );
   }, []);
 
-  // =========================================================
-  // INITIAL LOAD + LIVE UPDATES
-  // =========================================================
+  /* =======================================================
+     INITIAL LOAD + LIVE UPDATES
+  ======================================================= */
 
   useEffect(() => {
     loadDashboardData();
@@ -167,102 +315,157 @@ function AdminDashboard() {
       loadDashboardData();
     };
 
-    window.addEventListener("storage", handleUpdate);
-    window.addEventListener("eventon:auth-updated", handleUpdate);
-    window.addEventListener(EVENTS_UPDATED_EVENT, handleUpdate);
-    window.addEventListener(BOOKINGS_UPDATED_EVENT, handleUpdate);
+    window.addEventListener(
+      "storage",
+      handleUpdate
+    );
+
+    window.addEventListener(
+      "eventon:auth-updated",
+      handleUpdate
+    );
+
+    window.addEventListener(
+      EVENTS_UPDATED_EVENT,
+      handleUpdate
+    );
+
+    window.addEventListener(
+      BOOKINGS_UPDATED_EVENT,
+      handleUpdate
+    );
 
     return () => {
-      window.removeEventListener("storage", handleUpdate);
-      window.removeEventListener("eventon:auth-updated", handleUpdate);
-      window.removeEventListener(EVENTS_UPDATED_EVENT, handleUpdate);
-      window.removeEventListener(BOOKINGS_UPDATED_EVENT, handleUpdate);
+      window.removeEventListener(
+        "storage",
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        "eventon:auth-updated",
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        EVENTS_UPDATED_EVENT,
+        handleUpdate
+      );
+
+      window.removeEventListener(
+        BOOKINGS_UPDATED_EVENT,
+        handleUpdate
+      );
     };
   }, [loadDashboardData]);
 
-  // =========================================================
-  // ACCOUNT MAP
-  // =========================================================
+  /* =======================================================
+     ACCOUNT MAP
+  ======================================================= */
 
   const accountMap = useMemo(() => {
     return new Map(
-      accounts.map((account) => [String(account.id), account])
+      accounts.map((account) => [
+        String(account.id),
+        account,
+      ])
     );
   }, [accounts]);
 
-  // =========================================================
-  // EVENT MAP
-  // =========================================================
+  /* =======================================================
+     EVENT MAP
+  ======================================================= */
 
   const eventMap = useMemo(() => {
     return new Map(
-      events.map((event) => [String(event.id), event])
+      events.map((event) => [
+        String(event.id),
+        event,
+      ])
     );
   }, [events]);
 
-  // =========================================================
-  // BOOKING STATUS HELPERS
-  // =========================================================
+  /* =======================================================
+     BOOKING HELPERS
+  ======================================================= */
 
-  const isCancelledBooking = useCallback((booking) => {
-    const status = String(booking?.status || "confirmed")
-      .trim()
-      .toLowerCase();
+  const isCancelledBooking = useCallback(
+    (booking) => {
+      const status = String(
+        booking?.status || "confirmed"
+      )
+        .trim()
+        .toLowerCase();
 
-    return status === "cancelled" || status === "canceled";
-  }, []);
-
-  const isActiveBooking = useCallback(
-    (booking) => !isCancelledBooking(booking),
-    [isCancelledBooking]
+      return (
+        status === "cancelled" ||
+        status === "canceled"
+      );
+    },
+    []
   );
 
-  // =========================================================
-  // ACTIVE BOOKINGS
-  // =========================================================
-
   const activeBookings = useMemo(() => {
-    return bookings.filter((booking) => isActiveBooking(booking));
-  }, [bookings, isActiveBooking]);
+    return bookings.filter(
+      (booking) => !isCancelledBooking(booking)
+    );
+  }, [bookings, isCancelledBooking]);
 
-  // =========================================================
-  // RESOLVE BOOKING USER
-  // =========================================================
+  /* =======================================================
+     RESOLVE BOOKING USER
+  ======================================================= */
 
   const getBookingUser = useCallback(
     (booking) => {
       const attendee = booking?.attendee || {};
 
       if (attendee.userId) {
-        const account = accountMap.get(String(attendee.userId));
+        const account = accountMap.get(
+          String(attendee.userId)
+        );
 
         if (account) {
           return {
-            name: account.name || attendee.name || "Attendee",
-            email: account.email || attendee.email || "No email",
-            phone:
-              attendee.phone || account.phone || "No phone",
+            name:
+              account.name ||
+              attendee.name ||
+              "Attendee",
+
+            email:
+              account.email ||
+              attendee.email ||
+              "No email",
+
             id: account.id,
           };
         }
       }
 
       if (booking?.userId) {
-        const account = accountMap.get(String(booking.userId));
+        const account = accountMap.get(
+          String(booking.userId)
+        );
 
         if (account) {
           return {
-            name: account.name || attendee.name || "Attendee",
-            email: account.email || attendee.email || "No email",
-            phone:
-              attendee.phone || account.phone || "No phone",
+            name:
+              account.name ||
+              attendee.name ||
+              "Attendee",
+
+            email:
+              account.email ||
+              attendee.email ||
+              "No email",
+
             id: account.id,
           };
         }
       }
 
       if (attendee.email) {
-        const normalizedEmail = String(attendee.email)
+        const normalizedEmail = String(
+          attendee.email
+        )
           .trim()
           .toLowerCase();
 
@@ -275,10 +478,16 @@ function AdminDashboard() {
 
         if (account) {
           return {
-            name: account.name || attendee.name || "Attendee",
-            email: account.email || attendee.email,
-            phone:
-              attendee.phone || account.phone || "No phone",
+            name:
+              account.name ||
+              attendee.name ||
+              "Attendee",
+
+            email:
+              account.email ||
+              attendee.email ||
+              "No email",
+
             id: account.id,
           };
         }
@@ -289,14 +498,12 @@ function AdminDashboard() {
           attendee.name ||
           booking?.name ||
           "Attendee",
+
         email:
           attendee.email ||
           booking?.email ||
           "No email",
-        phone:
-          attendee.phone ||
-          booking?.phone ||
-          "No phone",
+
         id:
           attendee.userId ||
           booking?.userId ||
@@ -306,9 +513,9 @@ function AdminDashboard() {
     [accountMap, accounts]
   );
 
-  // =========================================================
-  // GET BOOKING EVENT
-  // =========================================================
+  /* =======================================================
+     GET BOOKING EVENT
+  ======================================================= */
 
   const getBookingEvent = useCallback(
     (booking) => {
@@ -327,31 +534,35 @@ function AdminDashboard() {
     [eventMap]
   );
 
-  // =========================================================
-  // ACTUAL BOOKED TICKETS
-  // =========================================================
+  /* =======================================================
+     ACTUAL BOOKED TICKETS
+  ======================================================= */
 
   const getActualBookedTickets = useCallback(
     (eventId) => {
-      return activeBookings.reduce((total, booking) => {
-        if (
-          String(booking.eventId) !== String(eventId)
-        ) {
-          return total;
-        }
+      return activeBookings.reduce(
+        (total, booking) => {
+          if (
+            String(booking.eventId) !==
+            String(eventId)
+          ) {
+            return total;
+          }
 
-        return (
-          total +
-          (Number(booking.ticketCount) || 0)
-        );
-      }, 0);
+          return (
+            total +
+            (Number(booking.ticketCount) || 0)
+          );
+        },
+        0
+      );
     },
     [activeBookings]
   );
 
-  // =========================================================
-  // USER STATISTICS
-  // =========================================================
+  /* =======================================================
+     ATTENDEE STATISTICS
+  ======================================================= */
 
   const userStatistics = useMemo(() => {
     const attendees = accounts.filter(
@@ -368,24 +579,15 @@ function AdminDashboard() {
           .toLowerCase() === "organizer"
     );
 
-    const admins = accounts.filter(
-      (account) =>
-        String(account.role)
-          .trim()
-          .toLowerCase() === "admin"
-    );
-
     return {
-      total: accounts.length,
       attendees: attendees.length,
       organizers: organizers.length,
-      admins: admins.length,
     };
   }, [accounts]);
 
-  // =========================================================
-  // EVENT STATISTICS
-  // =========================================================
+  /* =======================================================
+     EVENT STATISTICS
+  ======================================================= */
 
   const eventStatistics = useMemo(() => {
     const statuses = events.map((event) =>
@@ -397,37 +599,49 @@ function AdminDashboard() {
 
     return {
       total: events.length,
+
       published: statuses.filter(
         (status) => status === "Published"
       ).length,
+
       ongoing: statuses.filter(
         (status) => status === "Ongoing"
       ).length,
+
       completed: statuses.filter(
         (status) => status === "Completed"
       ).length,
+
       soldOut: statuses.filter(
         (status) => status === "Sold out"
+      ).length,
+
+      cancelled: statuses.filter(
+        (status) => status === "Cancelled"
       ).length,
     };
   }, [events, getActualBookedTickets]);
 
-  // =========================================================
-  // BOOKING STATISTICS
-  // =========================================================
+  /* =======================================================
+     BOOKING STATISTICS
+  ======================================================= */
 
   const bookingStatistics = useMemo(() => {
-    const ticketsSold = activeBookings.reduce(
-      (total, booking) =>
-        total + (Number(booking.ticketCount) || 0),
-      0
-    );
+    const ticketsSold =
+      activeBookings.reduce(
+        (total, booking) =>
+          total +
+          (Number(booking.ticketCount) || 0),
+        0
+      );
 
-    const revenue = activeBookings.reduce(
-      (total, booking) =>
-        total + (Number(booking.totalPrice) || 0),
-      0
-    );
+    const revenue =
+      activeBookings.reduce(
+        (total, booking) =>
+          total +
+          (Number(booking.totalPrice) || 0),
+        0
+      );
 
     return {
       total: activeBookings.length,
@@ -436,23 +650,45 @@ function AdminDashboard() {
     };
   }, [activeBookings]);
 
-  // =========================================================
-  // RECENT BOOKINGS
-  // =========================================================
+  /* =======================================================
+     AVERAGE BOOKING VALUE
+  ======================================================= */
+
+  const revenuePerBooking = useMemo(() => {
+    if (bookingStatistics.total === 0) {
+      return 0;
+    }
+
+    return (
+      bookingStatistics.revenue /
+      bookingStatistics.total
+    );
+  }, [
+    bookingStatistics.revenue,
+    bookingStatistics.total,
+  ]);
+
+  /* =======================================================
+     RECENT BOOKINGS
+  ======================================================= */
 
   const recentBookings = useMemo(() => {
     return [...activeBookings]
       .sort(
         (a, b) =>
-          new Date(b.createdAt || 0).getTime() -
-          new Date(a.createdAt || 0).getTime()
+          new Date(
+            b.createdAt || 0
+          ).getTime() -
+          new Date(
+            a.createdAt || 0
+          ).getTime()
       )
       .slice(0, 5);
   }, [activeBookings]);
 
-  // =========================================================
-  // RECENT EVENTS
-  // =========================================================
+  /* =======================================================
+     RECENT EVENTS
+  ======================================================= */
 
   const recentEvents = useMemo(() => {
     return [...events]
@@ -472,9 +708,9 @@ function AdminDashboard() {
       .slice(0, 5);
   }, [events]);
 
-  // =========================================================
-  // EVENT PERFORMANCE
-  // =========================================================
+  /* =======================================================
+     TOP 3 EVENT PERFORMANCE
+  ======================================================= */
 
   const eventPerformance = useMemo(() => {
     return [...events]
@@ -495,7 +731,8 @@ function AdminDashboard() {
             0
           );
 
-        const capacity = Number(event.capacity) || 0;
+        const capacity =
+          Number(event.capacity) || 0;
 
         const percentage =
           capacity > 0
@@ -513,7 +750,10 @@ function AdminDashboard() {
           percentage,
         };
       })
-      .sort((a, b) => b.ticketsSold - a.ticketsSold)
+      .sort(
+        (a, b) =>
+          b.ticketsSold - a.ticketsSold
+      )
       .slice(0, 3);
   }, [
     events,
@@ -521,9 +761,9 @@ function AdminDashboard() {
     getActualBookedTickets,
   ]);
 
-  // =========================================================
-  // FORMATTERS
-  // =========================================================
+  /* =======================================================
+     FORMATTERS
+  ======================================================= */
 
   const formatCurrency = (value) => {
     return `₹${Number(value || 0).toLocaleString(
@@ -532,9 +772,7 @@ function AdminDashboard() {
   };
 
   const formatDate = (value) => {
-    if (!value) {
-      return "—";
-    }
+    if (!value) return "—";
 
     const date = new Date(value);
 
@@ -549,59 +787,87 @@ function AdminDashboard() {
     });
   };
 
-  const getEventStatus = (event) =>
-    getEventLifecycleStatus(
-      event,
-      getActualBookedTickets(event?.id)
-    );
-
-  // =========================================================
-  // RENDER
-  // =========================================================
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
   return (
     <div className="min-h-full bg-slate-50">
-      {/* =====================================================
-          WELCOME
-      ===================================================== */}
 
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto w-full max-w-7xl px-5 py-7 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold text-orange-500">
-              Admin Dashboard
-            </p>
+      <main className="mx-auto w-full max-w-7xl px-5 pb-10 pt-6 sm:px-8 lg:px-10">
 
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Welcome back,{" "}
-              {user?.name || "Administrator"} 👋
-            </h1>
+        {/* =================================================
+            WELCOME CARD
+        ================================================= */}
 
-            <p className="max-w-2xl text-sm leading-6 text-slate-500">
-              Manage users, events, bookings, and
-              platform activity from one place.
-            </p>
+        <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+
+          <div className="flex flex-col justify-between gap-6 p-6 sm:p-7 lg:flex-row lg:items-center">
+
+            {/* WELCOME TEXT */}
+
+            <div>
+
+              <div className="inline-flex items-center rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-600">
+                Admin Dashboard
+              </div>
+
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Welcome back,{" "}
+                {user?.name || "Administrator"} 👋
+              </h1>
+
+              <p className="mt-1.5 max-w-xl text-sm leading-6 text-slate-500">
+                Manage your EventON platform,
+                monitor events, users, bookings,
+                and overall activity.
+              </p>
+
+            </div>
+
+            {/* ACTIONS */}
+
+            <div className="flex flex-wrap items-center gap-3">
+
+              <Link
+                to="/admin/events"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+              >
+                <CalendarDays size={18} />
+                Events
+              </Link>
+
+              <Link
+                to="/admin/bookings"
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
+              >
+                <Ticket size={18} />
+                Bookings
+              </Link>
+
+            </div>
+
           </div>
-        </div>
-      </section>
 
-      {/* =====================================================
-          MAIN
-      ===================================================== */}
+        </section>
 
-      <main className="mx-auto w-full max-w-7xl px-5 pb-10 pt-6 sm:px-6 lg:px-8">
-        {/* ===================================================
+        {/* =================================================
             STATISTICS
-        =================================================== */}
+        ================================================= */}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+          {/* ATTENDEES */}
+
           <StatCard
-            title="Total Users"
-            value={userStatistics.total}
-            subtitle={`${userStatistics.attendees} attendees`}
+            title="Attendees"
+            value={userStatistics.attendees}
+            subtitle="Active attendees"
             icon={Users}
             iconClass="bg-blue-50 text-blue-600"
           />
+
+          {/* ORGANIZERS */}
 
           <StatCard
             title="Organizers"
@@ -611,6 +877,8 @@ function AdminDashboard() {
             iconClass="bg-violet-50 text-violet-600"
           />
 
+          {/* EVENTS */}
+
           <StatCard
             title="Total Events"
             value={eventStatistics.total}
@@ -619,25 +887,37 @@ function AdminDashboard() {
             iconClass="bg-orange-50 text-orange-600"
           />
 
+          {/* REVENUE */}
+
           <StatCard
-            title="Total Bookings"
-            value={bookingStatistics.total}
-            subtitle={`${bookingStatistics.ticketsSold} tickets sold`}
-            icon={Ticket}
+            title="Total Revenue"
+            value={formatCurrency(
+              bookingStatistics.revenue
+            )}
+            subtitle={`${bookingStatistics.total} active bookings`}
+            icon={IndianRupee}
             iconClass="bg-emerald-50 text-emerald-600"
+            isCurrency
           />
+
         </section>
 
-        {/* ===================================================
-            REVENUE + EVENT OVERVIEW
-        =================================================== */}
+        {/* =================================================
+            PLATFORM REVENUE + EVENT OVERVIEW
+        ================================================= */}
 
         <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+
+          {/* PLATFORM REVENUE */}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+
             <div className="flex items-start justify-between gap-4">
+
               <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Total Revenue
+
+                <p className="text-sm font-semibold text-slate-500">
+                  Platform Revenue
                 </p>
 
                 <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
@@ -648,31 +928,81 @@ function AdminDashboard() {
 
                 <div className="mt-2 flex items-center gap-1.5 text-sm font-medium text-emerald-600">
                   <TrendingUp size={16} />
-                  <span>From active bookings</span>
+
+                  <span>
+                    Generated from active EventON
+                    bookings
+                  </span>
                 </div>
+
               </div>
 
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                <IndianRupee size={21} />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                <IndianRupee size={22} />
               </div>
+
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <MiniStat
+            {/* REVENUE DETAILS */}
+
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+
+              <RevenueMiniCard
                 label="Active Bookings"
                 value={bookingStatistics.total}
               />
 
-              <MiniStat
-                label="Total Events"
-                value={eventStatistics.total}
+              <RevenueMiniCard
+                label="Tickets Sold"
+                value={bookingStatistics.ticketsSold}
               />
+
+              <RevenueMiniCard
+                label="Avg. Booking Value"
+                value={formatCurrency(
+                  revenuePerBooking
+                )}
+              />
+
             </div>
+
+            <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
+
+              <div className="flex items-start gap-3">
+
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-orange-500">
+                  <TrendingUp size={16} />
+                </div>
+
+                <div>
+
+                  <p className="text-xs font-bold text-orange-700">
+                    Platform Activity
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-orange-600">
+                    Revenue currently reflects active
+                    bookings across all EventON events.
+                    Cancelled bookings are excluded from
+                    this platform figure.
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {/* EVENT OVERVIEW */}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
             <div className="flex items-start justify-between">
+
               <div>
+
                 <p className="text-sm font-semibold text-slate-900">
                   Event Overview
                 </p>
@@ -680,14 +1010,17 @@ function AdminDashboard() {
                 <p className="mt-1 text-xs text-slate-500">
                   Current platform status
                 </p>
+
               </div>
 
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
-                <CalendarDays size={18} />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+                <CalendarDays size={19} />
               </div>
+
             </div>
 
             <div className="mt-6 space-y-5">
+
               <ProgressRow
                 label="Published"
                 value={eventStatistics.published}
@@ -711,20 +1044,23 @@ function AdminDashboard() {
                 value={eventStatistics.soldOut}
                 total={eventStatistics.total}
               />
+
             </div>
+
           </section>
+
         </section>
 
-        {/* ===================================================
+        {/* =================================================
             RECENT BOOKINGS + RECENT EVENTS
-        =================================================== */}
+        ================================================= */}
 
         <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-          {/* =================================================
-              RECENT BOOKINGS
-          ================================================= */}
+
+          {/* RECENT BOOKINGS */}
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
             <SectionHeader
               title="Recent Bookings"
               description="Latest active booking activity"
@@ -733,14 +1069,19 @@ function AdminDashboard() {
             />
 
             {recentBookings.length === 0 ? (
+
               <EmptyState
                 icon={Ticket}
                 title="No bookings yet"
                 description="Booking activity will appear here."
               />
+
             ) : (
+
               <div className="divide-y divide-slate-100">
+
                 {recentBookings.map((booking) => {
+
                   const attendee =
                     getBookingUser(booking);
 
@@ -751,13 +1092,25 @@ function AdminDashboard() {
                     booking.bookingId ||
                     booking.id;
 
+                  const bookingStatus = event
+                    ? getUnifiedStatus(event)
+                    : "upcoming";
+
+                  const finalStatus =
+                    isCancelledBooking(booking)
+                      ? "cancelled"
+                      : bookingStatus;
+
                   return (
                     <Link
                       key={bookingId}
                       to={`/admin/bookings/${bookingId}`}
                       className="group flex items-center gap-4 px-5 py-4 transition hover:bg-slate-50"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600">
+
+                      {/* ORANGE AVATAR */}
+
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">
                         {String(
                           attendee.name || "A"
                         )
@@ -766,57 +1119,48 @@ function AdminDashboard() {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {attendee.name}
-                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2">
+
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {attendee.name}
+                          </p>
+
+                          <BookingStatus
+                            status={finalStatus}
+                          />
+
+                        </div>
 
                         <p className="mt-1 truncate text-xs text-slate-500">
                           {event?.title ||
                             "Event unavailable"}
                         </p>
 
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                          <span>
-                            {booking.ticketCount || 0}{" "}
-                            {Number(
-                              booking.ticketCount
-                            ) === 1
-                              ? "ticket"
-                              : "tickets"}
-                          </span>
-
-                          <span>
-                            {formatDate(
-                              booking.createdAt
-                            )}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {formatCurrency(
-                            booking.totalPrice
-                          )}
+                        <p className="mt-1 text-xs text-slate-400">
+                          Booking #{bookingId}
                         </p>
 
-                        <ArrowRight
-                          size={15}
-                          className="ml-auto mt-2 text-slate-300 transition group-hover:text-orange-500"
-                        />
                       </div>
+
+                      <ArrowRight
+                        size={15}
+                        className="shrink-0 text-slate-300 transition group-hover:text-orange-500"
+                      />
+
                     </Link>
                   );
                 })}
+
               </div>
             )}
+
           </section>
 
-          {/* =================================================
-              RECENT EVENTS
-          ================================================= */}
+          {/* RECENT EVENTS */}
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
             <SectionHeader
               title="Recent Events"
               description="Latest events on EventON"
@@ -825,14 +1169,19 @@ function AdminDashboard() {
             />
 
             {recentEvents.length === 0 ? (
+
               <EmptyState
                 icon={CalendarDays}
                 title="No events yet"
                 description="Created events will appear here."
               />
+
             ) : (
+
               <div className="divide-y divide-slate-100">
+
                 {recentEvents.map((event) => {
+
                   const actualBookedTickets =
                     getActualBookedTickets(
                       event.id
@@ -842,7 +1191,7 @@ function AdminDashboard() {
                     Number(event.capacity) || 0;
 
                   const status =
-                    getEventStatus(event);
+                    getUnifiedStatus(event);
 
                   return (
                     <Link
@@ -850,9 +1199,15 @@ function AdminDashboard() {
                       to={`/admin/events/${event.id}`}
                       className="group block px-5 py-4 transition hover:bg-slate-50"
                     >
+
                       <div className="flex items-center gap-4">
+
+                        {/* EVENT IMAGE */}
+
                         <div className="h-14 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+
                           {event.image ? (
+
                             <img
                               src={event.image}
                               alt={
@@ -861,42 +1216,38 @@ function AdminDashboard() {
                               }
                               className="h-full w-full object-cover"
                             />
+
                           ) : (
+
                             <div className="flex h-full w-full items-center justify-center text-slate-400">
                               <CalendarDays
                                 size={21}
                               />
                             </div>
+
                           )}
+
                         </div>
 
+                        {/* EVENT DETAILS */}
+
                         <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
+
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+
                             <p className="truncate text-sm font-semibold text-slate-900">
                               {event.title ||
                                 "Untitled Event"}
                             </p>
 
-                            <span
-                              className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold sm:inline-flex ${
-                                status === "Sold out"
-                                  ? "bg-red-50 text-red-600"
-                                  : status === "Completed"
-                                  ? "bg-blue-50 text-blue-600"
-                                  : status === "Ongoing"
-                                  ? "bg-amber-50 text-amber-600"
-                                  : status === "Published"
-                                  ? "bg-emerald-50 text-emerald-600"
-                                  : status === "Cancelled"
-                                  ? "bg-red-50 text-red-600"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {status}
-                            </span>
+                            <BookingStatus
+                              status={status}
+                            />
+
                           </div>
 
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+
                             <span className="flex items-center gap-1">
                               <Clock3 size={12} />
                               {formatDate(event.date)}
@@ -908,190 +1259,238 @@ function AdminDashboard() {
                                 {event.city}
                               </span>
                             )}
+
                           </div>
 
                           <p className="mt-1.5 text-xs text-slate-400">
                             {actualBookedTickets} /{" "}
                             {capacity} booked
                           </p>
+
                         </div>
 
                         <ArrowRight
                           size={17}
                           className="shrink-0 text-slate-300 transition group-hover:text-orange-500"
                         />
+
                       </div>
+
                     </Link>
                   );
                 })}
+
               </div>
             )}
+
           </section>
+
         </section>
 
-        {/* ===================================================
-            EVENT PERFORMANCE
-        =================================================== */}
+        {/* =================================================
+            TOP 3 EVENT PERFORMANCE
+        ================================================= */}
 
         <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-5">
+
             <div>
+
               <h2 className="text-base font-semibold text-slate-900">
-                Event Performance
+                Top 3 Event Performance
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Booking performance across your events
+                Best performing events by tickets sold
               </p>
+
             </div>
 
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-50 text-orange-500">
               <TrendingUp size={18} />
             </div>
+
           </div>
 
           {eventPerformance.length === 0 ? (
+
             <EmptyState
               icon={CalendarDays}
               title="No event performance data"
               description="Event booking activity will appear here."
             />
+
           ) : (
+
             <div className="divide-y divide-slate-100">
-              {eventPerformance.map((event) => {
-                const status =
-                  getEventStatus(event);
 
-                return (
-                  <Link
-                    key={event.id}
-                    to={`/admin/events/${event.id}`}
-                    className="group block px-5 py-5 transition hover:bg-slate-50"
-                  >
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
-                      {/* EVENT INFO */}
+              {eventPerformance.map(
+                (event, index) => {
 
-                      <div className="flex min-w-0 flex-1 items-center gap-4">
-                        <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                          {event.image ? (
-                            <img
-                              src={event.image}
-                              alt={
-                                event.title ||
-                                "Event"
-                              }
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-slate-400">
-                              <CalendarDays
-                                size={22}
+                  const status =
+                    getUnifiedStatus(event);
+
+                  return (
+                    <Link
+                      key={event.id}
+                      to={`/admin/events/${event.id}`}
+                      className="group block px-5 py-5 transition hover:bg-slate-50"
+                    >
+
+                      <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+
+                        {/* EVENT INFO */}
+
+                        <div className="flex min-w-0 flex-1 items-center gap-4">
+
+                          {/* RANK */}
+
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-sm font-bold text-orange-600">
+                            #{index + 1}
+                          </div>
+
+                          {/* IMAGE */}
+
+                          <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+
+                            {event.image ? (
+
+                              <img
+                                src={event.image}
+                                alt={
+                                  event.title ||
+                                  "Event"
+                                }
+                                className="h-full w-full object-cover"
                               />
+
+                            ) : (
+
+                              <div className="flex h-full w-full items-center justify-center text-slate-400">
+                                <CalendarDays
+                                  size={22}
+                                />
+                              </div>
+
+                            )}
+
+                          </div>
+
+                          {/* DETAILS */}
+
+                          <div className="min-w-0">
+
+                            <div className="flex flex-wrap items-center gap-2">
+
+                              <p className="truncate text-sm font-semibold text-slate-900">
+                                {event.title ||
+                                  "Untitled Event"}
+                              </p>
+
+                              <BookingStatus
+                                status={status}
+                              />
+
                             </div>
-                          )}
+
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+
+                              <span className="flex items-center gap-1">
+                                <Clock3 size={12} />
+                                {formatDate(
+                                  event.date
+                                )}
+                              </span>
+
+                              {event.city && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin size={12} />
+                                  {event.city}
+                                </span>
+                              )}
+
+                            </div>
+
+                          </div>
+
                         </div>
 
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-slate-900">
-                              {event.title ||
-                                "Untitled Event"}
+                        {/* TICKETS */}
+
+                        <div className="w-full lg:w-72">
+
+                          <div className="mb-2 flex items-center justify-between">
+
+                            <span className="text-xs text-slate-500">
+                              Tickets sold
+                            </span>
+
+                            <span className="text-sm font-semibold text-slate-900">
+                              {event.ticketsSold} /{" "}
+                              {event.capacity}
+                            </span>
+
+                          </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+
+                            <div
+                              className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                              style={{
+                                width: `${event.percentage}%`,
+                              }}
+                            />
+
+                          </div>
+
+                        </div>
+
+                        {/* REVENUE */}
+
+                        <div className="flex shrink-0 items-center justify-between gap-5 lg:w-40 lg:justify-end">
+
+                          <div>
+
+                            <p className="text-xs text-slate-400">
+                              Revenue
                             </p>
 
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                                status === "Sold out"
-                                  ? "bg-red-50 text-red-600"
-                                  : status === "Completed"
-                                  ? "bg-blue-50 text-blue-600"
-                                  : status === "Ongoing"
-                                  ? "bg-amber-50 text-amber-600"
-                                  : status === "Published"
-                                  ? "bg-emerald-50 text-emerald-600"
-                                  : status === "Cancelled"
-                                  ? "bg-red-50 text-red-600"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {status}
-                            </span>
+                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                              {formatCurrency(
+                                event.revenue
+                              )}
+                            </p>
+
                           </div>
 
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                            <span className="flex items-center gap-1">
-                              <Clock3 size={12} />
-                              {formatDate(event.date)}
-                            </span>
-
-                            {event.city && (
-                              <span className="flex items-center gap-1">
-                                <MapPin size={12} />
-                                {event.city}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* TICKETS */}
-
-                      <div className="w-full lg:w-72">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-xs text-slate-500">
-                            Tickets sold
-                          </span>
-
-                          <span className="text-sm font-semibold text-slate-900">
-                            {event.ticketsSold} /{" "}
-                            {event.capacity}
-                          </span>
-                        </div>
-
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-orange-500 transition-all duration-500"
-                            style={{
-                              width: `${event.percentage}%`,
-                            }}
+                          <ArrowRight
+                            size={17}
+                            className="text-slate-300 transition group-hover:text-orange-500"
                           />
-                        </div>
-                      </div>
 
-                      {/* REVENUE */}
-
-                      <div className="flex shrink-0 items-center justify-between gap-5 lg:w-40 lg:justify-end">
-                        <div>
-                          <p className="text-xs text-slate-400">
-                            Revenue
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold text-slate-900">
-                            {formatCurrency(
-                              event.revenue
-                            )}
-                          </p>
                         </div>
 
-                        <ArrowRight
-                          size={17}
-                          className="text-slate-300 transition group-hover:text-orange-500"
-                        />
                       </div>
-                    </div>
-                  </Link>
-                );
-              })}
+
+                    </Link>
+                  );
+                }
+              )}
+
             </div>
           )}
+
         </section>
+
       </main>
     </div>
   );
 }
 
-// ===========================================================
-// SECTION HEADER
-// ===========================================================
+/* =========================================================
+   SECTION HEADER
+========================================================= */
 
 function SectionHeader({
   title,
@@ -1101,7 +1500,9 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-5">
+
       <div className="min-w-0">
+
         <h2 className="text-base font-semibold text-slate-900">
           {title}
         </h2>
@@ -1109,9 +1510,11 @@ function SectionHeader({
         <p className="mt-1 truncate text-xs text-slate-500">
           {description}
         </p>
+
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+
         {count && (
           <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 sm:inline-flex">
             {count}
@@ -1128,14 +1531,16 @@ function SectionHeader({
 
           <ArrowRight size={16} />
         </Link>
+
       </div>
+
     </div>
   );
 }
 
-// ===========================================================
-// STAT CARD
-// ===========================================================
+/* =========================================================
+   STAT CARD
+========================================================= */
 
 function StatCard({
   title,
@@ -1143,20 +1548,33 @@ function StatCard({
   subtitle,
   icon: Icon,
   iconClass,
+  isCurrency = false,
 }) {
   return (
     <div className="flex min-h-[132px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+
       <div className="flex items-start justify-between gap-4">
+
         <div className="min-w-0">
+
           <p className="truncate text-sm font-medium text-slate-500">
             {title}
           </p>
 
-          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-            {Number(value || 0).toLocaleString(
-              "en-IN"
-            )}
+          <p
+            className={`mt-2 font-bold tracking-tight text-slate-900 ${
+              isCurrency
+                ? "text-2xl"
+                : "text-3xl"
+            }`}
+          >
+            {isCurrency
+              ? value
+              : Number(value || 0).toLocaleString(
+                  "en-IN"
+                )}
           </p>
+
         </div>
 
         <div
@@ -1164,38 +1582,45 @@ function StatCard({
         >
           <Icon size={21} />
         </div>
+
       </div>
 
       <p className="mt-3 truncate text-xs text-slate-500">
         {subtitle}
       </p>
+
     </div>
   );
 }
 
-// ===========================================================
-// MINI STAT
-// ===========================================================
+/* =========================================================
+   REVENUE MINI CARD
+========================================================= */
 
-function MiniStat({ label, value }) {
+function RevenueMiniCard({
+  label,
+  value,
+}) {
   return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3">
-      <p className="text-xs text-slate-500">
+    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+
+      <p className="text-xs font-medium text-slate-500">
         {label}
       </p>
 
-      <p className="mt-1 text-lg font-bold text-slate-900">
-        {Number(value || 0).toLocaleString(
-          "en-IN"
-        )}
+      <p className="mt-1.5 text-lg font-bold text-slate-900">
+        {typeof value === "number"
+          ? value.toLocaleString("en-IN")
+          : value}
       </p>
+
     </div>
   );
 }
 
-// ===========================================================
-// PROGRESS ROW
-// ===========================================================
+/* =========================================================
+   PROGRESS ROW
+========================================================= */
 
 function ProgressRow({
   label,
@@ -1209,7 +1634,9 @@ function ProgressRow({
 
   return (
     <div>
+
       <div className="mb-2 flex items-center justify-between text-xs">
+
         <span className="font-medium text-slate-600">
           {label}
         </span>
@@ -1217,23 +1644,27 @@ function ProgressRow({
         <span className="font-semibold text-slate-900">
           {value}
         </span>
+
       </div>
 
       <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+
         <div
           className="h-full rounded-full bg-orange-500 transition-all duration-500"
           style={{
             width: `${percentage}%`,
           }}
         />
+
       </div>
+
     </div>
   );
 }
 
-// ===========================================================
-// EMPTY STATE
-// ===========================================================
+/* =========================================================
+   EMPTY STATE
+========================================================= */
 
 function EmptyState({
   icon: Icon,
@@ -1242,6 +1673,7 @@ function EmptyState({
 }) {
   return (
     <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-12 text-center">
+
       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
         <Icon size={22} />
       </div>
@@ -1253,6 +1685,7 @@ function EmptyState({
       <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
         {description}
       </p>
+
     </div>
   );
 }

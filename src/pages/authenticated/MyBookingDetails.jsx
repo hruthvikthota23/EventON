@@ -35,7 +35,79 @@ import {
 
 import BookingStatus from "../../components/bookings/BookingStatus";
 
-function BookingDetails() {
+const getEventDateTime = (dateValue, timeValue) => {
+  if (!dateValue) return null;
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+
+  if (!timeValue) {
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+  }
+
+  const value = String(timeValue).trim();
+  const match12 = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const match24 = value.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+
+  let hours;
+  let minutes;
+
+  if (match12) {
+    hours = Number(match12[1]);
+    minutes = Number(match12[2]);
+    const period = match12[3].toUpperCase();
+
+    if (period === "PM" && hours !== 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+  } else if (match24) {
+    hours = Number(match24[1]);
+    minutes = Number(match24[2]);
+  } else {
+    return date;
+  }
+
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    hours,
+    minutes,
+    0,
+    0
+  );
+};
+
+const getEventStatus = (bookingValue, eventValue) => {
+  const rawStatus = String(bookingValue?.status || "").toLowerCase();
+
+  if (rawStatus === "cancelled" || rawStatus === "canceled") {
+    return "cancelled";
+  }
+
+  const start = getEventDateTime(
+    eventValue?.date,
+    eventValue?.time || eventValue?.startTime
+  );
+
+  if (!start) return "upcoming";
+
+  const end = getEventDateTime(
+    eventValue?.date,
+    eventValue?.endTime || eventValue?.finishTime
+  );
+
+  const now = new Date();
+
+  if (now < start) return "upcoming";
+  if (end && now < end) return "ongoing";
+  return "completed";
+};
+
+function MyBookingDetails() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
 
@@ -56,6 +128,8 @@ function BookingDetails() {
     useState(false);
   const [cancelError, setCancelError] =
     useState("");
+  const [showCancelModal, setShowCancelModal] =
+    useState(false);
 
   // =========================================================
   // LOAD BOOKING
@@ -221,7 +295,7 @@ function BookingDetails() {
       navigate("/login", {
         replace: true,
         state: {
-          from: `/bookings/${bookingId}`,
+          from: `/my-bookings/${bookingId}`,
         },
       });
     }
@@ -283,8 +357,8 @@ function BookingDetails() {
             </p>
 
             <Link
-              to="/bookings"
-              className="mt-7 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              to="/my-bookings"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
             >
               <ArrowLeft size={17} />
               Back to bookings
@@ -317,7 +391,12 @@ function BookingDetails() {
   // =========================================================
 
   const handleCancelBooking = () => {
-    if (isCancelling || !booking || isCancelled) {
+    if (
+      isCancelling ||
+      !booking ||
+      isCancelled ||
+      displayStatus !== "upcoming"
+    ) {
       return;
     }
 
@@ -331,7 +410,16 @@ function BookingDetails() {
       return;
     }
 
-    if (String(latestBooking.status).toLowerCase() === "cancelled") {
+    const latestBookingStatus = String(
+      latestBooking.status || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (
+      latestBookingStatus === "cancelled" ||
+      latestBookingStatus === "canceled"
+    ) {
       setBooking(latestBooking);
       return;
     }
@@ -346,18 +434,72 @@ function BookingDetails() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Cancel this booking for ${latestBooking.ticketCount} ${
-        Number(latestBooking.ticketCount) === 1
-          ? "ticket"
-          : "tickets"
-      }?`
+    // Re-check the live event status immediately before opening
+    // the confirmation modal.
+    const latestDisplayStatus = getEventStatus(
+      latestBooking,
+      latestEvent
     );
 
-    if (!confirmed) {
+    if (latestDisplayStatus !== "upcoming") {
+      setBooking(latestBooking);
+      setCancelError(
+        "This booking can no longer be cancelled because the event has started or completed."
+      );
       return;
     }
 
+    setCancelError("");
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelBooking = () => {
+    if (
+      isCancelling ||
+      !booking ||
+      isCancelled ||
+      displayStatus !== "upcoming"
+    ) {
+      return;
+    }
+
+    const latestBooking =
+      getStoredBookingById(booking.bookingId);
+
+    if (!latestBooking) {
+      setShowCancelModal(false);
+      setCancelError(
+        "This booking could not be found. Please refresh and try again."
+      );
+      return;
+    }
+
+    const latestEvent =
+      eventId ? getStoredEventById(eventId) : null;
+
+    if (!latestEvent) {
+      setShowCancelModal(false);
+      setCancelError(
+        "The event information is no longer available."
+      );
+      return;
+    }
+
+    const latestDisplayStatus = getEventStatus(
+      latestBooking,
+      latestEvent
+    );
+
+    if (latestDisplayStatus !== "upcoming") {
+      setShowCancelModal(false);
+      setBooking(latestBooking);
+      setCancelError(
+        "This booking can no longer be cancelled because the event has started or completed."
+      );
+      return;
+    }
+
+    setShowCancelModal(false);
     setIsCancelling(true);
     setCancelError("");
 
@@ -395,6 +537,7 @@ function BookingDetails() {
       );
 
       if (!updatedBooking) {
+        // Roll back the seat change if booking update fails.
         incrementEventSeats(
           latestEvent.id,
           ticketQuantity
@@ -413,7 +556,8 @@ function BookingDetails() {
       );
 
       if (
-        String(updatedEvent.status).toLowerCase() === "sold-out" &&
+        String(updatedEvent.status || "").toLowerCase() ===
+          "sold-out" &&
         remainingSeats > 0
       ) {
         updateStoredEvent(latestEvent.id, {
@@ -426,9 +570,13 @@ function BookingDetails() {
       );
 
       const refreshedBooking =
-        getStoredBookingById(latestBooking.bookingId);
+        getStoredBookingById(
+          latestBooking.bookingId
+        );
 
-      setBooking(refreshedBooking || updatedBooking);
+      setBooking(
+        refreshedBooking || updatedBooking
+      );
     } catch (error) {
       console.error(
         "Unable to cancel booking:",
@@ -470,8 +618,8 @@ function BookingDetails() {
             </p>
 
             <Link
-              to="/bookings"
-              className="mt-7 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              to="/my-bookings"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
             >
               <ArrowLeft size={17} />
               Back to bookings
@@ -497,10 +645,22 @@ function BookingDetails() {
     Number(event.price) * ticketCount;
 
   const status =
-    booking.status || "confirmed";
+    String(booking.status || "")
+      .trim()
+      .toLowerCase();
 
   const isCancelled =
-    status === "cancelled";
+    status === "cancelled" ||
+    status === "canceled";
+
+  const displayStatus = getEventStatus(
+    booking,
+    event
+  );
+
+  const canCancel =
+    displayStatus === "upcoming" &&
+    !isCancelled;
 
   // =========================================================
   // DATE FORMATTING
@@ -590,8 +750,8 @@ function BookingDetails() {
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-8 lg:px-10">
           <Link
-            to="/bookings"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-slate-900"
+            to="/my-bookings"
+            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-slate-800 transition hover:bg-orange-50 hover:text-orange-600"
           >
             <ArrowLeft size={17} />
             Back to bookings
@@ -624,9 +784,7 @@ function BookingDetails() {
               </p>
             </div>
 
-            <BookingStatus
-              status={status}
-            />
+
           </div>
         </div>
 
@@ -664,7 +822,7 @@ function BookingDetails() {
               <div className="p-6 sm:p-8">
 
                 <span className="inline-flex rounded-full bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-600">
-                  {event.category}
+                  {event.category || "General"}
                 </span>
 
                 <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">
@@ -710,10 +868,16 @@ function BookingDetails() {
                       </p>
 
                       <p className="mt-1 text-sm font-semibold text-slate-800">
-                        {event.time}
+                        {event.time ||
+                          event.startTime ||
+                          "Time unavailable"}
 
-                        {event.endTime
-                          ? ` – ${event.endTime}`
+                        {(event.endTime ||
+                          event.finishTime)
+                          ? ` – ${
+                              event.endTime ||
+                              event.finishTime
+                            }`
                           : ""}
                       </p>
                     </div>
@@ -732,14 +896,17 @@ function BookingDetails() {
                       </p>
 
                       <p className="mt-1 text-sm font-semibold text-slate-800">
-                        {event.location}
+                        {event.location ||
+                          event.city ||
+                          "Location unavailable"}
                       </p>
 
-                      {event.city && (
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {event.city}
-                        </p>
-                      )}
+                      {event.location &&
+                        event.city && (
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {event.city}
+                          </p>
+                        )}
                     </div>
                   </div>
 
@@ -859,7 +1026,7 @@ function BookingDetails() {
                 </h2>
 
                 <BookingStatus
-                  status={status}
+                  status={displayStatus}
                 />
               </div>
 
@@ -967,19 +1134,29 @@ function BookingDetails() {
 
               {/* CANCEL BOOKING */}
 
-              {!isCancelled && (
-                <button
-                  type="button"
-                  onClick={handleCancelBooking}
-                  disabled={isCancelling}
-                  className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <XCircle size={17} />
-                  {isCancelling
+              <button
+                type="button"
+                onClick={canCancel ? handleCancelBooking : undefined}
+                disabled={!canCancel || isCancelling}
+                className={`mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition ${
+                  canCancel
+                    ? "border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50"
+                    : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                <XCircle size={17} />
+                {isCancelled
+                  ? "Booking Cancelled"
+                  : canCancel
+                  ? isCancelling
                     ? "Cancelling booking..."
-                    : "Cancel Booking"}
-                </button>
-              )}
+                    : "Cancel Booking"
+                  : displayStatus === "ongoing"
+                  ? "Cancellation Unavailable"
+                  : displayStatus === "completed"
+                  ? "Cancellation Unavailable"
+                  : "Cancellation Unavailable"}
+              </button>
 
               {/* VIEW EVENT */}
 
@@ -990,22 +1167,71 @@ function BookingDetails() {
                 View Event
               </Link>
 
-              {/* BACK TO BOOKINGS */}
-
-              <Link
-                to="/bookings"
-                className="mt-3 flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                Back to My Bookings
-              </Link>
 
             </div>
           </aside>
 
         </div>
       </section>
+
+      {/* CANCEL CONFIRMATION MODAL */}
+      {showCancelModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-5 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-booking-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
+                <XCircle size={22} />
+              </div>
+
+              <div className="min-w-0">
+                <h2
+                  id="cancel-booking-title"
+                  className="text-lg font-bold text-slate-900"
+                >
+                  Cancel booking?
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Are you sure you want to cancel your booking for{" "}
+                  <span className="font-semibold text-slate-700">
+                    {event.title}
+                  </span>
+                  ? Your {ticketCount}{" "}
+                  {ticketCount === 1 ? "ticket" : "tickets"} will be
+                  released back to the event.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                disabled={isCancelling}
+                className="h-11 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Keep Booking
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmCancelBooking}
+                disabled={isCancelling}
+                className="h-11 rounded-xl bg-red-500 px-5 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCancelling ? "Cancelling..." : "Yes, Cancel Booking"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-export default BookingDetails;
+export default MyBookingDetails;

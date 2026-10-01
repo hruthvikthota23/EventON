@@ -5,6 +5,7 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 const features = [
   "Create and publish events",
@@ -13,6 +14,15 @@ const features = [
 ];
 
 function OrganizerCTA() {
+  const { user } = useAuth();
+
+  const role = String(user?.role || "attendee").trim().toLowerCase();
+
+  const createEventPath =
+    role === "organizer"
+      ? "/organizer/events/create"
+      : "/register";
+
   return (
     <section className="bg-white py-20 sm:py-24">
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10">
@@ -29,7 +39,10 @@ function OrganizerCTA() {
             <div className="max-w-2xl">
 
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-300">
-                <CalendarPlus size={16} className="text-orange-500" />
+                <CalendarPlus
+                  size={16}
+                  className="text-orange-500"
+                />
                 For event organizers
               </div>
 
@@ -64,7 +77,7 @@ function OrganizerCTA() {
             {/* CTA */}
             <div className="lg:pr-2">
               <Link
-                to="/register"
+                to={createEventPath}
                 className="group inline-flex w-full items-center justify-center gap-3 rounded-xl bg-orange-500 px-7 py-4 text-sm font-bold text-white shadow-lg shadow-orange-500/10 transition hover:bg-orange-600 sm:w-auto"
               >
                 Create an Event

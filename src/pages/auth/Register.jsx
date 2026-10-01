@@ -458,7 +458,7 @@ function Register() {
                 Welcome to EventON
               </p>
 
-              <h1 className="mt-2 text-4xl font-bold leading-[1.08] tracking-tight text-white xl:text-[46px]">
+              <h1 className="mt-2 text-4xl font-bold leading-[1.08] tracking-tight text-white xl:text-[52px]">
                 Your next experience
                 <br />
                 starts here.
@@ -506,7 +506,7 @@ function Register() {
             RIGHT PANEL
         ====================================================== */}
 
-        <section className="flex h-full min-h-0 min-w-0 items-start justify-center overflow-hidden px-5 py-3 sm:px-8 lg:px-10 lg:py-5">
+        <section className="flex h-full min-h-0 min-w-0 items-start justify-center overflow-hidden px-5 py-3 sm:px-8 lg:px-10 lg:pt-12">
 
           <div className="w-full max-w-[450px]">
 

@@ -3,6 +3,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import EventCard from "./EventCard";
+
 import {
   getStoredEvents,
   EVENTS_UPDATED_EVENT,
@@ -122,7 +123,7 @@ function FeaturedEvents() {
   // 2. featured === true
   // 3. Event must still be upcoming
   // 4. Soonest event first
-  // 5. Maximum 6 cards
+  // 5. Maximum 3 cards
   // =========================================================
 
   const featuredEvents = useMemo(() => {
@@ -149,7 +150,7 @@ function FeaturedEvents() {
           getEventTimestamp(a) -
           getEventTimestamp(b)
       )
-      .slice(0, 6);
+      .slice(0, 3);
   }, [events, currentTime]);
 
   return (
@@ -163,6 +164,7 @@ function FeaturedEvents() {
           <div>
             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-orange-500">
               <Sparkles size={16} />
+
               Featured
             </div>
 
@@ -180,7 +182,7 @@ function FeaturedEvents() {
             to="/events"
             className="group inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-700 transition hover:text-orange-500"
           >
-            View all events
+            Explore all events
 
             <ArrowRight
               size={17}
@@ -202,6 +204,7 @@ function FeaturedEvents() {
           </div>
         ) : (
           <div className="mt-10 rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center">
+
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50">
               <Sparkles
                 size={24}
@@ -223,11 +226,11 @@ function FeaturedEvents() {
               className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-orange-500 hover:text-orange-600"
             >
               Browse all events
+
               <ArrowRight size={16} />
             </Link>
           </div>
         )}
-
       </div>
     </section>
   );

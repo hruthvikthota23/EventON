@@ -6,10 +6,36 @@ import {
   MessageCircle,
   Share2,
 } from "lucide-react";
-
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 function Footer() {
+const { user } = useAuth();
+
+const role = user?.role
+  ? String(user.role).trim().toLowerCase()
+  : null;
+
+// Create Event
+const createEventPath =
+  role === "organizer"
+    ? "/organizer/events/create"
+    : "/register";
+
+// My Bookings
+const bookingsPath =
+  role === "organizer"
+    ? "/organizer/bookings"
+    : role === "admin"
+    ? "/admin/bookings"
+    : role === "attendee"
+    ? "/my-bookings"
+    : "/register";
+
+  // =========================================================
+  // SHARE
+  // =========================================================
+
   const handleShare = async () => {
     try {
       if (navigator.share) {
@@ -30,28 +56,22 @@ function Footer() {
 
   return (
     <footer className="min-h-[calc(100vh-72px)] overflow-hidden bg-gray-950 text-white">
-
       {/* =====================================================
           LARGE EVENTON BRAND
       ====================================================== */}
 
       <section className="flex min-h-[45vh] items-center border-b border-gray-800">
-
         <div className="mx-auto flex w-full max-w-7xl items-center justify-center px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
-
           <Link
             to="/"
             className="flex max-w-full flex-col items-center text-center"
           >
-
             {/* =================================================
                 LARGE EVENTON LOGO
             ================================================== */}
 
             <div className="flex max-w-full items-center justify-center gap-4 sm:gap-6 lg:gap-8">
-
               {/* Calendar Icon */}
-
               <div
                 className="
                   flex
@@ -64,7 +84,6 @@ function Footer() {
                   bg-orange-500
                 "
               >
-
                 <CalendarDays
                   strokeWidth={2}
                   className="
@@ -73,11 +92,9 @@ function Footer() {
                     text-white
                   "
                 />
-
               </div>
 
               {/* EventON Text */}
-
               <span
                 className="
                   whitespace-nowrap
@@ -90,7 +107,6 @@ function Footer() {
               >
                 Event<span className="text-orange-500">ON</span>
               </span>
-
             </div>
 
             {/* =================================================
@@ -111,11 +127,8 @@ function Footer() {
             >
               Discover. Connect. Experience.
             </p>
-
           </Link>
-
         </div>
-
       </section>
 
       {/* =====================================================
@@ -123,7 +136,6 @@ function Footer() {
       ====================================================== */}
 
       <section className="flex flex-1 items-center">
-
         <div
           className="
             mx-auto
@@ -136,7 +148,6 @@ function Footer() {
             lg:px-10
           "
         >
-
           {/* =================================================
               FOOTER COLUMNS
           ================================================== */}
@@ -151,33 +162,25 @@ function Footer() {
               lg:gap-16
             "
           >
-
             {/* =================================================
                 BRAND
             ================================================== */}
 
             <div>
-
               <Link
                 to="/"
                 className="inline-flex items-center gap-3"
               >
-
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500">
-
                   <CalendarDays
                     size={21}
                     strokeWidth={2.5}
                   />
-
                 </div>
 
                 <span className="text-2xl font-bold tracking-tight">
-                  Event<span className="text-orange-500">
-                    ON
-                  </span>
+                  Event<span className="text-orange-500">ON</span>
                 </span>
-
               </Link>
 
               <p className="mt-4 max-w-sm text-sm leading-6 text-gray-400">
@@ -186,11 +189,8 @@ function Footer() {
               </p>
 
               {/* Social / Contact */}
-
               <div className="mt-5 flex items-center gap-3">
-
                 {/* Email */}
-
                 <a
                   href="mailto:support@eventon.com"
                   aria-label="Email EventON"
@@ -212,9 +212,8 @@ function Footer() {
                 </a>
 
                 {/* Contact */}
-
-                <a
-                  href="mailto:support@eventon.com"
+                <Link
+                  to="/contact"
                   aria-label="Contact EventON"
                   className="
                     flex
@@ -231,10 +230,9 @@ function Footer() {
                   "
                 >
                   <MessageCircle size={17} />
-                </a>
+                </Link>
 
                 {/* Share */}
-
                 <button
                   type="button"
                   aria-label="Share EventON"
@@ -257,9 +255,8 @@ function Footer() {
                 </button>
 
                 {/* Website */}
-
-                <a
-                  href={window.location.origin}
+                <Link
+                  to="/"
                   aria-label="EventON website"
                   className="
                     flex
@@ -276,10 +273,8 @@ function Footer() {
                   "
                 >
                   <Globe2 size={17} />
-                </a>
-
+                </Link>
               </div>
-
             </div>
 
             {/* =================================================
@@ -287,13 +282,12 @@ function Footer() {
             ================================================== */}
 
             <div>
-
               <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
                 Platform
               </h3>
 
               <ul className="mt-4 space-y-3">
-
+                {/* Browse Events */}
                 <li>
                   <Link
                     to="/events"
@@ -312,9 +306,10 @@ function Footer() {
                   </Link>
                 </li>
 
+                {/* Create Event */}
                 <li>
                   <Link
-                    to="/organizer/events/create"
+                    to={createEventPath}
                     className="
                       inline-flex
                       items-center
@@ -330,9 +325,10 @@ function Footer() {
                   </Link>
                 </li>
 
+                {/* My Bookings */}
                 <li>
                   <Link
-                    to="/bookings"
+                    to={bookingsPath}
                     className="
                       inline-flex
                       items-center
@@ -347,9 +343,7 @@ function Footer() {
                     <ArrowUpRight size={13} />
                   </Link>
                 </li>
-
               </ul>
-
             </div>
 
             {/* =================================================
@@ -357,33 +351,68 @@ function Footer() {
             ================================================== */}
 
             <div>
-
               <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
                 Company
               </h3>
 
               <ul className="mt-4 space-y-3">
-
+                {/* About */}
                 <li>
-                  <span className="text-sm text-gray-500">
+                  <Link
+                    to="/about"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      text-sm
+                      text-gray-400
+                      transition
+                      hover:text-orange-400
+                    "
+                  >
                     About Us
-                  </span>
+                    <ArrowUpRight size={13} />
+                  </Link>
                 </li>
 
+                {/* Contact */}
                 <li>
-                  <span className="text-sm text-gray-500">
+                  <Link
+                    to="/contact"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      text-sm
+                      text-gray-400
+                      transition
+                      hover:text-orange-400
+                    "
+                  >
                     Contact
-                  </span>
+                    <ArrowUpRight size={13} />
+                  </Link>
                 </li>
 
+                {/* Careers */}
                 <li>
-                  <span className="text-sm text-gray-500">
+                  <Link
+                    to="/careers"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      text-sm
+                      text-gray-400
+                      transition
+                      hover:text-orange-400
+                    "
+                  >
                     Careers
-                  </span>
+                    <ArrowUpRight size={13} />
+                  </Link>
                 </li>
-
               </ul>
-
             </div>
 
             {/* =================================================
@@ -391,35 +420,69 @@ function Footer() {
             ================================================== */}
 
             <div>
-
               <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
                 Support
               </h3>
 
               <ul className="mt-4 space-y-3">
-
+                {/* Help Center */}
                 <li>
-                  <span className="text-sm text-gray-500">
+                  <Link
+                    to="/help-center"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      text-sm
+                      text-gray-400
+                      transition
+                      hover:text-orange-400
+                    "
+                  >
                     Help Center
-                  </span>
+                    <ArrowUpRight size={13} />
+                  </Link>
                 </li>
 
+                {/* Privacy Policy */}
                 <li>
-                  <span className="text-sm text-gray-500">
+                  <Link
+                    to="/privacy-policy"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      text-sm
+                      text-gray-400
+                      transition
+                      hover:text-orange-400
+                    "
+                  >
                     Privacy Policy
-                  </span>
+                    <ArrowUpRight size={13} />
+                  </Link>
                 </li>
 
+                {/* Terms & Conditions */}
                 <li>
-                  <span className="text-sm text-gray-500">
+                  <Link
+                    to="/terms"
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      text-sm
+                      text-gray-400
+                      transition
+                      hover:text-orange-400
+                    "
+                  >
                     Terms & Conditions
-                  </span>
+                    <ArrowUpRight size={13} />
+                  </Link>
                 </li>
-
               </ul>
-
             </div>
-
           </div>
 
           {/* =====================================================
@@ -445,7 +508,6 @@ function Footer() {
               md:justify-between
             "
           >
-
             <p>
               © {new Date().getFullYear()} EventON.
               All rights reserved.
@@ -454,13 +516,9 @@ function Footer() {
             <p>
               Discover. Connect. Experience.
             </p>
-
           </div>
-
         </div>
-
       </section>
-
     </footer>
   );
 }

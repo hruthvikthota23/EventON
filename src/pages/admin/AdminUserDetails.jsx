@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
   Clock3,
-  IndianRupee,
   Mail,
   MapPin,
-  ShieldCheck,
+  Phone,
   Ticket,
   UserRound,
   UserRoundCog,
@@ -19,218 +18,158 @@ import {
 
 import {
   getStoredEvents,
-  EVENTS_UPDATED_EVENT,
+  getStoredEventsByOrganizer,
 } from "../../utils/eventStorage";
 
 import {
   getStoredBookings,
-  BOOKINGS_UPDATED_EVENT,
 } from "../../utils/bookingStorage";
 
 const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
 
 /* =========================================================
-   ROLE HELPERS
+   HELPERS
 ========================================================= */
 
-const normalizeRole = (role) => {
-  const normalized = String(role || "attendee")
+function normalizeRole(role) {
+  return String(role || "attendee")
+    .trim()
+    .toLowerCase();
+}
+
+function getEventStart(event) {
+  if (!event?.date) {
+    return null;
+  }
+
+  const start = new Date(
+    `${event.date}T${event.time || "00:00"}`
+  );
+
+  return Number.isNaN(start.getTime())
+    ? null
+    : start;
+}
+
+function getEventEnd(event) {
+  if (!event?.date) {
+    return null;
+  }
+
+  const end = new Date(
+    `${event.date}T${
+      event.endTime || event.time || "23:59"
+    }`
+  );
+
+  return Number.isNaN(end.getTime())
+    ? null
+    : end;
+}
+
+function getEventStatus(
+  event,
+  currentTime = new Date()
+) {
+  if (!event) {
+    return "upcoming";
+  }
+
+  const storedStatus = String(
+    event.status || ""
+  )
     .trim()
     .toLowerCase();
 
-  if (
-    normalized === "organizer" ||
-    normalized === "admin"
-  ) {
-    return normalized;
+  if (storedStatus === "cancelled") {
+    return "cancelled";
   }
 
-  return "attendee";
-};
-
-const getRoleLabel = (role) => {
-  const normalized = normalizeRole(role);
-
-  if (normalized === "organizer") {
-    return "Organizer";
+  if (storedStatus === "draft") {
+    return "draft";
   }
 
-  if (normalized === "admin") {
-    return "Admin";
+  const start = getEventStart(event);
+  const end = getEventEnd(event);
+
+  if (!start) {
+    return "upcoming";
   }
 
-  return "Attendee";
-};
-
-const getRoleStyle = (role) => {
-  const normalized = normalizeRole(role);
-
-  if (normalized === "organizer") {
-    return "border-violet-200 bg-violet-50 text-violet-600";
+  if (currentTime < start) {
+    return "upcoming";
   }
 
-  if (normalized === "admin") {
-    return "border-orange-200 bg-orange-50 text-orange-600";
+  if (end && currentTime < end) {
+    return "ongoing";
   }
 
-  return "border-blue-200 bg-blue-50 text-blue-600";
-};
+  return "completed";
+}
 
-const getRoleIcon = (role) => {
-  const normalized = normalizeRole(role);
-
-  if (normalized === "organizer") {
-    return UserRoundCog;
-  }
-
-  if (normalized === "admin") {
-    return ShieldCheck;
-  }
-
-  return UserRound;
-};
-
-/* =========================================================
-   BOOKING HELPERS
-========================================================= */
-
-const getBookingStatus = (booking) => {
-  const status = String(
-    booking?.status || "confirmed"
+function getBookingStatus(
+  booking,
+  event,
+  currentTime = new Date()
+) {
+  const bookingStatus = String(
+    booking?.status || ""
   )
     .trim()
     .toLowerCase();
 
   if (
-    status === "cancelled" ||
-    status === "canceled"
+    bookingStatus === "cancelled" ||
+    bookingStatus === "canceled"
   ) {
     return "cancelled";
   }
 
-  if (
-    status === "completed" ||
-    status === "attended"
-  ) {
-    return "completed";
-  }
+  return getEventStatus(
+    event,
+    currentTime
+  );
+}
 
-  if (status === "pending") {
-    return "pending";
-  }
-
-  return "confirmed";
-};
-
-const getBookingStatusLabel = (status) => {
-  if (status === "cancelled") {
-    return "Cancelled";
-  }
-
-  if (status === "completed") {
-    return "Completed";
-  }
-
-  if (status === "pending") {
-    return "Pending";
-  }
-
-  return "Confirmed";
-};
-
-const getBookingStatusStyle = (status) => {
-  if (status === "cancelled") {
-    return {
-      badge:
-        "border-red-200 bg-red-50 text-red-600",
-      dot: "bg-red-500",
-      icon: XCircle,
-    };
-  }
-
-  if (status === "completed") {
-    return {
-      badge:
-        "border-blue-200 bg-blue-50 text-blue-600",
-      dot: "bg-blue-500",
-      icon: CheckCircle2,
-    };
-  }
-
-  if (status === "pending") {
-    return {
-      badge:
-        "border-amber-200 bg-amber-50 text-amber-600",
-      dot: "bg-amber-500",
-      icon: Clock3,
-    };
-  }
-
-  return {
-    badge:
-      "border-emerald-200 bg-emerald-50 text-emerald-600",
-    dot: "bg-emerald-500",
-    icon: CheckCircle2,
-  };
-};
-
-const getBookingQuantity = (booking) => {
-  const quantity = Number(
+function getTicketCount(booking) {
+  const value =
     booking?.quantity ??
-      booking?.tickets ??
-      booking?.ticketCount ??
-      booking?.numberOfTickets ??
-      1
-  );
+    booking?.tickets ??
+    booking?.ticketCount ??
+    1;
 
-  if (
-    !Number.isFinite(quantity) ||
-    quantity <= 0
-  ) {
-    return 1;
-  }
+  const count = Number(value);
 
-  return quantity;
-};
+  return Number.isFinite(count) && count > 0
+    ? count
+    : 1;
+}
 
-const getBookingAmount = (booking) => {
-  const amount = Number(
-    booking?.totalAmount ??
-      booking?.totalPrice ??
-      booking?.amount ??
-      booking?.price ??
-      0
-  );
-
-  return Number.isFinite(amount)
-    ? amount
-    : 0;
-};
-
-const getBookingDate = (booking) => {
+function getBookingId(booking) {
   return (
-    booking?.createdAt ||
-    booking?.bookingDate ||
-    booking?.date ||
-    booking?.createdOn ||
-    booking?.timestamp ||
+    booking?.id ??
+    booking?.bookingId ??
+    "—"
+  );
+}
+
+function getBookingEventId(booking) {
+  return (
+    booking?.eventId ??
+    booking?.event?.id ??
     null
   );
-};
+}
 
-/* =========================================================
-   DATE / EVENT HELPERS
-========================================================= */
-
-const formatDate = (value) => {
-  if (!value) {
-    return "Not available";
+function formatDate(dateValue) {
+  if (!dateValue) {
+    return "—";
   }
 
-  const date = new Date(value);
+  const date = new Date(dateValue);
 
   if (Number.isNaN(date.getTime())) {
-    return String(value);
+    return dateValue;
   }
 
   return date.toLocaleDateString(
@@ -241,98 +180,63 @@ const formatDate = (value) => {
       year: "numeric",
     }
   );
-};
+}
 
-const formatDateTime = (value) => {
-  if (!value) {
-    return "Not available";
+function formatTime(timeValue) {
+  if (!timeValue) {
+    return "—";
   }
 
-  const date = new Date(value);
+  const [hours, minutes] =
+    String(timeValue)
+      .split(":")
+      .map(Number);
+
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes)
+  ) {
+    return timeValue;
+  }
+
+  const date = new Date();
+
+  date.setHours(
+    hours,
+    minutes,
+    0,
+    0
+  );
+
+  return date.toLocaleTimeString(
+    "en-IN",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    }
+  );
+}
+
+function formatDateTime(dateValue) {
+  if (!dateValue) {
+    return "—";
+  }
+
+  const date = new Date(dateValue);
 
   if (Number.isNaN(date.getTime())) {
-    return String(value);
+    return "—";
   }
 
-  return date.toLocaleString(
+  return date.toLocaleDateString(
     "en-IN",
     {
       day: "2-digit",
       month: "short",
       year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     }
   );
-};
-
-const getEventDate = (event) => {
-  return (
-    event?.date ||
-    event?.eventDate ||
-    event?.startDate ||
-    null
-  );
-};
-
-const getEventTime = (event) => {
-  const startTime =
-    event?.time ||
-    event?.startTime ||
-    "";
-
-  const endTime =
-    event?.endTime ||
-    event?.finishTime ||
-    "";
-
-  if (startTime && endTime) {
-    return `${startTime} - ${endTime}`;
-  }
-
-  return (
-    startTime ||
-    endTime ||
-    "Time not available"
-  );
-};
-
-const getEventLocation = (event) => {
-  if (!event) {
-    return "Location not available";
-  }
-
-  const location =
-    event?.location ||
-    event?.venue ||
-    event?.address ||
-    "";
-
-  const city =
-    event?.city ||
-    event?.locationCity ||
-    "";
-
-  if (location && city) {
-    if (
-      String(location)
-        .toLowerCase()
-        .includes(
-          String(city).toLowerCase()
-        )
-    ) {
-      return String(location);
-    }
-
-    return `${location}, ${city}`;
-  }
-
-  return (
-    location ||
-    city ||
-    "Location not available"
-  );
-};
+}
 
 /* =========================================================
    MAIN COMPONENT
@@ -340,33 +244,51 @@ const getEventLocation = (event) => {
 
 function AdminUserDetails() {
   const { userId } = useParams();
-  const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  const [allBookings, setAllBookings] =
+    useState([]);
+
+  const [allEvents, setAllEvents] =
+    useState([]);
+
+  const [organizerEvents, setOrganizerEvents] =
+    useState([]);
+
+  const [currentTime, setCurrentTime] =
+    useState(new Date());
+
+  const [activeView, setActiveView] =
+    useState("attendee");
+
+  const [loading, setLoading] =
+    useState(true);
 
   /* =======================================================
-     LOAD ACTUAL DATA
+     LOAD DATA
   ======================================================= */
 
   const loadData = () => {
     try {
       setLoading(true);
 
-      /* -----------------------------------------------
-         USERS
-      ------------------------------------------------ */
-
       const rawAccounts =
         localStorage.getItem(
           ACCOUNTS_STORAGE_KEY
         );
 
-      const accounts = rawAccounts
-        ? JSON.parse(rawAccounts)
-        : [];
+      if (!rawAccounts) {
+        setUser(null);
+        setAllBookings([]);
+        setAllEvents([]);
+        setOrganizerEvents([]);
+        setLoading(false);
+        return;
+      }
+
+      const accounts =
+        JSON.parse(rawAccounts);
 
       const foundUser =
         Array.isArray(accounts)
@@ -377,42 +299,79 @@ function AdminUserDetails() {
             )
           : null;
 
-      setUser(foundUser || null);
+      if (!foundUser) {
+        setUser(null);
+        setAllBookings([]);
+        setAllEvents([]);
+        setOrganizerEvents([]);
+        setLoading(false);
+        return;
+      }
 
-      /* -----------------------------------------------
-         BOOKINGS
-      ------------------------------------------------ */
+      const role = normalizeRole(
+        foundUser.role
+      );
+
+      /*
+       * Only registered users:
+       * attendee + organizer
+       */
+      if (
+        role !== "attendee" &&
+        role !== "organizer"
+      ) {
+        setUser(null);
+        setAllBookings([]);
+        setAllEvents([]);
+        setOrganizerEvents([]);
+        setLoading(false);
+        return;
+      }
+
+      setUser(foundUser);
 
       const storedBookings =
         getStoredBookings();
 
-      setBookings(
+      const storedEvents =
+        getStoredEvents();
+
+      setAllBookings(
         Array.isArray(storedBookings)
           ? storedBookings
           : []
       );
 
-      /* -----------------------------------------------
-         EVENTS
-      ------------------------------------------------ */
-
-      const storedEvents =
-        getStoredEvents();
-
-      setEvents(
+      setAllEvents(
         Array.isArray(storedEvents)
           ? storedEvents
           : []
       );
+
+      if (role === "organizer") {
+        const events =
+          getStoredEventsByOrganizer(
+            foundUser.id
+          );
+
+        setOrganizerEvents(
+          Array.isArray(events)
+            ? events
+            : []
+        );
+      } else {
+        setOrganizerEvents([]);
+      }
     } catch (error) {
       console.error(
-        "Unable to load admin user details:",
+        "Unable to load user details:",
         error
       );
 
       setUser(null);
-      setBookings([]);
-      setEvents([]);
+      setAllBookings([]);
+      setAllEvents([]);
+      setOrganizerEvents([]);
     } finally {
       setLoading(false);
     }
@@ -429,6 +388,10 @@ function AdminUserDetails() {
       loadData();
     };
 
+    const updateTime = () => {
+      setCurrentTime(new Date());
+    };
+
     window.addEventListener(
       "storage",
       handleUpdate
@@ -440,14 +403,20 @@ function AdminUserDetails() {
     );
 
     window.addEventListener(
-      EVENTS_UPDATED_EVENT,
+      "eventon:bookings-updated",
       handleUpdate
     );
 
     window.addEventListener(
-      BOOKINGS_UPDATED_EVENT,
+      "eventon:events-updated",
       handleUpdate
     );
+
+    const interval =
+      window.setInterval(
+        updateTime,
+        30000
+      );
 
     return () => {
       window.removeEventListener(
@@ -461,212 +430,280 @@ function AdminUserDetails() {
       );
 
       window.removeEventListener(
-        EVENTS_UPDATED_EVENT,
+        "eventon:bookings-updated",
         handleUpdate
       );
 
       window.removeEventListener(
-        BOOKINGS_UPDATED_EVENT,
+        "eventon:events-updated",
         handleUpdate
+      );
+
+      window.clearInterval(
+        interval
       );
     };
   }, [userId]);
+
+  /* =======================================================
+     ROLE
+  ======================================================= */
+
+  const role = normalizeRole(
+    user?.role
+  );
+
+  const isOrganizer =
+    role === "organizer";
 
   /* =======================================================
      USER BOOKINGS
   ======================================================= */
 
   const userBookings = useMemo(() => {
-    if (!user) {
+    if (!user?.id) {
       return [];
     }
 
-    const currentUserId =
-      String(user.id || "");
-
-    const currentEmail =
-      String(user.email || "")
-        .trim()
-        .toLowerCase();
-
-    return bookings.filter(
+    return allBookings.filter(
       (booking) => {
         const bookingUserId =
-          String(
-            booking?.userId ??
-              booking?.attendeeId ??
-              booking?.attendee?.userId ??
-              booking?.user?.id ??
-              ""
-          );
-
-        const bookingEmail =
-          String(
-            booking?.attendee?.email ??
-              booking?.attendeeEmail ??
-              booking?.userEmail ??
-              booking?.email ??
-              booking?.user?.email ??
-              ""
-          )
-            .trim()
-            .toLowerCase();
+          booking?.userId ??
+          booking?.attendeeId ??
+          booking?.user?.id ??
+          booking?.attendee?.userId ??
+          null;
 
         return (
-          (
-            currentUserId &&
-            bookingUserId ===
-              currentUserId
-          ) ||
-          (
-            currentEmail &&
-            bookingEmail ===
-              currentEmail
-          )
+          String(bookingUserId) ===
+          String(user.id)
         );
       }
     );
-  }, [bookings, user]);
+  }, [
+    allBookings,
+    user,
+  ]);
 
   /* =======================================================
-     EVENT MAP
+     ATTENDEE STATISTICS
   ======================================================= */
 
-  const eventMap = useMemo(() => {
-    return new Map(
-      events.map((event) => [
-        String(event.id),
-        event,
-      ])
-    );
-  }, [events]);
+  const attendeeStats =
+    useMemo(() => {
+      let upcoming = 0;
+      let ongoing = 0;
+      let completed = 0;
+      let cancelled = 0;
+      let tickets = 0;
 
-  /* =======================================================
-     GET BOOKING EVENT
-  ======================================================= */
+      userBookings.forEach(
+        (booking) => {
+          const eventId =
+            getBookingEventId(
+              booking
+            );
 
-  const getBookingEvent = (booking) => {
-    const eventId =
-      booking?.eventId ??
-      booking?.event?.id;
+          const event =
+            allEvents.find(
+              (item) =>
+                String(item?.id) ===
+                String(eventId)
+            );
 
-    return (
-      eventMap.get(
-        String(eventId)
-      ) ||
-      booking?.event ||
-      null
-    );
-  };
+          const status =
+            getBookingStatus(
+              booking,
+              event,
+              currentTime
+            );
 
-  /* =======================================================
-     STATISTICS
-  ======================================================= */
+          tickets +=
+            getTicketCount(
+              booking
+            );
 
-  const statistics = useMemo(() => {
-    const totalBookings =
-      userBookings.length;
-
-    const confirmedBookings =
-      userBookings.filter(
-        (booking) =>
-          getBookingStatus(
-            booking
-          ) === "confirmed"
-      ).length;
-
-    const pendingBookings =
-      userBookings.filter(
-        (booking) =>
-          getBookingStatus(
-            booking
-          ) === "pending"
-      ).length;
-
-    const cancelledBookings =
-      userBookings.filter(
-        (booking) =>
-          getBookingStatus(
-            booking
-          ) === "cancelled"
-      ).length;
-
-    const completedBookings =
-      userBookings.filter(
-        (booking) =>
-          getBookingStatus(
-            booking
-          ) === "completed"
-      ).length;
-
-    const activeBookings =
-      userBookings.filter(
-        (booking) =>
-          getBookingStatus(
-            booking
-          ) !== "cancelled"
+          if (
+            status === "upcoming"
+          ) {
+            upcoming++;
+          } else if (
+            status === "ongoing"
+          ) {
+            ongoing++;
+          } else if (
+            status === "completed"
+          ) {
+            completed++;
+          } else if (
+            status === "cancelled"
+          ) {
+            cancelled++;
+          }
+        }
       );
 
-    const tickets =
-      activeBookings.reduce(
-        (total, booking) =>
-          total +
-          getBookingQuantity(
-            booking
-          ),
-        0
-      );
-
-    const totalSpent =
-      activeBookings.reduce(
-        (total, booking) =>
-          total +
-          getBookingAmount(
-            booking
-          ),
-        0
-      );
-
-    return {
-      totalBookings,
-      confirmedBookings,
-      pendingBookings,
-      cancelledBookings,
-      completedBookings,
-      tickets,
-      totalSpent,
-    };
-  }, [userBookings]);
+      return {
+        totalBookings:
+          userBookings.length,
+        upcoming,
+        ongoing,
+        completed,
+        cancelled,
+        tickets,
+      };
+    }, [
+      userBookings,
+      allEvents,
+      currentTime,
+    ]);
 
   /* =======================================================
-     SORT BOOKINGS
+     ORGANIZER STATISTICS
   ======================================================= */
 
-  const sortedBookings = useMemo(() => {
-    return [...userBookings].sort(
-      (a, b) => {
-        const dateA =
-          getBookingDate(a);
+  const organizerStats =
+    useMemo(() => {
+      let upcoming = 0;
+      let ongoing = 0;
+      let completed = 0;
+      let cancelled = 0;
+      let ticketsSold = 0;
 
-        const dateB =
-          getBookingDate(b);
+      organizerEvents.forEach(
+        (event) => {
+          const status =
+            getEventStatus(
+              event,
+              currentTime
+            );
 
-        const timeA = dateA
-          ? new Date(
-              dateA
-            ).getTime()
-          : 0;
+          if (
+            status === "upcoming"
+          ) {
+            upcoming++;
+          } else if (
+            status === "ongoing"
+          ) {
+            ongoing++;
+          } else if (
+            status === "completed"
+          ) {
+            completed++;
+          } else if (
+            status === "cancelled"
+          ) {
+            cancelled++;
+          }
 
-        const timeB = dateB
-          ? new Date(
-              dateB
-            ).getTime()
-          : 0;
+          const eventBookings =
+            allBookings.filter(
+              (booking) => {
+                const eventId =
+                  getBookingEventId(
+                    booking
+                  );
 
-        return timeB - timeA;
-      }
-    );
-  }, [userBookings]);
+                const bookingStatus =
+                  String(
+                    booking?.status ||
+                      ""
+                  )
+                    .trim()
+                    .toLowerCase();
+
+                return (
+                  String(eventId) ===
+                    String(event.id) &&
+                  bookingStatus !==
+                    "cancelled" &&
+                  bookingStatus !==
+                    "canceled"
+                );
+              }
+            );
+
+          eventBookings.forEach(
+            (booking) => {
+              ticketsSold +=
+                getTicketCount(
+                  booking
+                );
+            }
+          );
+        }
+      );
+
+      return {
+        totalEvents:
+          organizerEvents.length,
+        upcoming,
+        ongoing,
+        completed,
+        cancelled,
+        ticketsSold,
+      };
+    }, [
+      organizerEvents,
+      allBookings,
+      currentTime,
+    ]);
+
+  /* =======================================================
+     RECENT BOOKINGS
+  ======================================================= */
+
+  const recentBookings =
+    useMemo(() => {
+      return [...userBookings]
+        .sort((first, second) => {
+          const firstDate =
+            new Date(
+              first?.createdAt ??
+                first?.bookedAt ??
+                first?.bookingDate ??
+                0
+            ).getTime();
+
+          const secondDate =
+            new Date(
+              second?.createdAt ??
+                second?.bookedAt ??
+                second?.bookingDate ??
+                0
+            ).getTime();
+
+          return (
+            secondDate - firstDate
+          );
+        })
+        .slice(0, 5);
+    }, [userBookings]);
+
+  /* =======================================================
+     RECENT ORGANIZER EVENTS
+  ======================================================= */
+
+  const recentOrganizerEvents =
+    useMemo(() => {
+      return [...organizerEvents]
+        .sort((first, second) => {
+          const firstDate =
+            getEventStart(
+              first
+            )?.getTime() || 0;
+
+          const secondDate =
+            getEventStart(
+              second
+            )?.getTime() || 0;
+
+          return (
+            secondDate - firstDate
+          );
+        })
+        .slice(0, 5);
+    }, [organizerEvents]);
 
   /* =======================================================
      LOADING
@@ -674,24 +711,10 @@ function AdminUserDetails() {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-slate-50">
-        <div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-6 w-28 rounded bg-slate-200" />
-
-            <div className="rounded-2xl bg-white p-7">
-              <div className="flex gap-5">
-                <div className="h-20 w-20 rounded-2xl bg-slate-200" />
-
-                <div className="space-y-3">
-                  <div className="h-6 w-52 rounded bg-slate-200" />
-                  <div className="h-4 w-72 rounded bg-slate-100" />
-                  <div className="h-4 w-56 rounded bg-slate-100" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="flex min-h-[500px] items-center justify-center bg-slate-50">
+        <p className="text-sm font-medium text-slate-500">
+          Loading user details...
+        </p>
       </div>
     );
   }
@@ -703,52 +726,63 @@ function AdminUserDetails() {
   if (!user) {
     return (
       <div className="min-h-full bg-slate-50">
-        <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl items-center justify-center px-5 py-10">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-              <UserRound size={26} />
-            </div>
 
-            <h1 className="mt-5 text-lg font-bold text-slate-900">
-              User not found
-            </h1>
+        <main className="mx-auto flex max-w-7xl flex-col items-center justify-center px-5 py-20 text-center">
 
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              This account could not be
-              found in EventON.
-            </p>
-
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  "/admin/users"
-                )
-              }
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
-            >
-              <ArrowLeft size={16} />
-              Back to Users
-            </button>
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+            <UserRound size={28} />
           </div>
+
+          <h1 className="mt-5 text-xl font-bold text-slate-900">
+            User not found
+          </h1>
+
+          <p className="mt-2 text-sm text-slate-500">
+            The requested registered user
+            could not be found.
+          </p>
+
+          <Link
+            to="/admin/users"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
+          >
+            <ArrowLeft size={16} />
+            Back to Users
+          </Link>
+
         </main>
       </div>
     );
   }
 
   /* =======================================================
-     USER DISPLAY
+     USER INFORMATION
   ======================================================= */
 
-  const role =
-    normalizeRole(user.role);
+  const fullName =
+    user.name || "Unnamed User";
 
-  const RoleIcon =
-    getRoleIcon(role);
+  const initial =
+    fullName
+      .charAt(0)
+      .toUpperCase();
 
-  const displayName =
-    user.name ||
-    "Unnamed User";
+  const phone =
+    user.mobile ||
+    user.phone ||
+    "Not provided";
+
+  const email =
+    user.email ||
+    "No email available";
+
+  const fullUserId =
+    user.id || "Not available";
+
+  const roleLabel =
+    isOrganizer
+      ? "Organizer"
+      : "Attendee";
 
   /* =======================================================
      RENDER
@@ -756,529 +790,962 @@ function AdminUserDetails() {
 
   return (
     <div className="min-h-full bg-slate-50">
+
       {/* ===================================================
-          PAGE TITLE
+          HEADER
       =================================================== */}
 
       <section className="bg-slate-50">
+
         <div className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
+
+          {/* BACK */}
+
           <Link
             to="/admin/users"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-orange-600"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-orange-500"
           >
             <ArrowLeft size={16} />
             Back to Users
           </Link>
 
-          <h1 className="mt-5 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            User Details
-          </h1>
+          {/* USER CARD */}
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+            <div className="flex flex-col gap-6 p-5 sm:p-6 lg:flex-row lg:items-center">
+
+              {/* LEFT SIDE */}
+
+              <div className="flex min-w-0 flex-1 items-center gap-4">
+
+                {/* AVATAR */}
+
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-xl font-bold text-orange-600">
+                  {initial}
+                </div>
+
+                {/* NAME + CONTACT */}
+
+                <div className="min-w-0">
+
+                  <div className="flex flex-wrap items-center gap-3">
+
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                      {fullName}
+                    </h1>
+
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+                        isOrganizer
+                          ? "bg-violet-50 text-violet-600"
+                          : "bg-blue-50 text-blue-600"
+                      }`}
+                    >
+                      {isOrganizer ? (
+                        <UserRoundCog
+                          size={14}
+                        />
+                      ) : (
+                        <UserRound
+                          size={14}
+                        />
+                      )}
+
+                      {roleLabel}
+                    </span>
+
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-2 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
+
+                    {/* PHONE */}
+
+                    <span className="inline-flex items-center gap-2">
+                      <Phone
+                        size={15}
+                        className="shrink-0 text-slate-400"
+                      />
+
+                      <span className="break-all">
+                        {phone}
+                      </span>
+                    </span>
+
+                    {/* EMAIL */}
+
+                    <span className="inline-flex items-center gap-2">
+                      <Mail
+                        size={15}
+                        className="shrink-0 text-slate-400"
+                      />
+
+                      <span className="break-all">
+                        {email}
+                      </span>
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* RIGHT SIDE USER ID */}
+
+              <div className="w-full border-t border-slate-100 pt-4 lg:w-[330px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  User ID
+                </p>
+
+                <p
+                  className="mt-2 break-all text-sm font-semibold leading-6 text-slate-700"
+                  title={fullUserId}
+                >
+                  {fullUserId}
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
         </div>
+
       </section>
 
       {/* ===================================================
           MAIN
       =================================================== */}
 
-      <main className="mx-auto w-full max-w-7xl px-5 pb-12 sm:px-6 lg:px-8">
-        {/* =================================================
-            PROFILE CARD
-        ================================================= */}
-
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="p-6 sm:p-7">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              {/* PROFILE */}
-
-              <div className="flex min-w-0 items-center gap-5">
-                {/* PROFESSIONAL USER AVATAR */}
-
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm sm:h-20 sm:w-20">
-                  <UserRound
-                    size={34}
-                    strokeWidth={1.7}
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
-                      {displayName}
-                    </h2>
-
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${getRoleStyle(
-                        role
-                      )}`}
-                    >
-                      <RoleIcon size={13} />
-                      {getRoleLabel(role)}
-                    </span>
-                  </div>
-
-                  {/* EMAIL */}
-
-                  <a
-                    href={`mailto:${user.email || ""}`}
-                    className="mt-3 flex items-center gap-2 break-all text-sm font-medium text-slate-500 transition hover:text-orange-600"
-                  >
-                    <Mail
-                      size={15}
-                      className="shrink-0"
-                    />
-
-                    {user.email ||
-                      "No email"}
-                  </a>
-
-                  {/* USER ID */}
-
-                  <p className="mt-2 break-all text-sm text-slate-500">
-                    User ID:{" "}
-                    <span className="font-semibold text-slate-700">
-                      {user.id ||
-                        "Not available"}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* ACCOUNT STATUS */}
-
-              <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm">
-                  <CheckCircle2 size={18} />
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
-                    Account
-                  </p>
-
-                  <p className="mt-0.5 text-sm font-bold text-emerald-700">
-                    Active
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+      <main className="mx-auto w-full max-w-7xl px-5 pb-10 sm:px-6 lg:px-8">
 
         {/* =================================================
-            STATS
+            ORGANIZER SWITCH
         ================================================= */}
 
-        <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <UserDetailStatCard
-            title="Total Bookings"
-            value={
-              statistics.totalBookings
-            }
-            icon={Ticket}
-            iconClass="bg-blue-50 text-blue-600"
-          />
+        {isOrganizer && (
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
 
-          <UserDetailStatCard
-            title="Confirmed"
-            value={
-              statistics.confirmedBookings
-            }
-            icon={CheckCircle2}
-            iconClass="bg-emerald-50 text-emerald-600"
-          />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 
-          <UserDetailStatCard
-            title="Pending"
-            value={
-              statistics.pendingBookings
-            }
-            icon={Clock3}
-            iconClass="bg-amber-50 text-amber-600"
-          />
-
-          <UserDetailStatCard
-            title="Cancelled"
-            value={
-              statistics.cancelledBookings
-            }
-            icon={XCircle}
-            iconClass="bg-red-50 text-red-600"
-          />
-
-          <UserDetailStatCard
-            title="Tickets"
-            value={
-              statistics.tickets
-            }
-            icon={Users}
-            iconClass="bg-violet-50 text-violet-600"
-          />
-
-          <UserDetailStatCard
-            title="Total Spent"
-            value={`₹${statistics.totalSpent.toLocaleString(
-              "en-IN"
-            )}`}
-            icon={IndianRupee}
-            iconClass="bg-orange-50 text-orange-600"
-          />
-        </section>
-
-        {/* =================================================
-            ACCOUNT INFORMATION
-        ================================================= */}
-
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-            <h2 className="text-sm font-bold text-slate-900">
-              Account Information
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
-            <InfoItem
-              label="Full Name"
-              value={
-                user.name ||
-                "Not available"
-              }
-              icon={UserRound}
-            />
-
-            <InfoItem
-              label="Email Address"
-              value={
-                user.email ||
-                "Not available"
-              }
-              icon={Mail}
-            />
-
-            <InfoItem
-              label="Role"
-              value={getRoleLabel(role)}
-              icon={RoleIcon}
-            />
-
-            <InfoItem
-              label="User ID"
-              value={
-                user.id ||
-                "Not available"
-              }
-              icon={ShieldCheck}
-              full
-            />
-
-            <InfoItem
-              label="Account Status"
-              value="Active"
-              icon={CheckCircle2}
-            />
-
-            <InfoItem
-              label="Registration"
-              value={
-                user.createdAt
-                  ? formatDate(
-                      user.createdAt
-                    )
-                  : user.createdOn
-                  ? formatDate(
-                      user.createdOn
-                    )
-                  : "Available account"
-              }
-              icon={Clock3}
-            />
-          </div>
-        </section>
-
-        {/* =================================================
-            BOOKING HISTORY
-        ================================================= */}
-
-        <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          {/* HEADER */}
-
-          <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Booking History
-                </h2>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  All bookings associated
-                  with this account
-                </p>
-              </div>
-
-              <div className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-600">
-                <Ticket size={14} />
-                {userBookings.length}
-              </div>
-            </div>
-          </div>
-
-          {/* BOOKINGS */}
-
-          {sortedBookings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                <Ticket size={25} />
-              </div>
-
-              <h3 className="mt-4 text-sm font-bold text-slate-900">
-                No bookings yet
-              </h3>
-
-              <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                No booking records are
-                associated with this user.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 p-4 sm:p-5">
-              {sortedBookings.map(
-                (booking, index) => {
-                  const event =
-                    getBookingEvent(
-                      booking
-                    );
-
-                  const status =
-                    getBookingStatus(
-                      booking
-                    );
-
-                  const statusStyle =
-                    getBookingStatusStyle(
-                      status
-                    );
-
-                  const bookingId =
-                    booking?.id ??
-                    booking?.bookingId ??
-                    "Not available";
-
-                  const eventDate =
-                    getEventDate(event);
-
-                  const eventTime =
-                    getEventTime(event);
-
-                  const eventLocation =
-                    getEventLocation(event);
-
-                  return (
-                    <article
-                      key={
-                        bookingId !==
-                        "Not available"
-                          ? bookingId
-                          : `${booking?.eventId}-${index}`
-                      }
-                      className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-slate-300 hover:shadow-sm"
-                    >
-                      {/* EVENT HEADER */}
-
-                      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:p-5">
-                        {/* EVENT IMAGE */}
-
-                        <div className="h-32 w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-24 sm:w-32">
-                          {event?.image ? (
-                            <img
-                              src={event.image}
-                              alt={
-                                event?.title ||
-                                "Event"
-                              }
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-400">
-                              <CalendarDays
-                                size={28}
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* EVENT CONTENT */}
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                              <h3 className="text-base font-bold text-slate-900">
-                                {event?.title ||
-                                  booking?.eventName ||
-                                  "Event"}
-                              </h3>
-
-                              {event?.category && (
-                                <p className="mt-1 text-xs font-medium text-slate-400">
-                                  {event.category}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* STATUS */}
-
-                            <span
-                              className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusStyle.badge}`}
-                            >
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${statusStyle.dot}`}
-                              />
-
-                              {getBookingStatusLabel(
-                                status
-                              )}
-                            </span>
-                          </div>
-
-                          {/* LOCATION */}
-
-                          <div className="mt-3 flex items-start gap-2">
-                            <MapPin
-                              size={15}
-                              className="mt-0.5 shrink-0 text-slate-400"
-                            />
-
-                            <span className="text-xs font-medium leading-5 text-slate-600">
-                              {eventLocation}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* EVENT META */}
-
-                      <div className="grid grid-cols-1 border-t border-slate-100 bg-slate-50 sm:grid-cols-3">
-                        <BookingMeta
-                          icon={CalendarDays}
-                          label="Date"
-                          value={
-                            eventDate
-                              ? formatDate(
-                                  eventDate
-                                )
-                              : "Not available"
-                          }
-                        />
-
-                        <BookingMeta
-                          icon={Clock3}
-                          label="Time"
-                          value={
-                            eventTime
-                          }
-                        />
-
-                        <BookingMeta
-                          icon={MapPin}
-                          label="Location"
-                          value={
-                            eventLocation
-                          }
-                        />
-                      </div>
-
-                      {/* BOOKING META */}
-
-                      <div className="grid grid-cols-1 gap-4 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4 sm:p-5">
-                        <BookingValue
-                          label="Booking ID"
-                          value={bookingId}
-                          full
-                        />
-
-                        <BookingValue
-                          label="Tickets"
-                          value={
-                            getBookingQuantity(
-                              booking
-                            )
-                          }
-                        />
-
-                        <BookingValue
-                          label="Amount"
-                          value={`₹${getBookingAmount(
-                            booking
-                          ).toLocaleString(
-                            "en-IN"
-                          )}`}
-                        />
-
-                        <BookingValue
-                          label="Booked On"
-                          value={formatDateTime(
-                            getBookingDate(
-                              booking
-                            )
-                          )}
-                        />
-                      </div>
-
-                      {/* CANCELLED */}
-
-                      {status ===
-                        "cancelled" && (
-                        <div className="mx-4 mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 p-3 sm:mx-5 sm:mb-5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-red-500">
-                            <XCircle size={16} />
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-bold text-red-700">
-                              Booking Cancelled
-                            </p>
-
-                            <p className="mt-0.5 text-[11px] leading-5 text-red-600">
-                              This booking remains
-                              in the user's history
-                              but is excluded from
-                              active ticket and
-                              spending totals.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </article>
-                  );
+              <button
+                type="button"
+                onClick={() =>
+                  setActiveView(
+                    "attendee"
+                  )
                 }
-              )}
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  activeView ===
+                  "attendee"
+                    ? "bg-orange-500 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Ticket size={17} />
+                  Attendee Activity
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setActiveView(
+                    "organizer"
+                  )
+                }
+                className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  activeView ===
+                  "organizer"
+                    ? "bg-violet-500 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <CalendarDays
+                    size={17}
+                  />
+                  Organizer Activity
+                </span>
+              </button>
+
             </div>
+
+          </section>
+        )}
+
+        {/* =================================================
+            ATTENDEE ACTIVITY
+        ================================================= */}
+
+        {(!isOrganizer ||
+          activeView ===
+            "attendee") && (
+          <AttendeeActivity
+            stats={attendeeStats}
+            bookings={recentBookings}
+            events={allEvents}
+            currentTime={currentTime}
+          />
+        )}
+
+        {/* =================================================
+            ORGANIZER ACTIVITY
+        ================================================= */}
+
+        {isOrganizer &&
+          activeView ===
+            "organizer" && (
+            <OrganizerActivity
+              stats={organizerStats}
+              events={
+                recentOrganizerEvents
+              }
+              allBookings={
+                allBookings
+              }
+              currentTime={
+                currentTime
+              }
+            />
           )}
-        </section>
+
       </main>
     </div>
   );
 }
 
-/* =========================================================
-   STAT CARD
-========================================================= */
+/* ===========================================================
+   ATTENDEE ACTIVITY
+=========================================================== */
 
-function UserDetailStatCard({
+function AttendeeActivity({
+  stats,
+  bookings,
+  events,
+  currentTime,
+}) {
+  return (
+    <div className="space-y-6">
+
+      {/* =================================================
+          STATS
+      ================================================= */}
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+        <StatCard
+          title="Total Bookings"
+          value={
+            stats.totalBookings
+          }
+          icon={Ticket}
+          iconClass="bg-blue-50 text-blue-600"
+        />
+
+        <StatCard
+          title="Upcoming"
+          value={stats.upcoming}
+          icon={Clock3}
+          iconClass="bg-amber-50 text-amber-600"
+        />
+
+        <StatCard
+          title="Ongoing"
+          value={stats.ongoing}
+          icon={Clock3}
+          iconClass="bg-blue-50 text-blue-600"
+        />
+
+        <StatCard
+          title="Completed"
+          value={stats.completed}
+          icon={CheckCircle2}
+          iconClass="bg-emerald-50 text-emerald-600"
+        />
+
+        <StatCard
+          title="Cancelled"
+          value={stats.cancelled}
+          icon={XCircle}
+          iconClass="bg-red-50 text-red-600"
+        />
+
+        <StatCard
+          title="Tickets Booked"
+          value={stats.tickets}
+          icon={Users}
+          iconClass="bg-violet-50 text-violet-600"
+        />
+
+      </section>
+
+      {/* =================================================
+          RECENT BOOKINGS
+      ================================================= */}
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+        <div className="border-b border-slate-200 px-5 py-5">
+
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              Recent Bookings
+            </h2>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Latest events booked by this user.
+            </p>
+          </div>
+
+        </div>
+
+        {bookings.length === 0 ? (
+
+          <EmptyState
+            icon={Ticket}
+            title="No bookings yet"
+            description="This user has not booked any events."
+          />
+
+        ) : (
+
+          <div className="divide-y divide-slate-100">
+
+            {bookings.map(
+              (booking) => {
+
+                const eventId =
+                  getBookingEventId(
+                    booking
+                  );
+
+                const event =
+                  events.find(
+                    (item) =>
+                      String(
+                        item?.id
+                      ) ===
+                      String(eventId)
+                  );
+
+                const status =
+                  getBookingStatus(
+                    booking,
+                    event,
+                    currentTime
+                  );
+
+                const ticketCount =
+                  getTicketCount(
+                    booking
+                  );
+
+                const bookingId =
+                  getBookingId(
+                    booking
+                  );
+
+                return (
+                  <div
+                    key={
+                      booking.id ||
+                      booking.bookingId ||
+                      `${eventId}-${booking.createdAt}`
+                    }
+                    className="p-5 transition hover:bg-slate-50"
+                  >
+
+                    <div className="flex flex-col gap-5 lg:flex-row">
+
+                      {/* IMAGE */}
+
+                      <div className="h-32 w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-36 sm:w-52">
+
+                        <EventImage
+                          src={event?.image}
+                          alt={
+                            event?.title ||
+                            "Event"
+                          }
+                        />
+
+                      </div>
+
+                      {/* CONTENT */}
+
+                      <div className="min-w-0 flex-1">
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+                          <div className="min-w-0">
+
+                            <h3 className="truncate text-base font-bold text-slate-900">
+                              {event?.title ||
+                                booking?.eventName ||
+                                "Event"}
+                            </h3>
+
+                            {/* REAL BOOKING ID */}
+
+                            <p className="mt-1 break-all text-xs font-medium text-slate-400">
+                              Booking ID:{" "}
+                              <span className="font-semibold text-slate-600">
+                                {bookingId}
+                              </span>
+                            </p>
+
+                          </div>
+
+                          <StatusBadge
+                            status={
+                              status
+                            }
+                          />
+
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+
+                          <InfoItem
+                            label="Event Date"
+                            value={
+                              event?.date
+                                ? formatDate(
+                                    event.date
+                                  )
+                                : "—"
+                            }
+                            icon={
+                              CalendarDays
+                            }
+                          />
+
+                          <InfoItem
+                            label="Time"
+                            value={
+                              event?.time
+                                ? `${formatTime(
+                                    event.time
+                                  )}${
+                                    event?.endTime
+                                      ? ` - ${formatTime(
+                                          event.endTime
+                                        )}`
+                                      : ""
+                                  }`
+                                : "—"
+                            }
+                            icon={
+                              Clock3
+                            }
+                          />
+
+                          <InfoItem
+                            label="Location"
+                            value={[
+                              event?.location,
+                              event?.city,
+                            ]
+                              .filter(Boolean)
+                              .join(", ") || "—"}
+                            icon={MapPin}
+                          />
+
+                          <InfoItem
+                            label="Tickets"
+                            value={`${ticketCount} ${
+                              ticketCount ===
+                              1
+                                ? "Ticket"
+                                : "Tickets"
+                            }`}
+                            icon={
+                              Ticket
+                            }
+                          />
+
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+
+                          <span>
+                            Booked on{" "}
+                            <strong className="font-semibold text-slate-700">
+                              {formatDateTime(
+                                booking?.createdAt ??
+                                  booking?.bookedAt ??
+                                  booking?.bookingDate
+                              )}
+                            </strong>
+                          </span>
+
+                          {event?.category && (
+                            <span>
+                              Category:{" "}
+                              <strong className="font-semibold text-slate-700">
+                                {
+                                  event.category
+                                }
+                              </strong>
+                            </span>
+                          )}
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+                );
+              }
+            )}
+
+          </div>
+
+        )}
+
+      </section>
+    </div>
+  );
+}
+
+/* ===========================================================
+   ORGANIZER ACTIVITY
+=========================================================== */
+
+function OrganizerActivity({
+  stats,
+  events,
+  allBookings,
+  currentTime,
+}) {
+  return (
+    <div className="space-y-6">
+
+      {/* STATS */}
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+        <StatCard
+          title="Total Events"
+          value={
+            stats.totalEvents
+          }
+          icon={CalendarDays}
+          iconClass="bg-blue-50 text-blue-600"
+        />
+
+        <StatCard
+          title="Upcoming"
+          value={stats.upcoming}
+          icon={Clock3}
+          iconClass="bg-amber-50 text-amber-600"
+        />
+
+        <StatCard
+          title="Ongoing"
+          value={stats.ongoing}
+          icon={Clock3}
+          iconClass="bg-blue-50 text-blue-600"
+        />
+
+        <StatCard
+          title="Completed"
+          value={stats.completed}
+          icon={CheckCircle2}
+          iconClass="bg-emerald-50 text-emerald-600"
+        />
+
+        <StatCard
+          title="Cancelled"
+          value={stats.cancelled}
+          icon={XCircle}
+          iconClass="bg-red-50 text-red-600"
+        />
+
+        <StatCard
+          title="Tickets Sold"
+          value={
+            stats.ticketsSold
+          }
+          icon={Users}
+          iconClass="bg-violet-50 text-violet-600"
+        />
+
+      </section>
+
+      {/* EVENTS */}
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+        <div className="border-b border-slate-200 px-5 py-5">
+
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              Organizer Events
+            </h2>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Events created and managed by this organizer.
+            </p>
+          </div>
+
+        </div>
+
+        {events.length === 0 ? (
+
+          <EmptyState
+            icon={CalendarDays}
+            title="No events created"
+            description="This organizer has not created any events yet."
+          />
+
+        ) : (
+
+          <div className="divide-y divide-slate-100">
+
+            {events.map((event) => {
+
+              const status =
+                getEventStatus(
+                  event,
+                  currentTime
+                );
+
+              const eventBookings =
+                allBookings.filter(
+                  (booking) => {
+                    const eventId =
+                      getBookingEventId(
+                        booking
+                      );
+
+                    const bookingStatus =
+                      String(
+                        booking?.status ||
+                          ""
+                      )
+                        .trim()
+                        .toLowerCase();
+
+                    return (
+                      String(eventId) ===
+                        String(event.id) &&
+                      bookingStatus !==
+                        "cancelled" &&
+                      bookingStatus !==
+                        "canceled"
+                    );
+                  }
+                );
+
+              const ticketsSold =
+                eventBookings.reduce(
+                  (
+                    total,
+                    booking
+                  ) =>
+                    total +
+                    getTicketCount(
+                      booking
+                    ),
+                  0
+                );
+
+              const capacity =
+                Number(
+                  event.capacity || 0
+                );
+
+              const availableSeats =
+                Math.max(
+                  capacity -
+                    ticketsSold,
+                  0
+                );
+
+              return (
+                <div
+                  key={event.id}
+                  className="p-5 transition hover:bg-slate-50"
+                >
+
+                  <div className="flex flex-col gap-5 lg:flex-row">
+
+                    {/* IMAGE */}
+
+                    <div className="h-36 w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-40 sm:w-56">
+
+                      <EventImage
+                        src={event.image}
+                        alt={
+                          event.title ||
+                          "Event"
+                        }
+                      />
+
+                    </div>
+
+                    {/* CONTENT */}
+
+                    <div className="min-w-0 flex-1">
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+                        <div className="min-w-0">
+
+                          <h3 className="truncate text-base font-bold text-slate-900">
+                            {event.title ||
+                              "Untitled Event"}
+                          </h3>
+
+                          <p className="mt-1 break-all text-xs font-medium text-slate-400">
+                            Event ID:{" "}
+                            <span className="font-semibold text-slate-600">
+                              {event.id ||
+                                "—"}
+                            </span>
+                          </p>
+
+                        </div>
+
+                        <StatusBadge
+                          status={
+                            status
+                          }
+                        />
+
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+
+                        <InfoItem
+                          label="Date"
+                          value={
+                            event.date
+                              ? formatDate(
+                                  event.date
+                                )
+                              : "—"
+                          }
+                          icon={
+                            CalendarDays
+                          }
+                        />
+
+                        <InfoItem
+                          label="Time"
+                          value={
+                            event.time
+                              ? `${formatTime(
+                                  event.time
+                                )}${
+                                  event.endTime
+                                    ? ` - ${formatTime(
+                                        event.endTime
+                                      )}`
+                                    : ""
+                                }`
+                              : "—"
+                          }
+                          icon={
+                            Clock3
+                          }
+                        />
+
+                        <InfoItem
+                          label="Location"
+                          value={
+                            event.location ||
+                            event.city ||
+                            "—"
+                          }
+                          icon={
+                            MapPin
+                          }
+                        />
+
+                        <InfoItem
+                          label="Category"
+                          value={
+                            event.category ||
+                            "General"
+                          }
+                        />
+
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 sm:grid-cols-3">
+
+                        <MetricItem
+                          label="Capacity"
+                          value={
+                            capacity ||
+                            "—"
+                          }
+                        />
+
+                        <MetricItem
+                          label="Tickets Sold"
+                          value={
+                            ticketsSold
+                          }
+                        />
+
+                        <MetricItem
+                          label="Available Seats"
+                          value={
+                            capacity
+                              ? availableSeats
+                              : "—"
+                          }
+                        />
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+              );
+            })}
+
+          </div>
+
+        )}
+
+      </section>
+    </div>
+  );
+}
+
+/* ===========================================================
+   EVENT IMAGE
+=========================================================== */
+
+function EventImage({
+  src,
+  alt,
+}) {
+  const [imageError, setImageError] =
+    useState(false);
+
+  if (!src || imageError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-300">
+        <CalendarDays size={34} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-full w-full object-cover"
+      onError={() =>
+        setImageError(true)
+      }
+    />
+  );
+}
+
+/* ===========================================================
+   INFO ITEM
+=========================================================== */
+
+function InfoItem({
+  label,
+  value,
+  icon: Icon,
+}) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2.5">
+
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+
+      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+
+        {Icon && (
+          <Icon
+            size={13}
+            className="shrink-0 text-slate-400"
+          />
+        )}
+
+        <p className="break-words text-xs font-semibold leading-5 text-slate-700">
+          {value}
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* ===========================================================
+   METRIC ITEM
+=========================================================== */
+
+function MetricItem({
+  label,
+  value,
+}) {
+  return (
+    <div>
+
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm font-bold text-slate-800">
+        {Number(value || 0).toLocaleString(
+          "en-IN"
+        )}
+      </p>
+
+    </div>
+  );
+}
+
+/* ===========================================================
+   STAT CARD
+=========================================================== */
+
+function StatCard({
   title,
   value,
   icon: Icon,
   iconClass,
 }) {
   return (
-    <div className="flex min-h-[116px] w-full flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+
+      <div className="flex items-start justify-between gap-4">
+
+        <div>
+
           <p className="text-sm font-medium text-slate-500">
             {title}
           </p>
 
-          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-900">
-            {value}
+          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+            {Number(
+              value || 0
+            ).toLocaleString(
+              "en-IN"
+            )}
           </p>
+
         </div>
 
         <div
@@ -1286,98 +1753,96 @@ function UserDetailStatCard({
         >
           <Icon size={21} />
         </div>
+
       </div>
+
     </div>
   );
 }
 
-/* =========================================================
-   ACCOUNT INFO
-========================================================= */
+/* ===========================================================
+   STATUS BADGE
+=========================================================== */
 
-function InfoItem({
-  label,
-  value,
+function StatusBadge({
+  status,
+}) {
+  const normalizedStatus =
+    String(status || "")
+      .trim()
+      .toLowerCase();
+
+  const statusConfig = {
+    upcoming: {
+      label: "Upcoming",
+      className:
+        "border-amber-200 bg-amber-50 text-amber-700",
+    },
+
+    ongoing: {
+      label: "Ongoing",
+      className:
+        "border-blue-200 bg-blue-50 text-blue-700",
+    },
+
+    completed: {
+      label: "Completed",
+      className:
+        "border-emerald-200 bg-emerald-50 text-emerald-700",
+    },
+
+    cancelled: {
+      label: "Cancelled",
+      className:
+        "border-red-200 bg-red-50 text-red-700",
+    },
+
+    draft: {
+      label: "Draft",
+      className:
+        "border-slate-200 bg-slate-50 text-slate-600",
+    },
+  };
+
+  const config =
+    statusConfig[
+      normalizedStatus
+    ] ||
+    statusConfig.upcoming;
+
+  return (
+    <span
+      className={`inline-flex w-fit shrink-0 items-center rounded-full border px-3 py-1.5 text-xs font-bold ${config.className}`}
+    >
+      {config.label}
+    </span>
+  );
+}
+
+/* ===========================================================
+   EMPTY STATE
+=========================================================== */
+
+function EmptyState({
   icon: Icon,
-  full = false,
+  title,
+  description,
 }) {
   return (
-    <div className="flex min-w-0 gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-        <Icon size={17} />
+    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+        <Icon size={25} />
       </div>
 
-      <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-          {label}
-        </p>
+      <h3 className="mt-4 text-sm font-semibold text-slate-900">
+        {title}
+      </h3>
 
-        <p
-          className={`mt-1 text-sm font-semibold text-slate-700 ${
-            full
-              ? "break-all"
-              : "break-words"
-          }`}
-        >
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   BOOKING META
-========================================================= */
-
-function BookingMeta({
-  icon: Icon,
-  label,
-  value,
-}) {
-  return (
-    <div className="flex items-start gap-3 px-4 py-3.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-400 shadow-sm">
-        <Icon size={15} />
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-          {label}
-        </p>
-
-        <p className="mt-1 break-words text-xs font-semibold leading-5 text-slate-700">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   BOOKING VALUE
-========================================================= */
-
-function BookingValue({
-  label,
-  value,
-  full = false,
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-        {label}
+      <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
+        {description}
       </p>
 
-      <p
-        className={`mt-1 text-sm font-bold text-slate-800 ${
-          full
-            ? "break-all"
-            : "break-words"
-        }`}
-      >
-        {value}
-      </p>
     </div>
   );
 }

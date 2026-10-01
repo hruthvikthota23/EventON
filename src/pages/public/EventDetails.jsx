@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { Link, useParams } from "react-router-dom";
 
 import {
@@ -16,106 +17,322 @@ import {
   EVENTS_UPDATED_EVENT,
 } from "../../utils/eventStorage";
 
-function getEventTimestamp(event) {
-  if (!event?.date) {
-    return Number.POSITIVE_INFINITY;
+/* =========================================================
+   DATE + TIME HELPERS
+========================================================= */
+
+function parseEventDateTime(dateValue, timeValue) {
+  if (!dateValue) {
+    return null;
   }
 
-  const rawDate = String(event.date).trim();
-  let date;
+  const dateText = String(dateValue).trim();
+  const timeText = String(timeValue || "00:00").trim();
 
-  // Treat YYYY-MM-DD as a local calendar date to avoid timezone shifts.
-  const dateOnlyMatch = rawDate.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  let year;
+  let month;
+  let day;
 
-  if (dateOnlyMatch) {
-    date = new Date(
-      Number(dateOnlyMatch[1]),
-      Number(dateOnlyMatch[2]) - 1,
-      Number(dateOnlyMatch[3]),
-      0,
-      0,
-      0,
-      0
-    );
-  } else {
-    date = new Date(rawDate);
+  /*
+   * YYYY-MM-DD
+   */
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    [year, month, day] = dateText
+      .split("-")
+      .map(Number);
   }
 
-  if (Number.isNaN(date.getTime())) {
-    return Number.POSITIVE_INFINITY;
+  /*
+   * DD-MM-YYYY
+   * DD/MM/YYYY
+   */
+  else if (/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(dateText)) {
+    [day, month, year] = dateText
+      .split(/[-/]/)
+      .map(Number);
   }
 
-  const time = String(event.time || "").trim();
-  const match = time.match(
-    /^(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)?$/i
+  /*
+   * Any other valid date string
+   */
+  else {
+    const parsed = new Date(dateText);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    year = parsed.getFullYear();
+    month = parsed.getMonth() + 1;
+    day = parsed.getDate();
+  }
+
+  /*
+   * Supports:
+   *
+   * 17:30
+   * 17:30:00
+   * 5:30 PM
+   * 05:30 PM
+   */
+  const timeMatch = timeText.match(
+    /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
   );
 
-  if (match) {
-    let hours = Number(match[1]);
-    const minutes = Number(match[2] || 0);
-    const period = match[3]?.toUpperCase();
-
-    if (period === "PM" && hours < 12) {
-      hours += 12;
-    }
-
-    if (period === "AM" && hours === 12) {
-      hours = 0;
-    }
-
-    if (
-      hours >= 0 &&
-      hours <= 23 &&
-      minutes >= 0 &&
-      minutes <= 59
-    ) {
-      date.setHours(hours, minutes, 0, 0);
-    }
+  if (!timeMatch) {
+    return null;
   }
 
-  return date.getTime();
+  let hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const second = Number(timeMatch[3] || 0);
+
+  const meridiem = timeMatch[4]?.toUpperCase();
+
+  /*
+   * Convert 12-hour time to 24-hour time
+   */
+  if (meridiem === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (meridiem === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  /*
+   * Validate time
+   */
+  if (
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59
+  ) {
+    return null;
+  }
+
+  /*
+   * IMPORTANT:
+   * Create the date using local browser time.
+   * This prevents timezone shifting for
+   * YYYY-MM-DD event dates.
+   */
+  const result = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    0
+  );
+
+  return Number.isNaN(result.getTime())
+    ? null
+    : result;
 }
 
-function isEventCompleted(event, currentTime = Date.now()) {
-  const timestamp = getEventTimestamp(event);
+/* =========================================================
+   EVENT START
+========================================================= */
 
-  return Number.isFinite(timestamp) && timestamp < currentTime;
+function getEventStart(event) {
+  if (!event) {
+    return null;
+  }
+
+  return parseEventDateTime(
+    event.date,
+    event.time || event.startTime
+  );
 }
+
+/* =========================================================
+   EVENT END
+========================================================= */
+
+function getEventEnd(event) {
+  if (!event) {
+    return null;
+  }
+
+  const endTime =
+    event.endTime ||
+    event.finishTime;
+
+  /*
+   * If there is no end time, we cannot determine
+   * the exact completion time.
+   */
+  if (!endTime) {
+    return null;
+  }
+
+  return parseEventDateTime(
+    event.date,
+    endTime
+  );
+}
+
+/* =========================================================
+   EVENT STATUS
+
+   Upcoming
+   Ongoing
+   Completed
+   Cancelled
+   Draft
+========================================================= */
+
+function getEventStatus(
+  event,
+  currentTime = Date.now()
+) {
+  const storedStatus = String(
+    event?.status || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  /*
+   * Stored cancellation always takes priority.
+   */
+  if (
+    storedStatus === "cancelled" ||
+    storedStatus === "canceled"
+  ) {
+    return "cancelled";
+  }
+
+  /*
+   * Draft event
+   */
+  if (storedStatus === "draft") {
+    return "draft";
+  }
+
+  const start = getEventStart(event);
+  const end = getEventEnd(event);
+
+  /*
+   * If start time is unavailable,
+   * do not incorrectly mark the event completed.
+   */
+  if (!start) {
+    return "upcoming";
+  }
+
+  /*
+   * BEFORE EVENT START
+   *
+   * Example:
+   * Current = 17:14
+   * Start   = 17:30
+   *
+   * Result = Upcoming
+   */
+  if (currentTime < start.getTime()) {
+    return "upcoming";
+  }
+
+  /*
+   * EVENT HAS STARTED
+   *
+   * If an end time exists:
+   *
+   * 17:30 <= current < 18:30
+   * => Ongoing
+   */
+  if (end) {
+    if (currentTime < end.getTime()) {
+      return "ongoing";
+    }
+
+    /*
+     * Current time has reached/passed end time.
+     *
+     * 18:30+
+     * => Completed
+     */
+    return "completed";
+  }
+
+  /*
+   * No end time was supplied.
+   *
+   * Once the event starts, keep it ongoing
+   * instead of incorrectly marking it completed.
+   */
+  return "ongoing";
+}
+
+/* =========================================================
+   COMPLETED CHECK
+========================================================= */
+
+function isEventCompleted(
+  event,
+  currentTime = Date.now()
+) {
+  return (
+    getEventStatus(
+      event,
+      currentTime
+    ) === "completed"
+  );
+}
+
+/* =========================================================
+   EVENT DETAILS
+========================================================= */
 
 function EventDetails() {
   const { id } = useParams();
 
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [currentTime, setCurrentTime] =
+    useState(() => Date.now());
 
-  // =========================================================
-  // EVENT STATE
-  // =========================================================
+  /* =======================================================
+     EVENT STATE
+  ======================================================= */
 
   const [event, setEvent] = useState(() =>
     getStoredEventById(id)
   );
 
-  // =========================================================
-  // LOAD EVENT
-  // =========================================================
+  /* =======================================================
+     LOAD EVENT
+  ======================================================= */
 
   useEffect(() => {
     const loadEvent = () => {
-      const storedEvent = getStoredEventById(id);
+      const storedEvent =
+        getStoredEventById(id);
+
       setEvent(storedEvent);
     };
 
     loadEvent();
 
-    // Refresh when EventON updates an event
+    /*
+     * Refresh when EventON updates an event
+     */
     window.addEventListener(
       EVENTS_UPDATED_EVENT,
       loadEvent
     );
 
-    // Refresh when localStorage changes
-    // from another browser tab
-    window.addEventListener("storage", loadEvent);
+    /*
+     * Refresh when localStorage changes
+     * from another browser tab
+     */
+    window.addEventListener(
+      "storage",
+      loadEvent
+    );
 
     return () => {
       window.removeEventListener(
@@ -130,26 +347,32 @@ function EventDetails() {
     };
   }, [id]);
 
+  /* =======================================================
+     LIVE CLOCK
+
+     Re-check event status every minute.
+  ======================================================= */
+
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 60 * 1000);
+    const intervalId =
+      window.setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 60 * 1000);
 
     return () => {
       window.clearInterval(intervalId);
     };
   }, []);
 
-  // =========================================================
-  // EVENT NOT FOUND
-  // =========================================================
+  /* =======================================================
+     EVENT NOT FOUND
+  ======================================================= */
 
   if (!event) {
     return (
       <main className="min-h-screen bg-slate-50">
         <section className="mx-auto flex min-h-[70vh] w-full max-w-7xl items-center justify-center px-5 py-16 sm:px-8 lg:px-10">
           <div className="max-w-md text-center">
-
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
               <Ticket
                 size={28}
@@ -173,22 +396,41 @@ function EventDetails() {
               <ArrowLeft size={17} />
               Back to events
             </Link>
-
           </div>
         </section>
       </main>
     );
   }
 
-  // =========================================================
-  // EVENT LIFECYCLE + AVAILABILITY
-  // =========================================================
+  /* =======================================================
+     EVENT LIFECYCLE + AVAILABILITY
+  ======================================================= */
 
-  const eventCompleted = isEventCompleted(event, currentTime);
+  const eventStatus = getEventStatus(
+    event,
+    currentTime
+  );
 
-  const capacity = Number(event.capacity) || 0;
+  const eventCompleted =
+    eventStatus === "completed";
+
+  const eventCancelled =
+    eventStatus === "cancelled";
+
+  const eventOngoing =
+    eventStatus === "ongoing";
+
+  const eventUpcoming =
+    eventStatus === "upcoming";
+
+  const capacity =
+    Number(event.capacity) || 0;
+
   const bookedSeats = Math.min(
-    Math.max(Number(event.bookedSeats) || 0, 0),
+    Math.max(
+      Number(event.bookedSeats) || 0,
+      0
+    ),
     Math.max(capacity, 0)
   );
 
@@ -197,18 +439,33 @@ function EventDetails() {
     0
   );
 
+  /*
+   * Sold out should only apply to an event
+   * that is still active.
+   */
   const soldOut =
     !eventCompleted &&
-    (availableSeats <= 0 ||
-      String(event.status || "").trim().toLowerCase() === "sold-out");
+    !eventCancelled &&
+    !eventOngoing &&
+    (
+      availableSeats <= 0 ||
+      String(event.status || "")
+        .trim()
+        .toLowerCase() === "sold-out"
+    );
 
-  // A completed event must never expose a booking action, even if
-  // its stored status still says "published" or it has free seats.
-  const bookingClosed = eventCompleted || soldOut;
+  /*
+   * Completed/cancelled/sold-out events
+   * cannot be booked.
+   */
+  const bookingClosed =
+    eventCompleted ||
+    eventCancelled ||
+    soldOut;
 
-  // =========================================================
-  // DATE
-  // =========================================================
+  /* =======================================================
+     DATE
+  ======================================================= */
 
   const formattedDate = new Date(
     event.date
@@ -219,9 +476,9 @@ function EventDetails() {
     year: "numeric",
   });
 
-  // =========================================================
-  // UI
-  // =========================================================
+  /* =======================================================
+     UI
+  ======================================================= */
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -232,7 +489,6 @@ function EventDetails() {
 
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-7xl px-5 py-4 sm:px-8 lg:px-10">
-
           <Link
             to="/events"
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-slate-900"
@@ -240,7 +496,6 @@ function EventDetails() {
             <ArrowLeft size={17} />
             Back to events
           </Link>
-
         </div>
       </div>
 
@@ -249,9 +504,7 @@ function EventDetails() {
       ====================================================== */}
 
       <section className="bg-white">
-
-        <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
-
+        <div className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 sm:py-14 lg:px-10 lg:py-16">
           <div className="grid gap-8 lg:grid-cols-[1.35fr_1fr] lg:items-start lg:gap-12">
 
             {/* =================================================
@@ -289,6 +542,12 @@ function EventDetails() {
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
                   <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900">
                     Completed
+                  </span>
+                </div>
+              ) : eventCancelled ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55">
+                  <span className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-red-600">
+                    Cancelled
                   </span>
                 </div>
               ) : (
@@ -330,13 +589,11 @@ function EventDetails() {
                 {/* Date */}
 
                 <div className="flex items-start gap-3">
-
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                     <CalendarDays size={19} />
                   </div>
 
                   <div>
-
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                       Date
                     </p>
@@ -344,21 +601,17 @@ function EventDetails() {
                     <p className="mt-1 text-sm font-semibold text-slate-900">
                       {formattedDate}
                     </p>
-
                   </div>
-
                 </div>
 
                 {/* Time */}
 
                 <div className="flex items-start gap-3">
-
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                     <Clock3 size={19} />
                   </div>
 
                   <div>
-
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                       Time
                     </p>
@@ -370,21 +623,17 @@ function EventDetails() {
                         ? ` – ${event.endTime}`
                         : ""}
                     </p>
-
                   </div>
-
                 </div>
 
                 {/* Location */}
 
                 <div className="flex items-start gap-3">
-
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600">
                     <MapPin size={19} />
                   </div>
 
                   <div>
-
                     <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                       Location
                     </p>
@@ -398,9 +647,7 @@ function EventDetails() {
                         {event.city}
                       </p>
                     )}
-
                   </div>
-
                 </div>
 
               </div>
@@ -410,23 +657,20 @@ function EventDetails() {
               ================================================== */}
 
               <div className="mt-7 border-t border-slate-200 pt-6">
-
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   Organized by
                 </p>
 
                 <p className="mt-1 text-sm font-semibold text-slate-900">
-                  {event.organizer || "EventON Organizer"}
+                  {event.organizer ||
+                    "EventON Organizer"}
                 </p>
-
               </div>
 
             </div>
 
           </div>
-
         </div>
-
       </section>
 
       {/* =====================================================
@@ -434,9 +678,7 @@ function EventDetails() {
       ====================================================== */}
 
       <section className="border-t border-slate-200 bg-slate-50">
-
         <div className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8 sm:py-14 lg:px-10">
-
           <div className="grid gap-8 lg:grid-cols-[1fr_380px] lg:items-start">
 
             {/* =================================================
@@ -460,7 +702,6 @@ function EventDetails() {
                 {/* Capacity */}
 
                 <div className="rounded-xl bg-slate-50 p-4">
-
                   <div className="flex items-center gap-3">
 
                     <Users
@@ -469,7 +710,6 @@ function EventDetails() {
                     />
 
                     <div>
-
                       <p className="text-xs text-slate-400">
                         Capacity
                       </p>
@@ -477,17 +717,14 @@ function EventDetails() {
                       <p className="mt-1 text-sm font-semibold text-slate-900">
                         {capacity} attendees
                       </p>
-
                     </div>
 
                   </div>
-
                 </div>
 
                 {/* Availability */}
 
                 <div className="rounded-xl bg-slate-50 p-4">
-
                   <div className="flex items-center gap-3">
 
                     <CheckCircle2
@@ -495,32 +732,34 @@ function EventDetails() {
                       className={
                         soldOut
                           ? "text-red-500"
+                          : eventCompleted
+                          ? "text-slate-500"
                           : "text-green-500"
                       }
                     />
 
                     <div>
-
                       <p className="text-xs text-slate-400">
                         Availability
                       </p>
 
                       <p className="mt-1 text-sm font-semibold text-slate-900">
-                        {eventCompleted
+                        {eventCancelled
+                          ? "Event cancelled"
+                          : eventCompleted
                           ? "Event completed"
                           : soldOut
-                            ? "Sold out"
-                            : `${availableSeats} seats left`}
+                          ? "Sold out"
+                          : eventOngoing
+                          ? "Event is ongoing"
+                          : `${availableSeats} seats left`}
                       </p>
-
                     </div>
 
                   </div>
-
                 </div>
 
               </div>
-
             </div>
 
             {/* =================================================
@@ -538,7 +777,6 @@ function EventDetails() {
                 <div className="mt-2 flex items-end justify-between gap-4">
 
                   <div>
-
                     <span className="text-3xl font-bold text-slate-900">
                       ₹{Number(event.price) || 0}
                     </span>
@@ -546,7 +784,6 @@ function EventDetails() {
                     <span className="ml-1 text-sm text-slate-500">
                       / person
                     </span>
-
                   </div>
 
                   {!bookingClosed && (
@@ -555,9 +792,21 @@ function EventDetails() {
                     </span>
                   )}
 
+                  {eventOngoing && (
+                    <span className="text-xs font-semibold text-blue-600">
+                      Ongoing
+                    </span>
+                  )}
+
                   {eventCompleted && (
                     <span className="text-xs font-semibold text-slate-500">
                       Completed
+                    </span>
+                  )}
+
+                  {eventCancelled && (
+                    <span className="text-xs font-semibold text-red-500">
+                      Cancelled
                     </span>
                   )}
 
@@ -574,6 +823,14 @@ function EventDetails() {
                     className="flex h-12 w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 text-sm font-semibold text-slate-500"
                   >
                     Event Completed
+                  </button>
+                ) : eventCancelled ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex h-12 w-full cursor-not-allowed items-center justify-center rounded-xl bg-slate-200 text-sm font-semibold text-slate-500"
+                  >
+                    Event Cancelled
                   </button>
                 ) : soldOut ? (
                   <button
@@ -595,9 +852,13 @@ function EventDetails() {
                 <p className="mt-4 text-center text-xs leading-5 text-slate-400">
                   {eventCompleted
                     ? "This event has already ended."
+                    : eventCancelled
+                    ? "This event has been cancelled."
                     : soldOut
-                      ? "Tickets for this event are sold out."
-                      : "Secure your spot before tickets run out."}
+                    ? "Tickets for this event are sold out."
+                    : eventOngoing
+                    ? "This event is currently ongoing."
+                    : "Secure your spot before tickets run out."}
                 </p>
 
               </div>
@@ -605,9 +866,7 @@ function EventDetails() {
             </aside>
 
           </div>
-
         </div>
-
       </section>
 
     </main>

@@ -170,19 +170,6 @@ function UpcomingEvents() {
             </p>
 
           </div>
-
-          <Link
-            to="/events"
-            className="group inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-700 transition hover:text-orange-500"
-          >
-            Explore all events
-
-            <ArrowRight
-              size={17}
-              className="transition-transform group-hover:translate-x-1"
-            />
-          </Link>
-
         </div>
 
         {/* Events */}

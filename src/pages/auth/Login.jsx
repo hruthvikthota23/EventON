@@ -110,7 +110,7 @@ function Login() {
     }
 
     if (role === "organizer") {
-      navigate("/", {
+      navigate("/organizer", {
         replace: true,
       });
 
@@ -1458,6 +1458,8 @@ function Login() {
 
           overflow:
             hidden;
+              
+          transform: translateY(-30px);
         }
 
         /* =========================================

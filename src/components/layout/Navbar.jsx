@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Search,
   User,
   X,
 } from "lucide-react";
@@ -22,6 +21,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+
 
 function Navbar() {
   const navigate = useNavigate();
@@ -43,18 +43,11 @@ function Navbar() {
   const [isAccountOpen, setIsAccountOpen] =
     useState(false);
 
-  const [isSearchOpen, setIsSearchOpen] =
-    useState(false);
-
-  const [searchQuery, setSearchQuery] =
-    useState("");
-
   // =========================================================
   // REFS
   // =========================================================
 
-  const searchInputRef = useRef(null);
-  const searchContainerRef = useRef(null);
+  const accountCloseTimerRef = useRef(null);
 
   // =========================================================
   // ROLE
@@ -68,6 +61,73 @@ function Navbar() {
 
   const isOrganizer = role === "organizer";
   const isAdmin = role === "admin";
+
+  // =========================================================
+  // ROLE-BASED PROFILE PATH
+  // =========================================================
+
+  const profilePath =
+    isAdmin
+      ? "/admin/profile"
+      : isOrganizer
+      ? "/organizer/profile"
+      : "/profile";
+
+  // =========================================================
+  // SCROLL TO TOP
+  // =========================================================
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  // =========================================================
+  // SCROLL TO TOP WHEN ROUTE CHANGES
+  // =========================================================
+  //
+  // This handles navigation such as:
+  //
+  // Home -> Events
+  // Events -> About
+  // About -> Home
+  // Profile -> My Bookings
+  // Dashboard -> Profile
+  //
+  // =========================================================
+
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }, [location.pathname]);
+
+  // =========================================================
+  // NAVIGATION HANDLER
+  // =========================================================
+  //
+  // If clicking the current page:
+  //     manually scroll to top.
+  //
+  // If clicking another page:
+  //     navigate to that page.
+  //     useEffect above handles the scroll.
+  //
+  // =========================================================
+
+  const handleNavigation = (path) => {
+    closeMenus();
+
+    if (location.pathname === path) {
+      scrollToTop();
+      return;
+    }
+
+    navigate(path);
+  };
 
   // =========================================================
   // USER INITIALS
@@ -103,196 +163,34 @@ function Navbar() {
   };
 
   // =========================================================
-  // HOME / LOGO
+  // ACCOUNT DROPDOWN
   // =========================================================
 
-  const goToHomeHero = () => {
-    closeMenus();
-
-    setIsSearchOpen(false);
-    setSearchQuery("");
-
-    if (location.pathname === "/") {
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-
-      return;
-    }
-
-    navigate("/");
-
-    setTimeout(() => {
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-    }, 100);
-  };
-
-  // =========================================================
-  // DESKTOP SEARCH
-  // =========================================================
-
-  const handleSearchIconClick = () => {
-    // -------------------------------------------------------
-    // OPEN SEARCH
-    // -------------------------------------------------------
-
-    setIsSearchOpen((previous) => {
-      const nextState = !previous;
-
-      if (nextState) {
-        // Search opens -> close everything else
-        setIsAccountOpen(false);
-        setIsMobileMenuOpen(false);
-      }
-
-      return nextState;
-    });
-
-    // If search is being closed, clear the text
-    if (isSearchOpen) {
-      setSearchQuery("");
+  const clearAccountCloseTimer = () => {
+    if (accountCloseTimerRef.current) {
+      clearTimeout(accountCloseTimerRef.current);
+      accountCloseTimerRef.current = null;
     }
   };
 
-  // =========================================================
-  // SEARCH SUBMIT
-  // =========================================================
-
-  const handleSearchSubmit = (event) => {
-    event.preventDefault();
-
-    const query = searchQuery.trim();
-
-    // Empty search
-    if (!query) {
-      searchInputRef.current?.focus();
-      return;
-    }
-
-    navigate(
-      `/events?search=${encodeURIComponent(query)}`
-    );
-
-    // Close search after navigation
-    setSearchQuery("");
-    setIsSearchOpen(false);
-  };
-
-  // =========================================================
-  // SEARCH INPUT FOCUS
-  // =========================================================
-
-  useEffect(() => {
-    if (!isSearchOpen) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      searchInputRef.current?.focus();
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [isSearchOpen]);
-
-  // =========================================================
-  // CLOSE SEARCH WHEN CLICKING OUTSIDE
-  // =========================================================
-
-  useEffect(() => {
-    if (!isSearchOpen) {
-      return;
-    }
-
-    const handleOutsideClick = (event) => {
-      if (
-        searchContainerRef.current &&
-        !searchContainerRef.current.contains(
-          event.target
-        )
-      ) {
-        setIsSearchOpen(false);
-        setSearchQuery("");
-      }
-    };
-
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-    };
-  }, [isSearchOpen]);
-
-  // =========================================================
-  // ESCAPE KEY
-  // =========================================================
-
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setIsSearchOpen(false);
-        setSearchQuery("");
-      }
-    };
-
-    document.addEventListener(
-      "keydown",
-      handleEscape
-    );
-
-    return () => {
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
-    };
-  }, []);
-
-  // =========================================================
-  // ACCOUNT
-  // =========================================================
-
-  const handleAccountClick = () => {
-    setIsAccountOpen((previous) => !previous);
-
-    // Account opens -> search must close
-    setIsSearchOpen(false);
-    setSearchQuery("");
-
-    setIsMobileMenuOpen(false);
-  };
-
-  // =========================================================
-  // ACCOUNT HOVER
-  // =========================================================
-
-  const handleAccountMouseEnter = () => {
-    // -------------------------------------------------------
-    // IMPORTANT:
-    // Do NOT open account dropdown while search is open.
-    // This prevents the two popups from overlapping.
-    // -------------------------------------------------------
-
-    if (isSearchOpen) {
-      return;
-    }
-
+  const openAccountDropdown = () => {
+    clearAccountCloseTimer();
     setIsAccountOpen(true);
   };
 
-  const handleAccountMouseLeave = () => {
-    setIsAccountOpen(false);
+  const closeAccountDropdown = () => {
+    clearAccountCloseTimer();
+
+    accountCloseTimerRef.current = setTimeout(() => {
+      setIsAccountOpen(false);
+    }, 120);
+  };
+
+  const handleAccountClick = () => {
+    clearAccountCloseTimer();
+
+    setIsAccountOpen((previous) => !previous);
+    setIsMobileMenuOpen(false);
   };
 
   // =========================================================
@@ -300,14 +198,13 @@ function Navbar() {
   // =========================================================
 
   const handleLogout = () => {
-    closeMenus();
+    clearAccountCloseTimer();
 
-    setIsSearchOpen(false);
-    setSearchQuery("");
+    closeMenus();
 
     logout();
 
-    navigate("/", {
+    navigate("/login", {
       replace: true,
     });
   };
@@ -321,15 +218,14 @@ function Navbar() {
 
     setIsAccountOpen(false);
 
-    setIsSearchOpen(false);
-    setSearchQuery("");
+    clearAccountCloseTimer();
   };
 
   const handleMobileNavigation = () => {
     setIsMobileMenuOpen(false);
     setIsAccountOpen(false);
-    setIsSearchOpen(false);
-    setSearchQuery("");
+
+    clearAccountCloseTimer();
   };
 
   // =========================================================
@@ -358,7 +254,7 @@ function Navbar() {
 
         <button
           type="button"
-          onClick={goToHomeHero}
+          onClick={() => handleNavigation("/")}
           className="flex h-10 shrink-0 items-center gap-3"
           aria-label="Go to EventON home"
         >
@@ -379,34 +275,39 @@ function Navbar() {
 
         {/* ===================================================
             CENTER NAVIGATION
-
-            Search is NOT inside this area.
-            Therefore it cannot overlap these links.
         =================================================== */}
 
         <nav className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex lg:gap-10">
 
-          <Link
-            to="/"
-            onClick={goToHomeHero}
+          {/* HOME */}
+
+          <button
+            type="button"
+            onClick={() => handleNavigation("/")}
             className={desktopNavLink}
           >
             Home
-          </Link>
+          </button>
 
-          <Link
-            to="/events"
+          {/* EVENTS */}
+
+          <button
+            type="button"
+            onClick={() => handleNavigation("/events")}
             className={desktopNavLink}
           >
             Events
-          </Link>
+          </button>
 
-          <Link
-            to="/about"
+          {/* ABOUT */}
+
+          <button
+            type="button"
+            onClick={() => handleNavigation("/about")}
             className={desktopNavLink}
           >
             About Us
-          </Link>
+          </button>
 
         </nav>
 
@@ -417,113 +318,27 @@ function Navbar() {
         <div className="ml-auto flex h-10 items-center">
 
           {/* =================================================
-              DESKTOP SEARCH
-          ================================================= */}
-
-          <div
-            ref={searchContainerRef}
-            className="relative hidden h-10 md:block"
-          >
-
-            {/* SEARCH BUTTON */}
-
-            <button
-              type="button"
-              aria-label="Search events"
-              aria-expanded={isSearchOpen}
-              onClick={handleSearchIconClick}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-colors duration-200 hover:bg-slate-100 hover:text-orange-500 ${
-                isSearchOpen
-                  ? "bg-slate-100 text-orange-500"
-                  : ""
-              }`}
-            >
-              <Search
-                size={20}
-                strokeWidth={2}
-              />
-            </button>
-
-            {/* =================================================
-                FLOATING SEARCH POPUP
-            ================================================= */}
-
-            <div
-              className={`absolute right-0 top-[calc(100%+10px)] z-[70] w-[min(320px,calc(100vw-32px))] origin-top-right transition-all duration-200 ${
-                isSearchOpen
-                  ? "visible translate-y-0 scale-100 opacity-100"
-                  : "invisible -translate-y-2 scale-95 opacity-0"
-              }`}
-            >
-
-              <form
-                onSubmit={handleSearchSubmit}
-                className="flex h-11 items-center rounded-xl border border-slate-200 bg-white px-2 shadow-lg shadow-slate-200/50"
-              >
-
-                <Search
-                  size={18}
-                  strokeWidth={2}
-                  className="ml-2 shrink-0 text-slate-400"
-                />
-
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(event) => {
-                    setSearchQuery(
-                      event.target.value
-                    );
-                  }}
-                  placeholder="Search events..."
-                  autoComplete="off"
-                  className="min-w-0 flex-1 bg-transparent px-3 text-sm font-normal text-slate-800 outline-none placeholder:text-slate-400"
-                />
-
-                {/* CLOSE SEARCH */}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSearchOpen(false);
-                    setSearchQuery("");
-                  }}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Close search"
-                >
-                  <X size={16} />
-                </button>
-
-              </form>
-
-            </div>
-
-          </div>
-
-          {/* =================================================
               ACCOUNT
           ================================================= */}
 
           {isAuthenticated ? (
 
             <div
-              className="relative ml-2 hidden h-10 md:block"
-              onMouseEnter={
-                handleAccountMouseEnter
-              }
-              onMouseLeave={
-                handleAccountMouseLeave
-              }
+              className="relative hidden h-10 md:block"
+              onMouseEnter={openAccountDropdown}
+              onMouseLeave={closeAccountDropdown}
             >
 
-              {/* ACCOUNT BUTTON */}
+              {/* =================================================
+                  ACCOUNT BUTTON
+              ================================================= */}
 
               <button
                 type="button"
                 onClick={handleAccountClick}
                 className="flex h-10 items-center gap-2 rounded-xl px-2.5 transition-colors duration-200 hover:bg-slate-100"
                 aria-expanded={isAccountOpen}
+                aria-haspopup="menu"
               >
 
                 {/* AVATAR */}
@@ -556,113 +371,130 @@ function Navbar() {
               ================================================= */}
 
               <div
-                className={`absolute right-0 top-full mt-2 w-60 origin-top-right rounded-2xl border border-slate-200 bg-white p-2 shadow-xl transition-all duration-200 ${
+                className={`absolute left-1/2 top-full z-[70] -translate-x-1/2 pt-2 ${
                   isAccountOpen
-                    ? "visible translate-y-0 scale-100 opacity-100"
-                    : "invisible -translate-y-2 scale-95 opacity-0"
+                    ? "visible"
+                    : "invisible"
                 }`}
+                onMouseEnter={openAccountDropdown}
+                onMouseLeave={closeAccountDropdown}
               >
 
-                {/* USER INFO */}
+                <div
+                  className={`w-60 origin-top rounded-2xl border border-slate-200 bg-white p-2 shadow-xl transition-all duration-200 ${
+                    isAccountOpen
+                      ? "translate-y-0 scale-100 opacity-100"
+                      : "-translate-y-2 scale-95 opacity-0"
+                  }`}
+                >
 
-                <div className="border-b border-slate-100 px-3 py-3">
+                  {/* USER INFO */}
 
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {user?.name || "User"}
-                  </p>
+                  <div className="border-b border-slate-100 px-3 py-3">
 
-                  <p className="mt-0.5 truncate text-xs text-slate-500">
-                    {user?.email || ""}
-                  </p>
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {user?.name || "User"}
+                    </p>
+
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {user?.email || ""}
+                    </p>
+
+                  </div>
+
+                  {/* ORGANIZER DASHBOARD */}
+
+                  {isOrganizer && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleNavigation("/organizer")
+                      }
+                      className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+                    >
+                      <LayoutDashboard
+                        size={18}
+                      />
+
+                      <span>
+                        Dashboard
+                      </span>
+                    </button>
+                  )}
+
+                  {/* ADMIN DASHBOARD */}
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleNavigation("/admin")
+                      }
+                      className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+                    >
+                      <LayoutDashboard
+                        size={18}
+                      />
+
+                      <span>
+                        Admin Dashboard
+                      </span>
+                    </button>
+                  )}
+
+                  {/* MY PROFILE */}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleNavigation(profilePath)
+                    }
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+                  >
+                    <User size={18} />
+
+                    <span>
+                      My Profile
+                    </span>
+                  </button>
+
+                  {/* MY BOOKINGS */}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleNavigation("/my-bookings")
+                    }
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+                  >
+                    <CalendarDays
+                      size={18}
+                    />
+
+                    <span>
+                      My Bookings
+                    </span>
+                  </button>
+
+                  {/* DIVIDER */}
+
+                  <div className="my-1 border-t border-slate-100" />
+
+                  {/* LOGOUT */}
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                  >
+                    <LogOut size={18} />
+
+                    <span>
+                      Logout
+                    </span>
+                  </button>
 
                 </div>
-
-                {/* ORGANIZER DASHBOARD */}
-
-                {isOrganizer && (
-                  <Link
-                    to="/organizer"
-                    onClick={() =>
-                      setIsAccountOpen(false)
-                    }
-                    className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
-                  >
-                    <LayoutDashboard size={18} />
-
-                    <span>
-                      Dashboard
-                    </span>
-                  </Link>
-                )}
-
-                {/* ADMIN DASHBOARD */}
-
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() =>
-                      setIsAccountOpen(false)
-                    }
-                    className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
-                  >
-                    <LayoutDashboard size={18} />
-
-                    <span>
-                      Admin Dashboard
-                    </span>
-                  </Link>
-                )}
-
-                {/* MY PROFILE */}
-
-                <Link
-                  to="/profile"
-                  onClick={() =>
-                    setIsAccountOpen(false)
-                  }
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
-                >
-                  <User size={18} />
-
-                  <span>
-                    My Profile
-                  </span>
-                </Link>
-
-                {/* MY BOOKINGS */}
-
-                <Link
-                  to="/bookings"
-                  onClick={() =>
-                    setIsAccountOpen(false)
-                  }
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
-                >
-                  <CalendarDays size={18} />
-
-                  <span>
-                    My Bookings
-                  </span>
-                </Link>
-
-                {/* DIVIDER */}
-
-                <div className="my-1 border-t border-slate-100" />
-
-                {/* LOGOUT */}
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-                >
-                  <LogOut size={18} />
-
-                  <span>
-                    Logout
-                  </span>
-                </button>
-
               </div>
 
             </div>
@@ -673,24 +505,29 @@ function Navbar() {
                LOGGED OUT
             ================================================= */
 
-            <div className="ml-2 hidden h-10 items-center gap-2 md:flex">
+            <div className="hidden h-10 items-center gap-2 md:flex">
 
-              <Link
-                to="/login"
+              <button
+                type="button"
+                onClick={() =>
+                  handleNavigation("/login")
+                }
                 className="inline-flex h-10 items-center rounded-xl px-4 text-sm font-medium leading-5 text-slate-600 transition-colors duration-200 hover:text-orange-500"
               >
                 Login
-              </Link>
+              </button>
 
-              <Link
-                to="/register"
+              <button
+                type="button"
+                onClick={() =>
+                  handleNavigation("/register")
+                }
                 className="inline-flex h-10 items-center rounded-xl bg-orange-500 px-4 text-sm font-semibold leading-5 text-white transition-all duration-200 hover:bg-orange-600 hover:shadow-md"
               >
                 Register
-              </Link>
+              </button>
 
             </div>
-
           )}
 
           {/* =================================================
@@ -712,7 +549,6 @@ function Navbar() {
           </button>
 
         </div>
-
       </div>
 
       {/* =====================================================
@@ -730,69 +566,49 @@ function Navbar() {
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
 
           {/* =================================================
-              MOBILE SEARCH
-          ================================================= */}
-
-          <form
-            onSubmit={(event) => {
-              handleSearchSubmit(event);
-              setIsMobileMenuOpen(false);
-            }}
-            className="mb-4 flex h-11 items-center rounded-xl border border-slate-200 bg-slate-50 px-3"
-          >
-
-            <Search
-              size={18}
-              className="mr-2 shrink-0 text-slate-400"
-            />
-
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(event) =>
-                setSearchQuery(
-                  event.target.value
-                )
-              }
-              placeholder="Search events..."
-              autoComplete="off"
-              className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
-            />
-
-          </form>
-
-          {/* =================================================
               MOBILE NAVIGATION
           ================================================= */}
 
           <nav className="flex flex-col gap-1">
 
-            <Link
-              to="/"
+            {/* HOME */}
+
+            <button
+              type="button"
               onClick={() => {
-                goToHomeHero();
+                handleNavigation("/");
                 handleMobileNavigation();
               }}
-              className="rounded-xl px-3 py-3 text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-orange-500"
+              className="rounded-xl px-3 py-3 text-left text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-orange-500"
             >
               Home
-            </Link>
+            </button>
 
-            <Link
-              to="/events"
-              onClick={handleMobileNavigation}
-              className="rounded-xl px-3 py-3 text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-orange-500"
+            {/* EVENTS */}
+
+            <button
+              type="button"
+              onClick={() => {
+                handleNavigation("/events");
+                handleMobileNavigation();
+              }}
+              className="rounded-xl px-3 py-3 text-left text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-orange-500"
             >
               Events
-            </Link>
+            </button>
 
-            <Link
-              to="/about"
-              onClick={handleMobileNavigation}
-              className="rounded-xl px-3 py-3 text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-orange-500"
+            {/* ABOUT */}
+
+            <button
+              type="button"
+              onClick={() => {
+                handleNavigation("/about");
+                handleMobileNavigation();
+              }}
+              className="rounded-xl px-3 py-3 text-left text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-orange-500"
             >
               About Us
-            </Link>
+            </button>
 
           </nav>
 
@@ -829,62 +645,80 @@ function Navbar() {
               {/* ORGANIZER DASHBOARD */}
 
               {isOrganizer && (
-                <Link
-                  to="/organizer"
-                  onClick={handleMobileNavigation}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleNavigation("/organizer");
+                    handleMobileNavigation();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
                 >
-                  <LayoutDashboard size={18} />
+                  <LayoutDashboard
+                    size={18}
+                  />
 
                   <span>
                     Dashboard
                   </span>
-                </Link>
+                </button>
               )}
 
               {/* ADMIN DASHBOARD */}
 
               {isAdmin && (
-                <Link
-                  to="/admin"
-                  onClick={handleMobileNavigation}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleNavigation("/admin");
+                    handleMobileNavigation();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
                 >
-                  <LayoutDashboard size={18} />
+                  <LayoutDashboard
+                    size={18}
+                  />
 
                   <span>
                     Admin Dashboard
                   </span>
-                </Link>
+                </button>
               )}
 
               {/* MY PROFILE */}
 
-              <Link
-                to="/profile"
-                onClick={handleMobileNavigation}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+              <button
+                type="button"
+                onClick={() => {
+                  handleNavigation(profilePath);
+                  handleMobileNavigation();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
               >
                 <User size={18} />
 
                 <span>
                   My Profile
                 </span>
-              </Link>
+              </button>
 
               {/* MY BOOKINGS */}
 
-              <Link
-                to="/bookings"
-                onClick={handleMobileNavigation}
-                className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
+              <button
+                type="button"
+                onClick={() => {
+                  handleNavigation("/my-bookings");
+                  handleMobileNavigation();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-orange-500"
               >
-                <CalendarDays size={18} />
+                <CalendarDays
+                  size={18}
+                />
 
                 <span>
                   My Bookings
                 </span>
-              </Link>
+              </button>
 
               {/* LOGOUT */}
 
@@ -910,28 +744,32 @@ function Navbar() {
 
             <div className="mt-3 flex gap-2 border-t border-slate-100 pt-4">
 
-              <Link
-                to="/login"
-                onClick={handleMobileNavigation}
+              <button
+                type="button"
+                onClick={() => {
+                  handleNavigation("/login");
+                  handleMobileNavigation();
+                }}
                 className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-700 transition-colors hover:border-orange-200 hover:text-orange-500"
               >
                 Login
-              </Link>
+              </button>
 
-              <Link
-                to="/register"
-                onClick={handleMobileNavigation}
+              <button
+                type="button"
+                onClick={() => {
+                  handleNavigation("/register");
+                  handleMobileNavigation();
+                }}
                 className="flex-1 rounded-xl bg-orange-500 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-orange-600"
               >
                 Register
-              </Link>
+              </button>
 
             </div>
-
           )}
 
         </div>
-
       </div>
 
     </header>

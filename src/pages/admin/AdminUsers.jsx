@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+
 import {
   ArrowRight,
   Search,
-  ShieldCheck,
   UserRound,
   UserRoundCog,
   Users,
@@ -18,7 +18,8 @@ function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState("all");
 
   // =========================================================
-  // LOAD ACTUAL USERS
+  // LOAD REGISTERED USERS
+  // Only Attendees and Organizers are considered registered users
   // =========================================================
 
   const loadUsers = () => {
@@ -34,11 +35,17 @@ function AdminUsers() {
 
       const parsedAccounts = JSON.parse(rawAccounts);
 
-      setUsers(
-        Array.isArray(parsedAccounts)
-          ? parsedAccounts
-          : []
-      );
+      const registeredUsers = Array.isArray(parsedAccounts)
+        ? parsedAccounts.filter((account) => {
+            const role = String(account?.role || "attendee")
+              .trim()
+              .toLowerCase();
+
+            return role === "attendee" || role === "organizer";
+          })
+        : [];
+
+      setUsers(registeredUsers);
     } catch (error) {
       console.error(
         "Unable to load EventON users:",
@@ -102,18 +109,10 @@ function AdminUsers() {
           .toLowerCase() === "organizer"
     );
 
-    const admins = users.filter(
-      (user) =>
-        String(user.role || "")
-          .trim()
-          .toLowerCase() === "admin"
-    );
-
     return {
       total: users.length,
       attendees: attendees.length,
       organizers: organizers.length,
-      admins: admins.length,
     };
   }, [users]);
 
@@ -132,6 +131,14 @@ function AdminUsers() {
       )
         .trim()
         .toLowerCase();
+
+      // Only attendees and organizers
+      if (
+        role !== "attendee" &&
+        role !== "organizer"
+      ) {
+        return false;
+      }
 
       const matchesRole =
         roleFilter === "all" ||
@@ -183,10 +190,6 @@ function AdminUsers() {
       return "Organizer";
     }
 
-    if (normalizedRole === "admin") {
-      return "Admin";
-    }
-
     return "Attendee";
   };
 
@@ -205,10 +208,6 @@ function AdminUsers() {
       return "bg-violet-50 text-violet-600";
     }
 
-    if (normalizedRole === "admin") {
-      return "bg-orange-50 text-orange-600";
-    }
-
     return "bg-blue-50 text-blue-600";
   };
 
@@ -225,10 +224,6 @@ function AdminUsers() {
 
     if (normalizedRole === "organizer") {
       return UserRoundCog;
-    }
-
-    if (normalizedRole === "admin") {
-      return ShieldCheck;
     }
 
     return UserRound;
@@ -260,9 +255,8 @@ function AdminUsers() {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Manage registered attendees,
-                organizers, and administrators
-                across EventON.
+                Manage registered attendees
+                and organizers across EventON.
               </p>
             </div>
 
@@ -270,7 +264,7 @@ function AdminUsers() {
               <Users size={17} />
 
               <span>
-                {statistics.total} total users
+                {statistics.total} registered users
               </span>
             </div>
 
@@ -288,7 +282,7 @@ function AdminUsers() {
             STATISTICS
         =================================================== */}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
           <UserStatCard
             title="Total Users"
@@ -309,13 +303,6 @@ function AdminUsers() {
             value={statistics.organizers}
             icon={UserRoundCog}
             iconClass="bg-violet-50 text-violet-600"
-          />
-
-          <UserStatCard
-            title="Administrators"
-            value={statistics.admins}
-            icon={ShieldCheck}
-            iconClass="bg-orange-50 text-orange-600"
           />
 
         </section>
@@ -400,17 +387,6 @@ function AdminUsers() {
                   }
                   onClick={() =>
                     setRoleFilter("organizer")
-                  }
-                />
-
-                <RoleFilterButton
-                  label="Admins"
-                  count={statistics.admins}
-                  active={
-                    roleFilter === "admin"
-                  }
-                  onClick={() =>
-                    setRoleFilter("admin")
                   }
                 />
 
@@ -512,6 +488,7 @@ function AdminUsers() {
                         {/* USER DETAILS */}
 
                         <div className="min-w-0">
+
                           <p className="truncate text-sm font-semibold text-slate-900">
                             {displayName}
                           </p>
@@ -520,6 +497,7 @@ function AdminUsers() {
                             {account.email ||
                               "No email"}
                           </p>
+
                         </div>
 
                       </div>
@@ -552,11 +530,6 @@ function AdminUsers() {
                           User ID
                         </p>
 
-                        {/* IMPORTANT:
-                            No truncate.
-                            Full actual ID is displayed.
-                        */}
-
                         <p
                           className="mt-1 break-all text-xs font-medium text-slate-600"
                           title={userId}
@@ -577,6 +550,7 @@ function AdminUsers() {
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
                         >
                           View Details
+
                           <ArrowRight size={13} />
                         </Link>
 
@@ -661,7 +635,6 @@ function RoleFilterButton({
           : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
       }`}
     >
-
       <span>{label}</span>
 
       <span
@@ -673,7 +646,6 @@ function RoleFilterButton({
       >
         {count}
       </span>
-
     </button>
   );
 }

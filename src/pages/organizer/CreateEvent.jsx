@@ -1,6 +1,6 @@
 import { useState } from "react";
+
 import {
-  ArrowLeft,
   CalendarDays,
   Clock3,
   Image as ImageIcon,
@@ -9,92 +9,107 @@ import {
   Save,
   Users,
 } from "lucide-react";
+
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
+import { createStoredEvent } from "../../utils/eventStorage";
 
-import {
-  createStoredEvent,
-} from "../../utils/eventStorage";
+/* =========================================================
+   DEFAULT DATE
+========================================================= */
 
-// =========================================================
-// INITIAL FORM
-// =========================================================
+function getTomorrowString() {
+  const tomorrow = new Date();
+
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrow.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+/* =========================================================
+   INITIAL FORM
+
+   Default values:
+   Date     -> Tomorrow
+   Start    -> 10:00
+   End      -> 11:00
+========================================================= */
 
 const initialForm = {
   title: "",
-  category: "Technology",
+  category: "",
   description: "",
-  date: "",
-  time: "",
-  endTime: "",
+
+  date: getTomorrowString(),
+  time: "10:00",
+  endTime: "11:00",
+
   location: "",
   city: "",
+
   price: "",
   capacity: "",
+
   image: "",
+
   status: "published",
   featured: false,
 };
 
-// =========================================================
-// EVENT ID
-// =========================================================
+/* =========================================================
+   EVENT ID
+========================================================= */
 
 function generateEventId() {
-  return `EVT-${Date.now()}-${Math.floor(
-    Math.random() * 1000
-  )}`;
+  return `EVT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
-// =========================================================
-// DATE HELPERS
-// =========================================================
+/* =========================================================
+   TODAY STRING
+========================================================= */
 
 function getTodayString() {
   const today = new Date();
 
   const year = today.getFullYear();
-  const month = String(
-    today.getMonth() + 1
-  ).padStart(2, "0");
-  const day = String(
-    today.getDate()
-  ).padStart(2, "0");
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
+
+/* =========================================================
+   FUTURE START DATE VALIDATION
+========================================================= */
 
 function isValidFutureEventDate(date, time) {
   if (!date) {
     return "Event date is required.";
   }
 
+  if (!time) {
+    return "Start time is required.";
+  }
+
   const todayString = getTodayString();
 
-  // Never allow a date before today.
+  /* Event cannot be before today */
   if (date < todayString) {
     return "Event date cannot be in the past.";
   }
 
-  // If the event is today, its start time must still be ahead.
+  /* If event is today, start time must still be future */
   if (date === todayString) {
-    if (!time) {
-      return "Start time is required.";
-    }
-
-    const [hours, minutes] = time
-      .split(":")
-      .map(Number);
+    const [hours, minutes] = time.split(":").map(Number);
 
     const eventStart = new Date();
 
-    eventStart.setHours(
-      hours,
-      minutes,
-      0,
-      0
-    );
+    eventStart.setHours(hours, minutes, 0, 0);
 
     if (eventStart <= new Date()) {
       return "For today's event, the start time must be in the future.";
@@ -104,57 +119,119 @@ function isValidFutureEventDate(date, time) {
   return "";
 }
 
-function isValidEndTime(startTime, endTime) {
-  if (!startTime || !endTime) {
-    return "";
+/* =========================================================
+   END TIME VALIDATION
+========================================================= */
+
+function isValidEventEnd(startTime, endTime) {
+  if (!endTime) {
+    return "End time is required.";
   }
 
-  const [startHours, startMinutes] =
-    startTime.split(":").map(Number);
+  if (!startTime) {
+    return "Start time is required.";
+  }
 
-  const [endHours, endMinutes] =
-    endTime.split(":").map(Number);
+  const [startHours, startMinutes] = startTime
+    .split(":")
+    .map(Number);
 
-  const startTotal =
+  const [endHours, endMinutes] = endTime
+    .split(":")
+    .map(Number);
+
+  const startTotalMinutes =
     startHours * 60 + startMinutes;
 
-  const endTotal =
+  const endTotalMinutes =
     endHours * 60 + endMinutes;
 
-  if (endTotal <= startTotal) {
-    return "End time must be after start time.";
+  if (endTotalMinutes <= startTotalMinutes) {
+    return "End time must be after the start time.";
   }
 
   return "";
 }
 
-// =========================================================
-// MAIN COMPONENT
-// =========================================================
+/* =========================================================
+   WORD COUNT
+========================================================= */
+
+function countWords(text) {
+  return String(text || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+/* =========================================================
+   URL VALIDATION
+========================================================= */
+
+function isValidUrl(value) {
+  const url = String(value || "").trim();
+
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(url);
+
+    return (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
 
 function CreateEvent() {
   const { user } = useAuth();
+
   const navigate = useNavigate();
 
-  const [form, setForm] =
-    useState(initialForm);
+  const [form, setForm] = useState(initialForm);
 
-  const [errors, setErrors] =
-    useState({});
+  const [errors, setErrors] = useState({});
 
-  const [isSaving, setIsSaving] =
-    useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // =======================================================
-  // HANDLE INPUT
-  // =======================================================
+  /* =======================================================
+     HANDLE INPUT
+  ======================================================= */
 
   const handleChange = (event) => {
-    const { name, value, type, checked } =
-      event.target;
+    const {
+      name,
+      value,
+      type,
+      checked,
+    } = event.target;
+
+    /* Description maximum 150 words */
+    if (name === "description") {
+      const words = countWords(value);
+
+      if (words > 150) {
+        setErrors((current) => ({
+          ...current,
+          description:
+            "Description cannot exceed 150 words.",
+        }));
+
+        return;
+      }
+    }
 
     setForm((current) => ({
       ...current,
+
       [name]:
         type === "checkbox"
           ? checked
@@ -164,39 +241,79 @@ function CreateEvent() {
     setErrors((current) => ({
       ...current,
       [name]: "",
+      form: "",
     }));
   };
 
-  // =======================================================
-  // VALIDATION
-  // =======================================================
+  /* =======================================================
+     VALIDATION
+  ======================================================= */
 
   const validateForm = () => {
     const nextErrors = {};
+
+    /* -------------------------------------------------------
+       TITLE
+    ------------------------------------------------------- */
 
     if (!form.title.trim()) {
       nextErrors.title =
         "Event title is required.";
     }
 
+    /* -------------------------------------------------------
+       CATEGORY
+    ------------------------------------------------------- */
+
+    if (!form.category) {
+      nextErrors.category =
+        "Event category is required.";
+    }
+
+    /* -------------------------------------------------------
+       DESCRIPTION
+    ------------------------------------------------------- */
+
     if (!form.description.trim()) {
       nextErrors.description =
         "Event description is required.";
+    } else if (
+      countWords(form.description) > 150
+    ) {
+      nextErrors.description =
+        "Description must be 150 words or less.";
     }
+
+    /* -------------------------------------------------------
+       START DATE
+    ------------------------------------------------------- */
 
     if (!form.date) {
       nextErrors.date =
         "Event date is required.";
     }
 
+    /* -------------------------------------------------------
+       START TIME
+    ------------------------------------------------------- */
+
     if (!form.time) {
       nextErrors.time =
         "Start time is required.";
     }
 
-    // ---------------------------------------------------------
-    // EVENT MUST BE IN THE FUTURE
-    // ---------------------------------------------------------
+    /* -------------------------------------------------------
+       END TIME
+    ------------------------------------------------------- */
+
+    if (!form.endTime) {
+      nextErrors.endTime =
+        "End time is required.";
+    }
+
+    /* -------------------------------------------------------
+       EVENT MUST BE IN FUTURE
+    ------------------------------------------------------- */
 
     if (form.date && form.time) {
       const dateTimeError =
@@ -220,15 +337,44 @@ function CreateEvent() {
       }
     }
 
+    /* -------------------------------------------------------
+       END TIME MUST BE AFTER START TIME
+    ------------------------------------------------------- */
+
+    if (form.time && form.endTime) {
+      const endError =
+        isValidEventEnd(
+          form.time,
+          form.endTime
+        );
+
+      if (endError) {
+        nextErrors.endTime =
+          endError;
+      }
+    }
+
+    /* -------------------------------------------------------
+       LOCATION
+    ------------------------------------------------------- */
+
     if (!form.location.trim()) {
       nextErrors.location =
         "Event location is required.";
     }
 
+    /* -------------------------------------------------------
+       CITY
+    ------------------------------------------------------- */
+
     if (!form.city.trim()) {
       nextErrors.city =
         "City is required.";
     }
+
+    /* -------------------------------------------------------
+       CAPACITY
+    ------------------------------------------------------- */
 
     if (!form.capacity) {
       nextErrors.capacity =
@@ -240,25 +386,41 @@ function CreateEvent() {
         "Capacity must be greater than 0.";
     }
 
-    if (
-      form.price !== "" &&
+    /* -------------------------------------------------------
+       PRICE
+    ------------------------------------------------------- */
+
+    if (form.price === "") {
+      nextErrors.price =
+        "Ticket price is required.";
+    } else if (
       Number(form.price) < 0
     ) {
       nextErrors.price =
         "Price cannot be negative.";
     }
 
-    if (form.endTime && form.time) {
-      const endTimeError =
-        isValidEndTime(
-          form.time,
-          form.endTime
-        );
+    /* -------------------------------------------------------
+       IMAGE URL
+    ------------------------------------------------------- */
 
-      if (endTimeError) {
-        nextErrors.endTime =
-          endTimeError;
-      }
+    if (!form.image.trim()) {
+      nextErrors.image =
+        "Image URL is required.";
+    } else if (
+      !isValidUrl(form.image)
+    ) {
+      nextErrors.image =
+        "Please enter a valid HTTP or HTTPS URL.";
+    }
+
+    /* -------------------------------------------------------
+       STATUS
+    ------------------------------------------------------- */
+
+    if (!form.status) {
+      nextErrors.status =
+        "Event status is required.";
     }
 
     setErrors(nextErrors);
@@ -268,9 +430,9 @@ function CreateEvent() {
     );
   };
 
-  // =======================================================
-  // SUBMIT
-  // =======================================================
+  /* =======================================================
+     SUBMIT
+  ======================================================= */
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -279,7 +441,10 @@ function CreateEvent() {
       return;
     }
 
-    // Final guard immediately before creating the event.
+    /* -------------------------------------------------------
+       FINAL START DATE CHECK
+    ------------------------------------------------------- */
+
     const finalDateError =
       isValidFutureEventDate(
         form.date,
@@ -289,38 +454,89 @@ function CreateEvent() {
     if (finalDateError) {
       setErrors((current) => ({
         ...current,
+
         ...(finalDateError.includes(
           "start time"
         )
-          ? { time: finalDateError }
-          : { date: finalDateError }),
+          ? {
+              time: finalDateError,
+            }
+          : {
+              date: finalDateError,
+            }),
       }));
 
       return;
     }
 
-    const finalEndTimeError =
-      isValidEndTime(
+    /* -------------------------------------------------------
+       FINAL END TIME CHECK
+    ------------------------------------------------------- */
+
+    const finalEndError =
+      isValidEventEnd(
         form.time,
         form.endTime
       );
 
-    if (finalEndTimeError) {
+    if (finalEndError) {
       setErrors((current) => ({
         ...current,
-        endTime: finalEndTimeError,
+        endTime: finalEndError,
       }));
 
       return;
     }
 
+    /* -------------------------------------------------------
+       FINAL DESCRIPTION CHECK
+    ------------------------------------------------------- */
+
+    if (
+      countWords(form.description) >
+      150
+    ) {
+      setErrors((current) => ({
+        ...current,
+
+        description:
+          "Description must be 150 words or less.",
+      }));
+
+      return;
+    }
+
+    /* -------------------------------------------------------
+       FINAL IMAGE URL CHECK
+    ------------------------------------------------------- */
+
+    if (!isValidUrl(form.image)) {
+      setErrors((current) => ({
+        ...current,
+
+        image:
+          "Please enter a valid HTTP or HTTPS URL.",
+      }));
+
+      return;
+    }
+
+    /* -------------------------------------------------------
+       AUTH CHECK
+    ------------------------------------------------------- */
+
     if (!user?.id) {
       setErrors({
-        form: "You must be logged in as an organizer.",
+        form:
+          "You must be logged in as an organizer.",
       });
 
       return;
     }
+
+    /* -------------------------------------------------------
+       SAVE
+    ------------------------------------------------------- */
 
     setIsSaving(true);
 
@@ -330,7 +546,8 @@ function CreateEvent() {
       organizerId: user.id,
 
       organizer:
-        user.name || "Event Organizer",
+        user.name ||
+        "Event Organizer",
 
       title: form.title.trim(),
 
@@ -350,36 +567,59 @@ function CreateEvent() {
       description:
         form.description.trim(),
 
+      /*
+       * EventON date/time structure:
+       *
+       * date    -> event date
+       * time    -> start time
+       * endTime -> end time
+       *
+       * No endDate.
+       */
+
       date: form.date,
 
       time: form.time,
 
-      endTime:
-        form.endTime || "",
+      endTime: form.endTime,
 
       location:
         form.location.trim(),
 
-      city: form.city.trim(),
+      city:
+        form.city.trim(),
 
-      price:
-        Number(form.price) || 0,
+      /*
+       * 0 is a valid price
+       * for free events.
+       */
+
+      price: Number(form.price),
 
       capacity:
         Number(form.capacity),
 
       bookedSeats: 0,
 
+      /*
+       * Any valid HTTP/HTTPS
+       * URL is accepted.
+       */
+
       image:
-        form.image.trim() || "",
+        form.image.trim(),
 
-      featured: Boolean(form.featured),
+      featured:
+        Boolean(form.featured),
 
-      status: form.status,
+      status:
+        form.status,
     };
 
     const savedEvent =
-      createStoredEvent(eventData);
+      createStoredEvent(
+        eventData
+      );
 
     setIsSaving(false);
 
@@ -395,55 +635,9 @@ function CreateEvent() {
     navigate("/organizer/events");
   };
 
-  // =======================================================
-  // TEMPORARY LIFECYCLE TEST TOOL
-  // DEV ONLY - REMOVE AFTER TESTING
-  // =======================================================
-
-  const createLifecycleTestEvent = () => {
-    if (!user?.id) {
-      return;
-    }
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const year = yesterday.getFullYear();
-    const month = String(yesterday.getMonth() + 1).padStart(2, "0");
-    const day = String(yesterday.getDate()).padStart(2, "0");
-
-    const eventData = {
-      id: `EVT-LIFECYCLE-${Date.now()}`,
-      organizerId: user.id,
-      organizer: user.name || "Event Organizer",
-      title: "Lifecycle Test Event",
-      slug: `lifecycle-test-${Date.now()}`,
-      category: "Technology",
-      categorySlug: "technology",
-      description: "Temporary event used to verify EventON completed-event lifecycle behavior.",
-      date: `${year}-${month}-${day}`,
-      time: "10:00",
-      endTime: "12:00",
-      location: "Hyderabad",
-      city: "Hyderabad",
-      price: 0,
-      capacity: 10,
-      bookedSeats: 0,
-      image: "",
-      featured: false,
-      status: "published",
-    };
-
-    const savedEvent = createStoredEvent(eventData);
-
-    if (savedEvent) {
-      navigate("/organizer/events");
-    }
-  };
-
-  // =======================================================
-  // NOT LOGGED IN
-  // =======================================================
+  /* =======================================================
+     NOT LOGGED IN
+  ======================================================= */
 
   if (!user) {
     return (
@@ -455,13 +649,12 @@ function CreateEvent() {
             </h1>
 
             <p className="mt-2 text-sm text-slate-500">
-              Please log in before creating an
-              event.
+              Please log in before creating an event.
             </p>
 
             <Link
               to="/login"
-              className="mt-6 inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+              className="mt-6 inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
             >
               Go to Login
             </Link>
@@ -471,27 +664,20 @@ function CreateEvent() {
     );
   }
 
-  // =======================================================
-  // PAGE
-  // =======================================================
+  /* =======================================================
+     PAGE
+  ======================================================= */
 
   return (
     <section className="min-h-full bg-slate-50">
       <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-10">
+
         {/* =================================================
             HEADER
         ================================================= */}
 
         <div className="mb-8">
-          <Link
-            to="/organizer/events"
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900"
-          >
-            <ArrowLeft size={17} />
-            Back to My Events
-          </Link>
-
-          <div className="mt-5">
+          <div>
             <p className="text-sm font-semibold text-orange-500">
               Event Management
             </p>
@@ -501,8 +687,7 @@ function CreateEvent() {
             </h1>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Add the details below to create your
-              event.
+              Add the details below to create your event.
             </p>
           </div>
         </div>
@@ -515,6 +700,7 @@ function CreateEvent() {
           onSubmit={handleSubmit}
           className="space-y-6"
         >
+
           {/* =================================================
               GENERAL INFORMATION
           ================================================= */}
@@ -531,15 +717,16 @@ function CreateEvent() {
             </div>
 
             <div className="grid gap-5 p-5 sm:p-6">
+
               {/* Title */}
+
               <div>
                 <label
                   htmlFor="title"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Event title
+                  Event title{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -549,6 +736,7 @@ function CreateEvent() {
                   name="title"
                   value={form.title}
                   onChange={handleChange}
+                  required
                   placeholder="e.g. React Developer Meetup"
                   className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 ${
                     errors.title
@@ -565,12 +753,16 @@ function CreateEvent() {
               </div>
 
               {/* Category */}
+
               <div>
                 <label
                   htmlFor="category"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Category
+                  Category{" "}
+                  <span className="text-red-500">
+                    *
+                  </span>
                 </label>
 
                 <select
@@ -578,8 +770,17 @@ function CreateEvent() {
                   name="category"
                   value={form.category}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  required
+                  className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:ring-2 ${
+                    errors.category
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                      : "border-slate-200 focus:border-orange-400 focus:ring-orange-100"
+                  }`}
                 >
+                  <option value="">
+                    Select category
+                  </option>
+
                   <option value="Technology">
                     Technology
                   </option>
@@ -612,17 +813,23 @@ function CreateEvent() {
                     Other
                   </option>
                 </select>
+
+                {errors.category && (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {errors.category}
+                  </p>
+                )}
               </div>
 
               {/* Description */}
+
               <div>
                 <label
                   htmlFor="description"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Description
+                  Description{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -633,6 +840,7 @@ function CreateEvent() {
                   value={form.description}
                   onChange={handleChange}
                   rows={6}
+                  required
                   placeholder="Describe what attendees can expect from this event..."
                   className={`w-full resize-none rounded-xl border bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 ${
                     errors.description
@@ -641,18 +849,30 @@ function CreateEvent() {
                   }`}
                 />
 
-                <div className="mt-1.5 flex justify-between">
+                <div className="mt-1.5 flex items-center justify-between">
                   {errors.description ? (
                     <p className="text-xs text-red-600">
                       {errors.description}
                     </p>
                   ) : (
-                    <span />
+                    <p className="text-xs text-slate-400">
+                      Maximum 150 words.
+                    </p>
                   )}
 
-                  <span className="text-xs text-slate-400">
-                    {form.description.length}
-                    /1000
+                  <span
+                    className={`text-xs ${
+                      countWords(
+                        form.description
+                      ) > 150
+                        ? "text-red-600"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {countWords(
+                      form.description
+                    )}
+                    /150 words
                   </span>
                 </div>
               </div>
@@ -670,20 +890,23 @@ function CreateEvent() {
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Set when your event will take place.
+                Set the event date, start time and end time.
               </p>
             </div>
 
-            <div className="grid gap-5 p-5 sm:grid-cols-3 sm:p-6">
-              {/* Date */}
+            {/* SINGLE ROW */}
+
+            <div className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-3 sm:p-6">
+
+              {/* Event Date */}
+
               <div>
                 <label
                   htmlFor="date"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Date
+                  Event date{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -701,6 +924,7 @@ function CreateEvent() {
                     value={form.date}
                     min={getTodayString()}
                     onChange={handleChange}
+                    required
                     className={`w-full rounded-xl border bg-white py-3 pl-10 pr-3 text-sm text-slate-900 outline-none focus:ring-2 ${
                       errors.date
                         ? "border-red-300 focus:border-red-400 focus:ring-red-100"
@@ -709,26 +933,22 @@ function CreateEvent() {
                   />
                 </div>
 
-                {errors.date ? (
+                {errors.date && (
                   <p className="mt-1.5 text-xs text-red-600">
                     {errors.date}
-                  </p>
-                ) : (
-                  <p className="mt-1.5 text-xs text-slate-400">
-                    Choose today or a future date.
                   </p>
                 )}
               </div>
 
-              {/* Start */}
+              {/* Start Time */}
+
               <div>
                 <label
                   htmlFor="time"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Start time
+                  Start time{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -745,6 +965,7 @@ function CreateEvent() {
                     type="time"
                     value={form.time}
                     onChange={handleChange}
+                    required
                     className={`w-full rounded-xl border bg-white py-3 pl-10 pr-3 text-sm text-slate-900 outline-none focus:ring-2 ${
                       errors.time
                         ? "border-red-300 focus:border-red-400 focus:ring-red-100"
@@ -760,13 +981,17 @@ function CreateEvent() {
                 )}
               </div>
 
-              {/* End */}
+              {/* End Time */}
+
               <div>
                 <label
                   htmlFor="endTime"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  End time
+                  End time{" "}
+                  <span className="text-red-500">
+                    *
+                  </span>
                 </label>
 
                 <div className="relative">
@@ -781,6 +1006,7 @@ function CreateEvent() {
                     type="time"
                     value={form.endTime}
                     onChange={handleChange}
+                    required
                     className={`w-full rounded-xl border bg-white py-3 pl-10 pr-3 text-sm text-slate-900 outline-none focus:ring-2 ${
                       errors.endTime
                         ? "border-red-300 focus:border-red-400 focus:ring-red-100"
@@ -809,21 +1035,21 @@ function CreateEvent() {
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Tell attendees where the event will
-                happen.
+                Tell attendees where the event will happen.
               </p>
             </div>
 
             <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
+
               {/* Location */}
+
               <div>
                 <label
                   htmlFor="location"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Venue / Location
+                  Venue / Location{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -839,6 +1065,7 @@ function CreateEvent() {
                     name="location"
                     value={form.location}
                     onChange={handleChange}
+                    required
                     placeholder="e.g. HITEC City, Hyderabad"
                     className={`w-full rounded-xl border bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none focus:ring-2 ${
                       errors.location
@@ -856,14 +1083,14 @@ function CreateEvent() {
               </div>
 
               {/* City */}
+
               <div>
                 <label
                   htmlFor="city"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  City
+                  City{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -873,6 +1100,7 @@ function CreateEvent() {
                   name="city"
                   value={form.city}
                   onChange={handleChange}
+                  required
                   placeholder="e.g. Hyderabad"
                   className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:ring-2 ${
                     errors.city
@@ -901,21 +1129,21 @@ function CreateEvent() {
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Configure your event capacity and
-                ticket price.
+                Configure your event capacity and ticket price.
               </p>
             </div>
 
             <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
+
               {/* Capacity */}
+
               <div>
                 <label
                   htmlFor="capacity"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Ticket capacity
+                  Ticket capacity{" "}
                   <span className="text-red-500">
-                    {" "}
                     *
                   </span>
                 </label>
@@ -933,6 +1161,7 @@ function CreateEvent() {
                     min="1"
                     value={form.capacity}
                     onChange={handleChange}
+                    required
                     placeholder="e.g. 100"
                     className={`w-full rounded-xl border bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none focus:ring-2 ${
                       errors.capacity
@@ -950,12 +1179,16 @@ function CreateEvent() {
               </div>
 
               {/* Price */}
+
               <div>
                 <label
                   htmlFor="price"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Ticket price
+                  Ticket price{" "}
+                  <span className="text-red-500">
+                    *
+                  </span>
                 </label>
 
                 <div className="relative">
@@ -972,6 +1205,7 @@ function CreateEvent() {
                     step="1"
                     value={form.price}
                     onChange={handleChange}
+                    required
                     placeholder="0 for free event"
                     className={`w-full rounded-xl border bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none focus:ring-2 ${
                       errors.price
@@ -987,7 +1221,7 @@ function CreateEvent() {
                   </p>
                 ) : (
                   <p className="mt-1.5 text-xs text-slate-400">
-                    Enter 0 to make the event free.
+                    Enter 0 for a free event.
                   </p>
                 )}
               </div>
@@ -1010,11 +1244,15 @@ function CreateEvent() {
             </div>
 
             <div className="p-5 sm:p-6">
+
               <label
                 htmlFor="image"
                 className="mb-2 block text-sm font-semibold text-slate-700"
               >
-                Image URL
+                Image URL{" "}
+                <span className="text-red-500">
+                  *
+                </span>
               </label>
 
               <div className="relative">
@@ -1026,27 +1264,44 @@ function CreateEvent() {
                 <input
                   id="image"
                   name="image"
-                  type="url"
+                  type="text"
                   value={form.image}
                   onChange={handleChange}
+                  required
                   placeholder="https://example.com/event-image.jpg"
-                  className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  className={`w-full rounded-xl border bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-2 ${
+                    errors.image
+                      ? "border-red-300 focus:ring-red-100"
+                      : "border-slate-200 focus:ring-orange-100"
+                  }`}
                 />
               </div>
 
-              {form.image && (
-                <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                  <img
-                    src={form.image}
-                    alt="Event preview"
-                    className="h-48 w-full object-cover"
-                    onError={(event) => {
-                      event.currentTarget.style.display =
-                        "none";
-                    }}
-                  />
-                </div>
+              {errors.image && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  {errors.image}
+                </p>
               )}
+
+              <p className="mt-2 text-xs text-slate-400">
+                Enter a public HTTP/HTTPS image URL.
+              </p>
+
+              {form.image &&
+                isValidUrl(form.image) && (
+                  <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <img
+                      src={form.image}
+                      alt="Event preview"
+                      referrerPolicy="no-referrer"
+                      className="h-48 w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display =
+                          "none";
+                      }}
+                    />
+                  </div>
+                )}
             </div>
           </div>
 
@@ -1066,12 +1321,18 @@ function CreateEvent() {
             </div>
 
             <div className="space-y-5 p-5 sm:p-6">
+
+              {/* Status */}
+
               <div>
                 <label
                   htmlFor="status"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Event status
+                  Event status{" "}
+                  <span className="text-red-500">
+                    *
+                  </span>
                 </label>
 
                 <select
@@ -1079,7 +1340,12 @@ function CreateEvent() {
                   name="status"
                   value={form.status}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:max-w-sm"
+                  required
+                  className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 sm:max-w-sm ${
+                    errors.status
+                      ? "border-red-300"
+                      : "border-slate-200"
+                  }`}
                 >
                   <option value="published">
                     Published
@@ -1089,7 +1355,15 @@ function CreateEvent() {
                     Draft
                   </option>
                 </select>
+
+                {errors.status && (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    {errors.status}
+                  </p>
+                )}
               </div>
+
+              {/* Featured */}
 
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:bg-slate-50">
                 <input
@@ -1106,33 +1380,12 @@ function CreateEvent() {
                   </span>
 
                   <span className="mt-1 block text-xs leading-5 text-slate-500">
-                    Mark this event as featured for
-                    future featured-event sections.
+                    Mark this event as featured for future
+                    featured-event sections.
                   </span>
                 </span>
               </label>
             </div>
-          </div>
-
-          {/* =================================================
-              TEMPORARY LIFECYCLE TEST
-              DEV ONLY - REMOVE AFTER TESTING
-          ================================================= */}
-
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6">
-            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
-              Development test only
-            </p>
-            <p className="mt-1 text-sm leading-6 text-amber-800">
-              Creates a temporary event dated yesterday so we can verify that completed events are hidden publicly but retained for organizers and admins.
-            </p>
-            <button
-              type="button"
-              onClick={createLifecycleTestEvent}
-              className="mt-4 inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
-            >
-              Create Lifecycle Test Event
-            </button>
           </div>
 
           {/* =================================================
@@ -1150,6 +1403,7 @@ function CreateEvent() {
           ================================================= */}
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+
             <Link
               to="/organizer/events"
               className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"

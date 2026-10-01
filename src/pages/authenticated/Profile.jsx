@@ -1,23 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft,
   CalendarDays,
   CheckCircle2,
   Edit3,
   Mail,
+  Phone,
   Save,
   ShieldCheck,
   UserRound,
   X,
+  ArrowRight,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
 
 const ACCOUNTS_STORAGE_KEY = "eventon_accounts";
 
-function AdminProfile() {
-  const { user, updateUser } = useAuth();
+function Profile() {
+  const { user, isAuthenticated, isLoading, updateUser } = useAuth();
 
   const [account, setAccount] = useState(user || null);
   const [isEditing, setIsEditing] = useState(false);
@@ -25,11 +26,11 @@ function AdminProfile() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    mobile: "",
   });
 
   const [errors, setErrors] = useState({});
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   // =========================================================
@@ -75,7 +76,10 @@ function AdminProfile() {
       loadAccount();
     };
 
-    window.addEventListener("storage", handleUpdate);
+    window.addEventListener(
+      "storage",
+      handleUpdate
+    );
 
     window.addEventListener(
       "eventon:auth-updated",
@@ -104,7 +108,7 @@ function AdminProfile() {
       name:
         account?.name ||
         user?.name ||
-        "User",
+        "EventON User",
 
       email:
         account?.email ||
@@ -121,14 +125,18 @@ function AdminProfile() {
         user?.id ||
         "Not available",
 
-      phone:
+      mobile:
+        account?.mobile ||
         account?.phone ||
+        user?.mobile ||
         user?.phone ||
         "Not provided",
 
       createdAt:
         account?.createdAt ||
         account?.registeredAt ||
+        user?.createdAt ||
+        user?.registeredAt ||
         null,
     };
   }, [account, user]);
@@ -154,6 +162,24 @@ function AdminProfile() {
       : normalizedRole === "organizer"
       ? "Access to create, manage, and monitor your events and bookings."
       : "Access to discover events and manage your bookings.";
+
+  // =========================================================
+  // FOOTER NAVIGATION
+  // =========================================================
+
+  const footerActionLabel =
+    normalizedRole === "admin"
+      ? "Go to Dashboard"
+      : normalizedRole === "organizer"
+      ? "Go to Dashboard"
+      : "Go to Home";
+
+  const footerActionPath =
+    normalizedRole === "admin"
+      ? "/admin"
+      : normalizedRole === "organizer"
+      ? "/organizer"
+      : "/";
 
   // =========================================================
   // INITIALS
@@ -191,6 +217,10 @@ function AdminProfile() {
     setFormData({
       name: profile.name,
       email: profile.email,
+      mobile:
+        profile.mobile === "Not provided"
+          ? ""
+          : profile.mobile,
     });
 
     setErrors({});
@@ -206,6 +236,10 @@ function AdminProfile() {
     setFormData({
       name: profile.name,
       email: profile.email,
+      mobile:
+        profile.mobile === "Not provided"
+          ? ""
+          : profile.mobile,
     });
 
     setErrors({});
@@ -220,10 +254,22 @@ function AdminProfile() {
   const handleChange = (event) => {
     const { name, value } = event.target;
 
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    // Mobile: allow digits only
+    if (name === "mobile") {
+      const digitsOnly = value
+        .replace(/\D/g, "")
+        .slice(0, 10);
+
+      setFormData((previous) => ({
+        ...previous,
+        [name]: digitsOnly,
+      }));
+    } else {
+      setFormData((previous) => ({
+        ...previous,
+        [name]: value,
+      }));
+    }
 
     setErrors((previous) => ({
       ...previous,
@@ -242,7 +288,16 @@ function AdminProfile() {
     const newErrors = {};
 
     const name = formData.name.trim();
-    const email = formData.email.trim().toLowerCase();
+
+    const email = formData.email
+      .trim()
+      .toLowerCase();
+
+    const mobile = formData.mobile
+      .replace(/\D/g, "")
+      .trim();
+
+    // NAME
 
     if (!name) {
       newErrors.name = "Name is required.";
@@ -251,13 +306,27 @@ function AdminProfile() {
         "Name must contain at least 2 characters.";
     }
 
+    // EMAIL
+
     if (!email) {
       newErrors.email = "Email is required.";
     } else if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      !/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(
+        email
+      )
     ) {
       newErrors.email =
-        "Enter a valid email address.";
+        "Enter a valid Gmail address ending with @gmail.com.";
+    }
+
+    // MOBILE
+
+    if (!mobile) {
+      newErrors.mobile =
+        "Mobile number is required.";
+    } else if (!/^[6-9]\d{9}$/.test(mobile)) {
+      newErrors.mobile =
+        "Enter a valid 10-digit Indian mobile number.";
     }
 
     setErrors(newErrors);
@@ -272,6 +341,10 @@ function AdminProfile() {
   const handleSave = async (event) => {
     event.preventDefault();
 
+    if (isSaving) {
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -280,17 +353,26 @@ function AdminProfile() {
     setSuccessMessage("");
 
     try {
+      const normalizedMobile = formData.mobile
+        .replace(/\D/g, "")
+        .trim();
+
       const result = updateUser({
         name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: formData.email
+          .trim()
+          .toLowerCase(),
+        mobile: normalizedMobile,
       });
 
       if (!result?.success) {
-        setErrors({
-          form:
-            result?.error ||
-            "Unable to save your profile.",
-        });
+        setErrors(
+          result?.fields || {
+            form:
+              result?.error ||
+              "Unable to save your profile.",
+          }
+        );
 
         return;
       }
@@ -304,7 +386,7 @@ function AdminProfile() {
       setIsEditing(false);
     } catch (error) {
       console.error(
-        "Unable to update admin profile:",
+        "Unable to update profile:",
         error
       );
 
@@ -318,7 +400,57 @@ function AdminProfile() {
   };
 
   // =========================================================
-  // RENDER
+  // LOADING
+  // =========================================================
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-orange-500" />
+
+          <p className="mt-4 text-sm font-medium text-slate-500">
+            Loading your profile...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // NOT AUTHENTICATED
+  // =========================================================
+
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50 px-5">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+            <UserRound size={28} />
+          </div>
+
+          <h1 className="mt-5 text-xl font-bold text-slate-900">
+            Login required
+          </h1>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Please log in to view your EventON
+            profile.
+          </p>
+
+          <Link
+            to="/login"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600"
+          >
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // MAIN
   // =========================================================
 
   return (
@@ -329,15 +461,7 @@ function AdminProfile() {
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
-          <Link
-            to="/admin"
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-orange-600"
-          >
-            <ArrowLeft size={16} />
-            Back to Dashboard
-          </Link>
-
-          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-orange-500">
                 Account
@@ -372,6 +496,8 @@ function AdminProfile() {
       ===================================================== */}
 
       <main className="mx-auto w-full max-w-7xl px-5 py-6 sm:px-6 lg:px-8">
+        {/* SUCCESS MESSAGE */}
+
         {successMessage && (
           <div className="mb-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             <CheckCircle2
@@ -383,9 +509,13 @@ function AdminProfile() {
           </div>
         )}
 
+        {/* =================================================
+            MAIN GRID
+        ================================================= */}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* =================================================
-              PROFILE
+              LEFT PROFILE CARD
           ================================================= */}
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
@@ -403,7 +533,7 @@ function AdminProfile() {
                   {initials || "U"}
                 </div>
 
-                {/* IDENTITY */}
+                {/* USER */}
 
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -422,6 +552,7 @@ function AdminProfile() {
                       size={14}
                       className="shrink-0"
                     />
+
                     {profile.email}
                   </p>
                 </div>
@@ -450,7 +581,7 @@ function AdminProfile() {
               </div>
 
               {/* =================================================
-                  EDIT FORM
+                  EDIT MODE
               ================================================= */}
 
               {isEditing ? (
@@ -465,6 +596,8 @@ function AdminProfile() {
                   )}
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {/* NAME */}
+
                     <FormField
                       label="Full Name"
                       name="name"
@@ -472,7 +605,10 @@ function AdminProfile() {
                       onChange={handleChange}
                       icon={UserRound}
                       error={errors.name}
+                      placeholder="Enter your full name"
                     />
+
+                    {/* EMAIL */}
 
                     <FormField
                       label="Email Address"
@@ -482,10 +618,25 @@ function AdminProfile() {
                       onChange={handleChange}
                       icon={Mail}
                       error={errors.email}
+                      placeholder="Enter your Gmail"
+                    />
+
+                    {/* MOBILE */}
+
+                    <FormField
+                      label="Mobile Number"
+                      name="mobile"
+                      type="tel"
+                      value={formData.mobile}
+                      onChange={handleChange}
+                      icon={Phone}
+                      error={errors.mobile}
+                      placeholder="9876543210"
+                      maxLength={10}
                     />
                   </div>
 
-                  {/* ROLE - READ ONLY */}
+                  {/* ROLE */}
 
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start gap-3">
@@ -529,52 +680,60 @@ function AdminProfile() {
                       disabled={isSaving}
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <Save size={15} />
-
-                      {isSaving
-                        ? "Saving..."
-                        : "Save Changes"}
+                      {isSaving ? (
+                        <>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={15} />
+                          Save Changes
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
               ) : (
-                <>
-                  <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <InfoField
-                      label="Full Name"
-                      value={profile.name}
-                      icon={UserRound}
-                    />
+                /* =================================================
+                   VIEW MODE
+                ================================================= */
 
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <InfoField
+                    label="Full Name"
+                    value={profile.name}
+                    icon={UserRound}
+                  />
+
+                  <InfoField
+                    label="Email Address"
+                    value={profile.email}
+                    icon={Mail}
+                    breakValue
+                  />
+
+                  <InfoField
+                    label="Role"
+                    value={roleLabel}
+                    icon={ShieldCheck}
+                  />
+
+                  <InfoField
+                    label="Mobile Number"
+                    value={profile.mobile}
+                    icon={Phone}
+                  />
+
+                  <div className="sm:col-span-2">
                     <InfoField
-                      label="Email Address"
-                      value={profile.email}
-                      icon={Mail}
+                      label="User ID"
+                      value={profile.id}
+                      icon={UserRound}
                       breakValue
                     />
-
-                    <InfoField
-                      label="Role"
-                      value={roleLabel}
-                      icon={ShieldCheck}
-                    />
-
-                    <InfoField
-                      label="Phone"
-                      value={profile.phone}
-                      icon={UserRound}
-                    />
-
-                    <div className="sm:col-span-2">
-                      <InfoField
-                        label="User ID"
-                        value={profile.id}
-                        icon={UserRound}
-                        breakValue
-                      />
-                    </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </section>
@@ -584,9 +743,7 @@ function AdminProfile() {
           ================================================= */}
 
           <aside className="space-y-6">
-            {/* =================================================
-                ACCOUNT STATUS
-            ================================================= */}
+            {/* ACCOUNT STATUS */}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
@@ -624,9 +781,7 @@ function AdminProfile() {
               </div>
             </section>
 
-            {/* =================================================
-                ACCESS ROLE
-            ================================================= */}
+            {/* ACCESS ROLE */}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
@@ -660,9 +815,7 @@ function AdminProfile() {
               </div>
             </section>
 
-            {/* =================================================
-                ACCOUNT CREATED
-            ================================================= */}
+            {/* ACCOUNT CREATED */}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start gap-3">
@@ -685,7 +838,7 @@ function AdminProfile() {
         </div>
 
         {/* =====================================================
-            ACCOUNT INFORMATION FOOTER
+            FOOTER CARD
         ===================================================== */}
 
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -706,15 +859,15 @@ function AdminProfile() {
               </div>
             </div>
 
+            {/* ROLE-BASED NAVIGATION */}
+
             <Link
-              to="/admin"
+              to={footerActionPath}
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
             >
-              Go to Dashboard
-              <ArrowLeft
-                size={14}
-                className="rotate-180"
-              />
+              {footerActionLabel}
+
+              <ArrowRight size={14} />
             </Link>
           </div>
         </section>
@@ -748,7 +901,9 @@ function InfoField({
 
       <p
         className={`mt-2 text-sm font-semibold text-slate-900 ${
-          breakValue ? "break-all" : "truncate"
+          breakValue
+            ? "break-all"
+            : "truncate"
         }`}
       >
         {value || "Not available"}
@@ -769,6 +924,8 @@ function FormField({
   onChange,
   icon: Icon,
   error,
+  placeholder,
+  maxLength,
 }) {
   return (
     <div>
@@ -791,6 +948,15 @@ function FormField({
           type={type}
           value={value}
           onChange={onChange}
+          placeholder={placeholder}
+          maxLength={maxLength}
+          autoComplete={
+            name === "mobile"
+              ? "tel"
+              : name === "email"
+              ? "email"
+              : "name"
+          }
           className={`h-11 w-full rounded-xl border bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${
             error
               ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-50"
@@ -808,4 +974,4 @@ function FormField({
   );
 }
 
-export default AdminProfile;
+export default Profile;
